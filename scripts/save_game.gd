@@ -137,7 +137,7 @@ static func save(g) -> void:
 			"time": s.time, "hoses": s.hoses, "readings": readings, "vol_ver": s.vol_ver, "elec_ver": s.elec_ver,
 			"elec_sig": s._elec_sig, "leaks": leaks, "clouds": clouds, "blown": s.blown},
 		"game": {"ie": g.income_equip, "im": g.income_metal, "ih": g.income_hazard, "loss": g.losses, "lines": g.loss_lines,
-			"must": g.mandatory_ok, "time": g.playtime, "hints": g.hints_seen, "ledger": g.ledger,
+			"must": g.mandatory_ok, "incidents": g.incidents, "time": g.playtime, "hints": g.hints_seen, "ledger": g.ledger,
 			"drone": {"p": _v2(g.drone.global_position), "v": _v2(g.drone.linear_velocity), "hp": g.drone.integrity, "alive": g.drone.alive},
 			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode, "reveals": g.reveal_count, "respawn": g.drone_respawn,
 			"debris": debris},
@@ -410,6 +410,7 @@ static func apply_late(g, d: Dictionary) -> void:
 	g.loss_lines = gd.lines
 	for k in gd.must:
 		g.mandatory_ok[k] = gd.must[k]
+	g.incidents = gd.get("incidents", [])
 	g.playtime = gd.time
 	g.hints_seen = gd.hints
 	g.ledger = gd.ledger

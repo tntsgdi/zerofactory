@@ -52,6 +52,7 @@ var income_hazard := 0.0
 var losses := 0.0
 var loss_lines: Array = []   # [text_key, amount]
 var mandatory_ok := {}     # tag -> recovered intact into the equipment bay
+var incidents: Array = []  # [playtime, kind, detail]: what went wrong and when (the accident review reads it)
 var _mand: Array = []
 var _mand_zh := -1
 var feed: Array = []         # [text, amount, t] recent income lines for the HUD
@@ -503,6 +504,10 @@ func net() -> float:
 	return earned() - losses - CONTRACT_FEE
 
 
+func incident(kind: String, detail: String = "") -> void:
+	incidents.append([snappedf(playtime, 0.1), kind, detail])
+
+
 func lose(key: String, amount: float, at: Vector2) -> void:
 	losses += amount
 	loss_lines.append([key, amount])
@@ -628,6 +633,7 @@ func on_swallowed(b, zone: String) -> void:
 
 
 func _furnace_boom() -> void:
+	incident("furnace")
 	var p := Dock.zpos("metal")
 	fx.flash(p, 260.0, 0.7, Pal.heat(1.0, 3.0))
 	fx.ring(p, 20.0, 300.0, 0.6, Pal.heat(0.9, 2.0), 3.0)
@@ -723,6 +729,7 @@ func _impact(b, dv: float) -> void:
 			p.cond = maxf(0.0, p.cond - p.fragile * k * 0.5)
 			lost += (before - p.cond) * p.value
 	if lost > 150.0:
+		incident("impact", "%d" % int(lost))
 		fx.number(at + Vector2(0, -20), "−" + Pal.money(lost).trim_prefix("$"), Pal.heat(0.9, 1.3), 18)
 		say("impact_damage", at)
 		hint("impact")
@@ -758,6 +765,7 @@ func hurt_drone(amount: float, from: Vector2, key: String, cd_key: String = "", 
 		return
 	if cd_key != "":
 		hurt_cd[cd_key] = now
+	incident("drone_hit", key)
 	drone.hurt(amount, from)
 	shake(0.25 + amount / 100.0, (drone.global_position - from).normalized())
 	sfx.play("hurt")
@@ -772,6 +780,7 @@ func on_drone_impact(pos: Vector2, dv: float) -> void:
 
 
 func on_drone_destroyed() -> void:
+	incident("drone_lost")
 	var p := drone.global_position
 	fx.flash(p, 200.0, 0.6, Pal.heat(1.0, 2.6))
 	fx.ring(p, 10.0, 180.0, 0.6, Pal.heat(0.9, 1.8), 2.4)
@@ -814,6 +823,7 @@ func on_cut_into(p, pos: Vector2) -> void:
 		fx.sparks(pos, Vector2.UP, 8, Pal.tint(Pal.VOLT, 1.0, 2.0), 160.0, 0.3, PI)
 		sfx.play("zap_small")
 	if was_value > 200.0:
+		incident("equip_cut", p.tag)
 		fx.number(pos + Vector2(0, -30), "−" + Pal.money(was_value).trim_prefix("$"), Pal.heat(0.9, 1.3), 18)
 		say("equip_ruined", pos, Txt.piece_name(p))
 	# one touch of the beam and it is scrap
@@ -823,6 +833,7 @@ func on_cut_into(p, pos: Vector2) -> void:
 
 
 func _arc(pos: Vector2, volts: float, p = null) -> void:
+	incident("arc", "%d V%s" % [int(volts), (" " + p.tag) if p != null and p.tag != "" else ""])
 	var k := clampf(volts / 400.0, 0.3, 1.0)
 	for i in 3 + int(k * 3):
 		fx.arc(pos, pos + Vector2.from_angle(randf() * TAU) * randf_range(40, 120) * k, randf_range(0.18, 0.35), k)
@@ -839,6 +850,7 @@ func _arc(pos: Vector2, volts: float, p = null) -> void:
 
 
 func _burst(p, pos: Vector2) -> void:
+	incident("burst", p.tag)
 	var v: String = sys.tank_vol(p)
 	sys.gas_lost += sys.vols[v].n
 	sys.vols[v].n = 0.0
@@ -877,6 +889,7 @@ func _equip_near(c: Vector2, r: float) -> Array:
 
 
 func _leak(fluid: String, src: String, at: Vector2, piece = null) -> void:
+	incident("leak", src)
 	var lk := {"pos": at, "dir": Vector2.from_angle(randf() * TAU), "fluid": fluid, "rate": 1.0, "src": src, "t": 0.0, "piece": piece, "local": Vector2.ZERO}
 	if piece != null:
 		lk.local = world.frame(piece).affine_inverse() * at
@@ -935,6 +948,7 @@ func _cut_cable_volts(l) -> float:
 
 
 func on_ignite(cl: Dictionary, pos: Vector2) -> void:
+	incident("fire")
 	sys.clouds.erase(cl)
 	var c: Vector2 = cl.pos
 	fx.flash(c, cl.r * 2.2, 0.7, Pal.heat(1.0, 3.0))
@@ -985,6 +999,7 @@ func on_grab(p) -> void:
 
 
 func on_tear(p, weak: Array, lines_held: Array, at: Vector2) -> void:
+	incident("torn", p.tag)
 	var dmg := 0.0
 	for j in weak:
 		world.kill_joint(j)
@@ -1269,6 +1284,7 @@ func on_reveal(room: String, from: Vector2) -> void:
 
 
 func on_blowout(room: String, pos: Vector2, dir: Vector2, p0: float) -> void:
+	incident("blowout", room)
 	shake(0.55, dir)
 	hitstop(0.06)
 	fx.flash(pos, 260.0, 0.6, Pal.tint(Pal.AIR, 0.6, 1.8))

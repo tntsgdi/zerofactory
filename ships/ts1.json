@@ -1,0 +1,163 @@
+{
+	"id": "ts1",
+	"name": "TS-1 TRAINING SECTION",
+	"length": 12.0,
+	"value": {"metal":4000.0,"total":10200.0},
+	"clamps": [[16.5,2.2],[21.5,2.2]],
+	"room_names": {"TC":"room_TC"},
+	"gas": {
+		"rooms": {"TC":100.2},
+		"vessels": {
+			"SC-T": {"V":0.02,"dead_leg":"V-02","kpa":0.0}
+		},
+		"valves": [
+			{"a":"TC","b":"SC-T","ctrl":"V-02","g":20.0}
+		],
+		"value": 300.0
+	},
+	"power": {
+		"bus": "BUS-T",
+		"sources": [
+			{"cable":"c-g","kind":"gen","piece":"G-T01","running":false,"volts":52.0},
+			{"cable":"c-b","charge":1.0,"drain":0.0,"kind":"battery","local_volts":52.0,"piece":"B-T01","switch":"K-BT","volts":52.0},
+			{"cable":"c-c","charge":1.0,"discharge":"E-T02","kind":"cap","piece":"C-T01","volts":48.0}
+		],
+		"lamps": {"":"LAMP-T"}
+	},
+	"fluids": {
+		"volumes": {
+			"res": {"amount":0.03,"fluid":"coolant","full":0.03,"leak":0.2,"nets":["res"],"port":"DR-T","pump":[0.6,0.01]},
+			"rt": {"amount":0.06,"content":2.0,"fluid":"fuel","hazard":0.01,"leak":0.1,"piece":"RT-T"}
+		},
+		"value": {"coolant":50.0,"fuel":0.0}
+	},
+	"ctrls_cfg": {
+		"PT-02": {"rate":1.0},
+		"GAS-T1": {"rate":1.5}
+	},
+	"labels": {"G-T01":"MAIN","RT-T":"RESIDUE"},
+	"procedures": {
+		"P-002": [
+			{"ctrl":"PT-02","do":"measure","expect":["<",1.0]},
+			{"ctrl":"V-02","do":"operate"},
+			{"ctrl":"PT-02","do":"measure","expect":[">",90.0]},
+			{"ctrl":"GAS-T1","do":"hose"},
+			{"do":"wait","max":90.0,"until":{"P":["TC","<",5.0]}},
+			{"do":"free","piece":"P-002"},
+			{"do":"deliver","piece":"P-002","zone":"metal"}
+		],
+		"G-T01": [
+			{"ctrl":"K-BT","do":"operate"},
+			{"ctrl":"E-T02","do":"operate"},
+			{"do":"wait","max":30.0,"until":{"charge":["C-T01","<",0.002]}},
+			{"ctrl":"E-T01","do":"measure","expect":["<",1.0]},
+			{"do":"free","piece":"G-T01"},
+			{"do":"deliver","piece":"G-T01","zone":"equip"}
+		],
+		"CP-T": [
+			{"ctrl":"K-BT","do":"operate"},
+			{"ctrl":"E-T02","do":"operate"},
+			{"do":"wait","max":30.0,"until":{"charge":["C-T01","<",0.002]}},
+			{"ctrl":"DR-T","do":"hose"},
+			{"do":"wait","max":60.0,"until":{"fluid":["res","<",0.01]}},
+			{"do":"free","piece":"CP-T"},
+			{"do":"deliver","piece":"CP-T","zone":"equip"}
+		],
+		"RT-T": [
+			{"do":"free","piece":"RT-T"},
+			{"do":"deliver","piece":"RT-T","zone":"hazard"}
+		]
+	},
+	"blueprint": {"hide":["LAMP-T"]},
+	"training": true,
+	"pieces": [
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"TS-LW","kind":"hull","mass":2.016,"poly":[[15.0,-1.8],[15.4,-1.8],[15.4,1.8],[15.0,1.8]],"rig":true,"tag":"TS-LW"},
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"TS-T1","kind":"hull","mass":0.56,"poly":[[15.0,-2.2],[16.0,-2.2],[16.0,-1.8],[15.0,-1.8]],"rig":true,"tag":"TS-T1"},
+		{"barrier":true,"cut_speed":230.0,"density":1.0,"key":"P-002","kind":"hull","mass":0.64,"name_key":"p_ts_shell","poly":[[16.0,-2.2],[17.6,-2.2],[17.6,-1.8],[16.0,-1.8]],"tag":"P-002"},
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"TS-T2","kind":"hull","mass":0.784,"poly":[[17.6,-2.2],[19.0,-2.2],[19.0,-1.8],[17.6,-1.8]],"rig":true,"tag":"TS-T2"},
+		{"barrier":true,"cut_speed":260.0,"density":1.2,"key":"TS-BH","kind":"bulkhead","mass":1.296,"poly":[[18.6,-1.8],[18.9,-1.8],[18.9,1.8],[18.6,1.8]],"rig":true,"tag":"TS-BH"},
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"TS-B1","kind":"hull","mass":2.184,"poly":[[15.0,1.8],[18.9,1.8],[18.9,2.2],[15.0,2.2]],"rig":true,"tag":"TS-B1"},
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"TS-B2","kind":"hull","mass":2.296,"poly":[[18.9,1.8],[23.0,1.8],[23.0,2.2],[18.9,2.2]],"rig":true,"tag":"TS-B2"},
+		{"barrier":true,"cut_speed":260.0,"density":1.2,"key":"TS-RW","kind":"bulkhead","mass":1.584,"poly":[[23.0,-2.2],[23.3,-2.2],[23.3,2.2],[23.0,2.2]],"rig":true,"tag":"TS-RW"},
+		{"art":"cover","art_size":[0.25,1.4],"art_xf":[1.0,0.0,0.0,1.0,14.75,-0.699999968210856],"cut_speed":260.0,"density":0.6,"key":"P-001","kind":"fixture","mass":0.18,"name_key":"p_ts_cover","poly":[[14.75,-0.7],[15.0,-0.7],[15.0,0.7],[14.75,0.7]],"tag":"P-001"},
+		{"art":"swb","art_size":[0.6,1.2],"art_xf":[1.0,0.0,0.0,1.0,18.9000002543132,-1.39999993642171],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"BUS-T","kind":"equip","mass":0.25,"name_key":"p_ts_bus","poly":[[18.9,-1.4],[19.5,-1.4],[19.5,-0.2],[18.9,-0.2]],"tag":"BUS-T","value":300.0},
+		{"art":"lamp","art_size":[0.3,0.18],"art_xf":[1.0,0.0,0.0,1.0,19.0500005086263,-1.57999992370605],"cut_speed":260.0,"density":1.0,"key":"LAMP-T","kind":"fixture","mass":0.03,"name_key":"p_ts_lamp","poly":[[19.05,-1.58],[19.35,-1.58],[19.35,-1.4],[19.05,-1.4]],"tag":"LAMP-T"},
+		{"art":"gen","art_size":[1.15,1.0],"art_xf":[1.0,0.0,0.0,1.0,19.5999997456868,0.800000031789144],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.35,"hazard":"gen","key":"G-T01","kind":"equip","mass":0.9,"name_key":"p_ts_power","poly":[[19.6,0.8],[20.75,0.8],[20.75,1.8],[19.6,1.8]],"tag":"G-T01","value":1800.0},
+		{"art":"battery","art_size":[0.35,0.6],"art_xf":[1.0,0.0,0.0,1.0,20.8499997456868,1.19999996821086],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"hazard":"battery","key":"B-T01","kind":"equip","mass":0.3,"name_key":"p_ts_battery","poly":[[20.85,1.2],[21.2,1.2],[21.2,1.8],[20.85,1.8]],"tag":"B-T01","value":600.0},
+		{"art":"cap","art_size":[0.4,0.9],"art_xf":[1.0,0.0,0.0,1.0,19.0500005086263,0.900000015894572],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"hazard":"cap","key":"C-T01","kind":"equip","mass":0.2,"name_key":"p_ts_cap","poly":[[19.05,0.9],[19.45,0.9],[19.45,1.8],[19.05,1.8]],"tag":"C-T01","value":400.0},
+		{"art":"module","art_size":[0.45,0.9],"art_xf":[1.0,0.0,0.0,1.0,22.5500005086263,0.149999996026357],"cut_speed":240.0,"density":1.0,"key":"MAN-T","kind":"fixture","mass":0.15,"name_key":"p_ts_manifold","poly":[[22.55,0.15],[23.0,0.15],[23.0,1.05],[22.55,1.05]],"rig":true,"tag":"MAN-T"},
+		{"art":"pump","art_size":[1.0,0.8],"art_xf":[1.0,0.0,0.0,1.0,21.3999989827474,1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"CP-T","kind":"equip","mass":0.45,"name_key":"p_ts_pump","poly":[[21.4,1.0],[22.4,1.0],[22.4,1.8],[21.4,1.8]],"tag":"CP-T","value":2450.0},
+		{"cut_speed":170.0,"density":0.81,"key":"ARM-T","kind":"beam","mass":1.2,"name_key":"p_ts_armor","poly":[[23.3,-2.2],[27.0,-2.2],[27.0,-1.8],[23.3,-1.8]],"tag":"ARM-T"},
+		{"cut_speed":120.0,"density":2.16,"key":"BM-1","kind":"beam","mass":2.4,"name_key":"p_ts_beam","poly":[[23.3,1.6],[25.15,1.6],[25.15,2.2],[23.3,2.2]],"tag":"BM-1"},
+		{"cut_speed":120.0,"density":2.16,"key":"BM-2","kind":"beam","mass":2.4,"name_key":"p_ts_beam","poly":[[25.15,1.6],[27.0,1.6],[27.0,2.2],[25.15,2.2]],"tag":"BM-2"},
+		{"cut_speed":220.0,"density":0.45,"key":"p20","kind":"strut","mass":0.3366,"name_key":"p_ts_strut","poly":[[25.05,-1.8],[25.27,-1.8],[25.27,1.6],[25.05,1.6]]},
+		{"cut_speed":220.0,"density":0.45,"key":"p21","kind":"strut","mass":0.3366,"name_key":"p_ts_strut","poly":[[26.7,-1.8],[26.92,-1.8],[26.92,1.6],[26.7,1.6]]},
+		{"art":"fueltank","art_size":[0.85,0.75],"art_xf":[1.0,0.0,0.0,1.0,25.6000010172526,0.849999984105428],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.35,"hazard":"fuel_tank","key":"RT-T","kind":"equip","mass":0.3,"name_key":"p_ts_tank","poly":[[25.6,0.85],[26.45,0.85],[26.45,1.6],[25.6,1.6]],"tag":"RT-T","value":300.0}
+	],
+	"joints": [
+		{"a":"TS-LW","at":[15.2,-1.85],"b":"TS-T1","type":"weld"},
+		{"a":"TS-LW","at":[15.2,1.85],"b":"TS-B1","type":"weld"},
+		{"a":"TS-T2","at":[18.75,-1.85],"b":"TS-BH","type":"weld"},
+		{"a":"TS-BH","at":[18.75,1.85],"b":"TS-B1","type":"weld"},
+		{"a":"TS-B1","at":[18.9,2.0],"b":"TS-B2","type":"weld"},
+		{"a":"TS-B2","at":[23.0,2.0],"b":"TS-RW","type":"weld"},
+		{"a":"P-002","at":[16.08,-2.1],"b":"TS-T1","type":"bolt"},
+		{"a":"P-002","at":[16.08,-1.9],"b":"TS-T1","type":"bolt"},
+		{"a":"P-002","at":[17.52,-2.1],"b":"TS-T2","type":"bolt"},
+		{"a":"P-002","at":[17.52,-1.9],"b":"TS-T2","type":"bolt"},
+		{"a":"TS-B1","at":[16.5,2.15],"b":null,"tag":"CL-01","type":"clamp"},
+		{"a":"TS-B2","at":[21.5,2.15],"b":null,"tag":"CL-02","type":"clamp"},
+		{"a":"P-001","at":[14.9,-0.6],"b":"TS-LW","type":"bolt"},
+		{"a":"P-001","at":[14.9,-0.2],"b":"TS-LW","type":"bolt"},
+		{"a":"P-001","at":[14.9,0.2],"b":"TS-LW","type":"bolt"},
+		{"a":"P-001","at":[14.9,0.6],"b":"TS-LW","type":"bolt"},
+		{"a":"BUS-T","at":[18.95,-1.3],"b":"TS-BH","type":"bolt"},
+		{"a":"BUS-T","at":[18.95,-0.3],"b":"TS-BH","type":"bolt"},
+		{"a":"LAMP-T","at":[19.2,-1.42],"b":"BUS-T","type":"bolt"},
+		{"a":"G-T01","at":[19.75,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"G-T01","at":[20.6,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"B-T01","at":[20.92,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"B-T01","at":[21.13,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"C-T01","at":[19.12,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"C-T01","at":[19.38,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"MAN-T","at":[22.98,0.3],"b":"TS-RW","type":"weld"},
+		{"a":"MAN-T","at":[22.98,0.9],"b":"TS-RW","type":"weld"},
+		{"a":"CP-T","at":[21.55,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"CP-T","at":[21.9,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"CP-T","at":[22.25,1.8],"b":"TS-B2","type":"bolt"},
+		{"a":"ARM-T","at":[23.32,-2.1],"b":"TS-RW","type":"weld"},
+		{"a":"ARM-T","at":[23.32,-1.9],"b":"TS-RW","type":"weld"},
+		{"a":"BM-1","at":[25.15,1.7],"b":"BM-2","type":"weld"},
+		{"a":"BM-1","at":[25.15,1.9],"b":"BM-2","type":"weld"},
+		{"a":"BM-1","at":[25.15,2.1],"b":"BM-2","type":"weld"},
+		{"a":"BM-1","at":[23.32,1.75],"b":"TS-RW","type":"bolt"},
+		{"a":"BM-1","at":[23.32,2.05],"b":"TS-RW","type":"bolt"},
+		{"a":"p20","at":[25.16,-1.8],"b":"ARM-T","type":"bolt"},
+		{"a":"p20","at":[25.16,1.6],"b":"BM-1","type":"bolt"},
+		{"a":"p21","at":[26.81,-1.8],"b":"ARM-T","type":"bolt"},
+		{"a":"p21","at":[26.81,1.6],"b":"BM-2","type":"bolt"},
+		{"a":"RT-T","at":[25.75,1.6],"b":"BM-2","type":"bolt"},
+		{"a":"RT-T","at":[26.3,1.6],"b":"BM-2","type":"bolt"}
+	],
+	"lines": [
+		{"a":"G-T01","b":"BUS-T","id":"c-g","kind":"cable","net":"power","pa":[19.7,0.85],"path":[[19.7,0.85],[19.7,0.5],[19.4,0.5],[19.4,-0.25]],"pb":[19.4,-0.25]},
+		{"a":"B-T01","b":"BUS-T","id":"c-b","kind":"cable","net":"power","pa":[20.95,1.25],"path":[[20.95,1.25],[20.95,0.35],[19.55,0.35],[19.55,-0.35],[19.45,-0.35]],"pb":[19.45,-0.35]},
+		{"a":"C-T01","b":"BUS-T","id":"c-c","kind":"cable","net":"power","pa":[19.25,0.95],"path":[[19.25,0.95],[19.25,-0.25]],"pb":[19.25,-0.25]},
+		{"a":"BUS-T","b":"LAMP-T","id":"c-l","kind":"cable","net":"power","pa":[19.2,-1.38],"path":[[19.2,-1.38],[19.2,-1.42]],"pb":[19.2,-1.42]},
+		{"a":"BUS-T","b":"CP-T","id":"c-p","kind":"cable","net":"power","pa":[19.48,-0.6],"path":[[19.48,-0.6],[21.0,-0.6],[21.0,0.7],[21.45,0.7],[21.45,1.05]],"pb":[21.45,1.05]},
+		{"a":"CP-T","b":"MAN-T","id":"r1","kind":"pipe","net":"none","pa":[21.7,1.0],"path":[[21.7,1.0],[21.7,0.4],[22.55,0.4]],"pb":[22.55,0.4]},
+		{"a":"CP-T","b":"MAN-T","id":"r2","kind":"pipe","net":"res","pa":[22.35,1.2],"path":[[22.35,1.2],[22.45,1.2],[22.45,0.85],[22.55,0.85]],"pb":[22.55,0.85]}
+	],
+	"ctrls": [
+		{"at":[15.55,-2.25],"id":"PT-02","kind":"port","medium":"gas","piece":"TS-T1","target":"SC-T"},
+		{"at":[15.85,-2.25],"id":"V-02","kind":"valve","piece":"TS-T1","target":"V-02"},
+		{"at":[18.3,-2.25],"id":"GAS-T1","kind":"port","medium":"gas","piece":"TS-T2","target":"TC"},
+		{"at":[19.05,-1.15],"id":"K-BT","kind":"switch","piece":"BUS-T","state":true,"target":"K-BT"},
+		{"at":[19.33,-1.15],"id":"E-T01","kind":"test","medium":"volt","piece":"BUS-T","target":"bus"},
+		{"at":[19.05,-0.72],"id":"E-T02","kind":"discharge","piece":"BUS-T","target":"cap"},
+		{"at":[22.75,0.62],"id":"DR-T","kind":"port","medium":"coolant","piece":"MAN-T","target":"res"}
+	],
+	"rooms": [
+		{"name":"TC","poly":[[15.4,-1.8],[18.6,-1.8],[18.6,1.8],[15.4,1.8]]}
+	]
+}

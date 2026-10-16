@@ -81,7 +81,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				for k in 5:
 					L(ci, Vector2(cx - w * 0.08, h * (0.26 + k * 0.1)), Vector2(cx + w * 0.08, h * (0.26 + k * 0.1)), 0.2)
 			box(ci, Rect2(w * 0.08, h * 0.82, w * 0.84, h * 0.1), 0.35)
-			ci.draw_string(font, Vector2(w * 0.08, h * 0.12), "G-01  FUEL CELL", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.6))
+			ci.draw_string(font, Vector2(w * 0.08, h * 0.12), (p.tag + "  " + p.label).strip_edges(), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.6))
 			ring(ci, Vector2(w * 0.87, h * 0.25), 4.0, 0.6)
 		"battery":
 			for i in 4:
@@ -144,6 +144,6 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			ci.draw_arc(Vector2(w - r - 2, h * 0.5), r, -PI * 0.5, PI * 0.5, 16, Pal.ink(0.5), 1.0, true)
 			for i in 3:
 				L(ci, Vector2(w * (0.3 + i * 0.2), 3), Vector2(w * (0.3 + i * 0.2), h - 3), 0.25)
-			ci.draw_string(font, Vector2(w * 0.32, h * 0.6), "T-F01  PROP", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.5))
+			ci.draw_string(font, Vector2(w * 0.32, h * 0.6), (p.tag + "  " + p.label).strip_edges(), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.5))
 		"guard":
 			L(ci, Vector2(w * 0.5, 3), Vector2(w * 0.45, h - 3), 0.3)

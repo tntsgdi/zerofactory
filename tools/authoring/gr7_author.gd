@@ -310,7 +310,13 @@ static func _equipment() -> void:
 	# A — cockpit
 	var r := sit(1.25, 2.3, 0.85)
 	var con = _equip("CON-A", "console", r, {"mass": 0.35, "value": 1000.0, "fragile": 0.5, "room": "A", "name_key": "p_console"})
-	_sit_bolts(con, r, null)
+	# the bow floor slopes away under the console: its pedestal follows it down
+	var fl0 := floor_at(1.25)
+	var fl1 := floor_at(2.3)
+	con.poly = PackedVector2Array([p(1.25, r.position.y), p(2.3, r.position.y), p(2.3, fl1 - 0.02), p(1.25, fl0 - 0.02)])
+	for x in [1.44, 2.11]:
+		var hit := _below(x, lerpf(fl0, fl1, (x - 1.25) / 1.05) - 0.06)
+		_bolt(con, hit[0], x, hit[1])
 	r = sit(2.6, 3.8, 1.0)
 	var nav = _equip("NAV-01", "nav", r, {"mass": 0.45, "value": 6000.0, "fragile": 0.85, "room": "A", "name_key": "p_nav"})
 	_sit_bolts(nav, r, null, "bolt", 4)
@@ -594,7 +600,38 @@ static func meta() -> Dictionary:
 			"G-LOCAL": {"target": "G-01"},
 			"E-D02": {"target": "CAP-01"},
 		},
-		"labels": {"TK-B1": "O₂", "TK-B2": "N₂", "C-01": "IND. METAL", "C-02": "PRECISION", "C-03": "ELECTRONIC"},
+		"labels": {"TK-B1": "O₂", "TK-B2": "N₂", "C-01": "IND. METAL", "C-02": "PRECISION", "C-03": "ELECTRONIC", "G-01": "FUEL CELL", "T-F01": "PROP"},
+		# safe ways to take out the key equipment; VALIDATE SHIP has a bot walk each one
+		"procedures": {
+			"G-01": [
+				{"do": "hose", "ctrl": "GAS-D"},
+				{"do": "wait", "until": {"P": ["D", "<", 5.0]}, "max": 90.0},
+				{"do": "operate", "ctrl": "K-G"},
+				{"do": "operate", "ctrl": "K-B"},
+				{"do": "operate", "ctrl": "E-D02"},
+				{"do": "wait", "until": {"charge": ["CAP-01", "<", 0.002]}, "max": 30.0},
+				{"do": "measure", "ctrl": "E-D01", "expect": ["<", 1.0]},
+				{"do": "cut", "at": [28.6, -3.8], "kerf": [[28.2, -4.3], [28.2, -3.4]]},
+				{"do": "cut", "at": [28.6, -3.8], "kerf": [[29.0, -4.3], [29.0, -3.4]]},
+				{"do": "wait", "until": {"open": ["D"]}, "max": 5.0},
+				{"do": "operate", "ctrl": "G-LOCAL"},
+				{"do": "hose", "ctrl": "COOL-E"},
+				{"do": "wait", "until": {"fluid": ["cool", "<", 0.02], "T": ["<", 60.0]}, "max": 240.0},
+				{"do": "free", "piece": "G-01"},
+				{"do": "deliver", "piece": "G-01", "zone": "equip"},
+			],
+			"BB-01": [
+				{"do": "hose", "ctrl": "GAS-AB"},
+				{"do": "wait", "until": {"P": ["A", "<", 5.0]}, "max": 120.0},
+				{"do": "cut", "at": [3.6, -3.4], "kerf": [[3.2, -3.75], [3.2, -2.9]]},
+				{"do": "cut", "at": [3.6, -3.4], "kerf": [[4.0, -4.0], [4.0, -3.15]]},
+				{"do": "wait", "until": {"open": ["A"]}, "max": 5.0},
+				{"do": "free", "piece": "COV-A"},
+				{"do": "deliver", "piece": "COV-A", "zone": "metal"},
+				{"do": "free", "piece": "BB-01"},
+				{"do": "deliver", "piece": "BB-01", "zone": "equip"},
+			],
+		},
 		"blueprint": {
 			"hide": ["LAMP-A", "LAMP-B", "LAMP-C", "LAMP-D", "CTRL-D", "COV-A", "GUARD-F"],
 			"design": {"C-02": [15.0, 1.05, 17.6, 2.95], "RAD": [30.6, 1.8, 32.3, 2.95]},
