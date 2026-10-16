@@ -1,0 +1,786 @@
+class_name Hud
+extends CanvasLayer
+# Screen-space layer: contract panel, income, toolbar, drone status, cursor
+# labels, measurement tags, messages, hints, the contract card, the pause
+# menu and the settlement. Everything moves on springs and real time.
+
+var game: Game
+var c: Control
+var fadd: Control
+var font: Font
+var font_l: Font
+var font_b: Font
+var t := 0.0
+var rate_roll := Motion.Roller.new(0.0, 6.0)
+var credit_roll := Motion.Roller.new(0.0, 7.0)
+var credit_pop := 0.0
+var slot_y: Array = []
+var slot_glow: Array = []
+var hint_text := ""
+var hint_t := 99.0
+var flash := 0.0
+var hurt := 0.0
+var flyers: Array = []     # [from, to, t, amount]
+var card_k := Motion.Spring.new(0.0, 170.0, 0.82)
+var card_t := 0.0
+var menu_k := Motion.Spring.new(0.0, 220.0, 0.85)
+var menu_hover := -1
+var menu_confirm := -1
+var ending := false
+var end_t := 0.0
+var end_early := false
+var end_rows: Array = []
+var must_k := [0.0, 0.0]
+var tag_birth := {}
+var tool_names_k := 0.0
+
+
+func _ready() -> void:
+	layer = 20
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	font = Fonts.get_font("Regular")
+	font_l = Fonts.get_font("Light")
+	font_b = Fonts.get_font("Medium")
+	c = Control.new()
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.draw.connect(_draw_hud)
+	add_child(c)
+	fadd = Control.new()
+	fadd.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fadd.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var m := CanvasItemMaterial.new()
+	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	fadd.material = m
+	fadd.draw.connect(_draw_add)
+	add_child(fadd)
+	for i in 5:
+		slot_y.append(Motion.Spring.new(0.0, 300.0, 0.6))
+		slot_glow.append(0.0)
+
+
+func size() -> Vector2:
+	return c.size
+
+
+func to_screen(w: Vector2) -> Vector2:
+	return game.get_viewport().get_canvas_transform() * w
+
+
+func pointer_over_ui() -> bool:
+	var m := c.get_local_mouse_position()
+	return _toolbar_rect().has_point(m)
+
+
+func _toolbar_rect() -> Rect2:
+	var s := size()
+	var w := 5 * 132.0 + 4 * 10.0
+	return Rect2(s.x * 0.5 - w * 0.5, s.y - 112.0, w, 92.0)
+
+
+func menu_changed() -> void:
+	menu_k.target = 1.0 if game.menu_open else 0.0
+	menu_confirm = -1
+
+
+func contract_changed() -> void:
+	card_k.target = 1.0 if game.contract_open else 0.0
+	if game.contract_open:
+		card_t = 0.0
+
+
+func show_hint(text: String) -> void:
+	hint_text = text
+	hint_t = 0.0
+
+
+func white_flash(a: float) -> void:
+	flash = maxf(flash, a)
+
+
+func hurt_flash(amount: float) -> void:
+	hurt = maxf(hurt, clampf(amount / 40.0, 0.3, 1.0))
+
+
+func pop_credits(_amount: float) -> void:
+	credit_pop = 1.0
+
+
+func fly_credits(world_at: Vector2, amount: float) -> void:
+	var from := to_screen(world_at)
+	var s := size()
+	flyers.append([from, Vector2(s.x - 70.0, 76.0), 0.0, amount])
+
+
+func start_ending(early: bool) -> void:
+	ending = true
+	end_t = 0.0
+	end_early = early
+	var g = game
+	end_rows = [
+		["e_equip", g.income_equip],
+		["e_metal", g.income_metal + g.income_hazard],
+		["e_fluid", g.sys.gas_value() + g.sys.fluid_value()],
+		["e_loss", -g.losses],
+		["e_fee", -Game.CONTRACT_FEE],
+	]
+
+
+func ending_key(k: int) -> void:
+	if end_t < 1.0:
+		end_t = 9.0
+		return
+	if k == KEY_R:
+		game.restart()
+	elif k == KEY_M or k == KEY_ESCAPE:
+		game.to_title()
+
+
+func _input(ev: InputEvent) -> void:
+	if game == null:
+		return
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		if game.contract_open and card_t > 0.35:
+			game.close_contract()
+			get_viewport().set_input_as_handled()
+			return
+		if game.menu_open:
+			_menu_click()
+			get_viewport().set_input_as_handled()
+			return
+		if ending:
+			if end_t < 4.0:
+				end_t = 9.0
+			get_viewport().set_input_as_handled()
+			return
+		if game.state == "play" and _toolbar_rect().has_point(c.get_local_mouse_position()):
+			var i := int((c.get_local_mouse_position().x - _toolbar_rect().position.x) / 142.0)
+			game.tools.set_tool(clampi(i + 1, 1, 5))
+			get_viewport().set_input_as_handled()
+
+
+func _process(dt: float) -> void:
+	if game == null:
+		return
+	t += dt
+	hint_t += dt
+	flash = maxf(0.0, flash - dt * 2.5)
+	hurt = maxf(0.0, hurt - dt * 1.8)
+	credit_pop = maxf(0.0, credit_pop - dt * 3.0)
+	card_t += dt
+	card_k.step(dt)
+	menu_k.step(dt)
+	if ending:
+		end_t += dt
+	rate_roll.set_to(game.recovery_rate() * 100.0)
+	rate_roll.step(dt)
+	credit_roll.set_to(game.earned() - game.losses)
+	credit_roll.step(dt)
+	for i in 5:
+		var on: bool = game.tools.tool == i + 1
+		slot_y[i].target = -12.0 if on else 0.0
+		slot_y[i].step(dt)
+		slot_glow[i] = Pal.damp(slot_glow[i], 1.0 if on else 0.0, 14.0, dt)
+	must_k[0] = Pal.damp(must_k[0], 1.0 if game.bb_ok else 0.0, 8.0, dt)
+	must_k[1] = Pal.damp(must_k[1], 1.0 if game.gen_ok else 0.0, 8.0, dt)
+	for f in flyers:
+		f[2] += dt
+	var landed := flyers.filter(func(f): return f[2] >= 0.6)
+	if not landed.is_empty():
+		credit_pop = 1.0
+	flyers = flyers.filter(func(f): return f[2] < 0.6)
+	if game.menu_open:
+		_menu_hover()
+	c.queue_redraw()
+	fadd.queue_redraw()
+
+
+# ---------------------------------------------------------------- drawing helpers
+
+func _text(s: String, pos: Vector2, size_px: int, col: Color, f: Font = null, align: int = -1, width: float = -1.0) -> void:
+	var fo := f if f != null else font
+	var x := pos.x
+	if align == 0:
+		x -= fo.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x * 0.5
+	elif align == 1:
+		x -= fo.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+	c.draw_string(fo, Vector2(x, pos.y), s, HORIZONTAL_ALIGNMENT_LEFT, width, size_px, col)
+
+
+func _tw(s: String, size_px: int, f: Font = null) -> float:
+	return (f if f != null else font).get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+
+
+func _panel(r: Rect2, a: float = 0.82) -> void:
+	c.draw_rect(r, Color(0.03, 0.032, 0.037, a))
+	c.draw_rect(r, Pal.ink(0.16 * a / 0.82), false, 1.0)
+
+
+# ---------------------------------------------------------------- main draw
+
+func _draw_hud() -> void:
+	if game == null:
+		return
+	var s := size()
+	var g = game
+	if g.state == "intro":
+		_intro_overlay(s)
+		return
+	if not ending:
+		_world_tags()
+		_messages()
+		_cursor_label()
+		_contract_panel()
+		_credits(s)
+		_toolbar(s)
+		_drone_status(s)
+		_hint(s)
+		_text(g.txt("keys"), Vector2(s.x * 0.5, s.y - 10.0), 12, Pal.ink(0.22), font, 0)
+	# hurt vignette
+	if hurt > 0.0:
+		var e := hurt * hurt
+		for i in 6:
+			var w := 6.0 + i * 10.0
+			var a := 0.1 * e * (1.0 - i / 6.0)
+			c.draw_rect(Rect2(0, 0, s.x, w), Pal.heat(a))
+			c.draw_rect(Rect2(0, s.y - w, s.x, w), Pal.heat(a))
+			c.draw_rect(Rect2(0, 0, w, s.y), Pal.heat(a))
+			c.draw_rect(Rect2(s.x - w, 0, w, s.y), Pal.heat(a))
+	if g.contract_open or card_k.x > 0.01:
+		_contract_card(s)
+	if menu_k.x > 0.01:
+		_menu(s)
+	if ending:
+		_settlement(s)
+	if flash > 0.0:
+		c.draw_rect(Rect2(Vector2.ZERO, s), Color(1, 1, 1, flash * flash * 0.8))
+
+
+func _intro_overlay(s: Vector2) -> void:
+	var k := clampf(game.state_t / 0.6, 0.0, 1.0) * clampf((6.0 - game.state_t) / 0.6, 0.0, 1.0)
+	_text(game.txt("contract"), Vector2(70, s.y - 120), 16, Pal.ink(0.5 * k), font)
+	_text(game.txt("ship"), Vector2(70, s.y - 86), 30, Pal.ink(0.9 * k), font_l)
+	_text("ESC / SPACE", Vector2(s.x - 70, s.y - 60), 12, Pal.ink(0.3 * k), font, 1)
+	# letterbox bars slide away as the drone launches
+	var bar := 70.0 * clampf((5.2 - game.state_t) / 0.6, 0.0, 1.0)
+	c.draw_rect(Rect2(0, 0, s.x, bar), Color(0, 0, 0, 1))
+	c.draw_rect(Rect2(0, s.y - bar, s.x, bar), Color(0, 0, 0, 1))
+
+
+func _contract_panel() -> void:
+	var g = game
+	var x := 40.0
+	var y := 46.0
+	_text(g.txt("contract"), Vector2(x, y), 13, Pal.ink(0.45), font)
+	_text("GR-7  GREY HERON", Vector2(x, y + 24), 20, Pal.ink(0.92), font_b)
+	# mandatory items
+	var items := [["BB-01", g.txt("p_blackbox")], ["G-01", g.txt("p_gen")]]
+	for i in 2:
+		var yy := y + 56 + i * 24
+		var k: float = must_k[i]
+		var dc := Vector2(x + 7, yy - 5)
+		var dia := PackedVector2Array([dc + Vector2(0, -6), dc + Vector2(6, 0), dc + Vector2(0, 6), dc + Vector2(-6, 0)])
+		if k > 0.02:
+			var sc := 1.0 + 0.6 * (1.0 - k) * k * 4.0
+			var d2 := PackedVector2Array()
+			for q in dia:
+				d2.append(dc + (q - dc) * sc)
+			c.draw_colored_polygon(d2, Pal.ink(0.95 * k))
+		var cl := dia.duplicate()
+		cl.append(dia[0])
+		c.draw_polyline(cl, Pal.ink(0.7), 1.2, true)
+		_text(items[i][1] + "  " + items[i][0], Vector2(x + 22, yy), 14, Pal.ink(0.55 + 0.4 * k), font)
+	# recovery bar
+	var by := y + 120
+	_text(g.txt("rate"), Vector2(x, by), 13, Pal.ink(0.45), font)
+	var pct: float = rate_roll.shown
+	_text("%.1f%%" % pct, Vector2(x + 300, by + 2), 22, Pal.ink(0.95), font_l, 1)
+	var bw := 300.0
+	var br := Rect2(x, by + 12, bw, 4)
+	c.draw_rect(br, Pal.ink(0.1))
+	c.draw_rect(Rect2(br.position, Vector2(bw * clampf(pct / 100.0, 0.0, 1.0), 4)), Pal.ink(0.85))
+	for mark in [70.0, 80.0, 92.0]:
+		var mx: float = x + bw * mark / 100.0
+		c.draw_line(Vector2(mx, by + 9), Vector2(mx, by + 19), Pal.ink(0.5 if pct < mark else 0.9), 1.0)
+	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 12, Pal.ink(0.3), font)
+
+
+func _credits(s: Vector2) -> void:
+	var g = game
+	var x := s.x - 40.0
+	_text(g.txt("income"), Vector2(x, 46), 13, Pal.ink(0.45), font, 1)
+	var v: float = credit_roll.shown
+	var sc := 1.0 + 0.18 * credit_pop * credit_pop
+	var txt := Pal.money(v)
+	var sz := int(34 * sc)
+	_text(txt, Vector2(x, 88), sz, Pal.ink(0.95), font_l, 1)
+	var y := 120.0
+	for i in g.feed.size():
+		var f: Array = g.feed[i]
+		var age: float = f[2]
+		var slide := 1.0 - Pal.back(clampf(age / 0.35, 0.0, 1.0), 1.4)
+		var a: float = clampf((5.0 - age) / 0.8, 0.0, 1.0) * (1.0 - i * 0.14)
+		var col := Pal.ink(0.75 * a) if f[1] >= 0 else Pal.heat(0.9 * a, 1.2)
+		var amt: String = ("+" if f[1] >= 0 else "") + Pal.money(f[1])
+		_text(amt, Vector2(x + slide * 120.0, y + i * 22), 15, col, font_b, 1)
+		_text(str(f[0]), Vector2(x - 120 + slide * 120.0, y + i * 22), 13, Pal.ink(0.4 * a), font, 1)
+
+
+func _toolbar(s: Vector2) -> void:
+	var g = game
+	var r := _toolbar_rect()
+	for i in 5:
+		var sx := r.position.x + i * 142.0
+		var oy: float = slot_y[i].x
+		var rect := Rect2(sx, r.position.y + 14.0 + oy, 132.0, 70.0)
+		var on: float = slot_glow[i]
+		c.draw_rect(rect, Color(0.035, 0.037, 0.042, 0.88))
+		c.draw_rect(rect, Pal.ink(0.14 + 0.5 * on), false, 1.0)
+		if on > 0.01:
+			c.draw_rect(Rect2(rect.position.x, rect.end.y - 3, rect.size.x * on, 3), Pal.heat(1.0, 1.0))
+		_text(str(i + 1), rect.position + Vector2(10, 22), 14, Pal.ink(0.35 + 0.5 * on), font_b)
+		_tool_icon(i + 1, rect.position + Vector2(rect.size.x - 30, 26), on)
+		_text(g.txt("tool_%d" % (i + 1)), rect.position + Vector2(10, 56), 15, Pal.ink(0.5 + 0.45 * on), font)
+		if i == 4:
+			var mode: String = g.txt("mode_" + g.tools.hose_mode)
+			_text(mode, rect.position + Vector2(rect.size.x - 10, 56), 11, Pal.ink(0.4 + 0.3 * on) if g.tools.hose_mode == "recover" else Pal.heat(0.8, 1.0), font, 1)
+
+
+func _tool_icon(n: int, p: Vector2, on: float) -> void:
+	var col := Pal.ink(0.4 + 0.55 * on)
+	match n:
+		1:
+			c.draw_polyline(PackedVector2Array([p + Vector2(0, -9), p + Vector2(9, 0), p + Vector2(0, 9), p + Vector2(-9, 0), p + Vector2(0, -9)]), col, 1.4, true)
+			c.draw_circle(p, 2.0, col)
+		2:
+			c.draw_line(p + Vector2(-10, 8), p + Vector2(10, -8), Pal.heat(0.4 + 0.6 * on, 1.0 + on), 2.0, true)
+			c.draw_circle(p + Vector2(10, -8), 2.5, col)
+		3:
+			c.draw_arc(p, 9.0, 0.5, PI - 0.5, 12, col, 2.0, true)
+			c.draw_arc(p, 9.0, PI + 0.5, TAU - 0.5, 12, col, 2.0, true)
+		4:
+			c.draw_arc(p, 6.0, 0.0, TAU, 16, col, 1.6, true)
+			for k in 6:
+				var a := TAU * k / 6.0 + t * on * 0.6
+				c.draw_line(p + Vector2.from_angle(a) * 6.0, p + Vector2.from_angle(a) * 10.0, col, 2.0)
+		5:
+			c.draw_arc(p, 9.0, 0.0, TAU, 20, col, 1.4, true)
+			c.draw_arc(p, 4.0, 0.0, TAU, 12, col, 1.2, true)
+
+
+func _drone_status(s: Vector2) -> void:
+	var g = game
+	var d = g.drone
+	var x := 40.0
+	var y := s.y - 70.0
+	_text("R-02", Vector2(x, y), 18, Pal.ink(0.9), font_b)
+	var integ: float = d.integrity if d.alive else 0.0
+	var bw := 180.0
+	c.draw_rect(Rect2(x + 60, y - 10, bw, 6), Pal.ink(0.1))
+	var col := Pal.ink(0.85) if integ > 35.0 else Pal.heat(0.95, 1.2)
+	c.draw_rect(Rect2(x + 60, y - 10, bw * integ / 100.0, 6), col)
+	_text(g.txt("integrity") + "  %d%%" % int(integ), Vector2(x + 60, y + 16), 12, Pal.ink(0.4), font)
+	d.assist_k = Pal.damp(d.assist_k, 1.0 if d.assist else 0.0, 14.0, get_process_delta_time())
+	var sw := Rect2(x + 60 + bw + 26, y - 14, 34, 14)
+	c.draw_rect(sw, Pal.ink(0.08 + 0.1 * d.assist_k))
+	c.draw_rect(sw, Pal.ink(0.35 + 0.4 * d.assist_k), false, 1.0)
+	c.draw_rect(Rect2(sw.position + Vector2(2 + 18 * d.assist_k, 2), Vector2(12, 10)), Pal.ink(0.5 + 0.45 * d.assist_k) if d.assist else Pal.ink(0.35))
+	_text("F " + game.txt("assist"), Vector2(sw.end.x + 8, y - 2), 12, Pal.ink(0.4 + 0.4 * d.assist_k), font)
+	var spd: float = d.linear_velocity.length() / Geom.M if d.alive else 0.0
+	_text("%.1f m/s" % spd, Vector2(x + 60 + bw, y + 16), 12, Pal.ink(0.55), font, 1)
+	if not d.alive:
+		_text("R-02 …", Vector2(x, y - 30), 14, Pal.heat(0.9, 1.2), font)
+
+
+func _hint(s: Vector2) -> void:
+	if hint_text == "" or hint_t > 9.0:
+		return
+	var a := clampf(hint_t / 0.3, 0.0, 1.0) * clampf((9.0 - hint_t) / 0.6, 0.0, 1.0)
+	var w := minf(980.0, _tw(hint_text, 16) + 60.0)
+	var lines := 1
+	if _tw(hint_text, 16) > 920.0:
+		lines = 2
+	var r := Rect2(s.x * 0.5 - w * 0.5, s.y - 160.0 - lines * 22.0 - (1.0 - Pal.ease_out(a)) * 10.0, w, 18.0 + lines * 22.0)
+	c.draw_rect(r, Color(0.03, 0.032, 0.037, 0.85 * a))
+	c.draw_rect(Rect2(r.position, Vector2(3, r.size.y)), Pal.heat(a, 1.0))
+	c.draw_multiline_string(font, r.position + Vector2(22, 26), hint_text, HORIZONTAL_ALIGNMENT_LEFT, w - 40.0, 16, lines, Pal.ink(0.88 * a))
+
+
+# readings: tags anchored on the ship
+func _world_tags() -> void:
+	var g = game
+	var w = g.world
+	var mouse := c.get_local_mouse_position()
+	var hovered = null
+	var rects: Array = []
+	for key in g.sys.readings:
+		var r: Dictionary = g.sys.readings[key]
+		var anchor := Vector2.INF
+		if r.has("ctrl"):
+			if not w.ctrl_alive(r.ctrl):
+				continue
+			anchor = w.ctrl_world(r.ctrl)
+		elif r.has("piece"):
+			if r.piece.gone:
+				continue
+			anchor = w.frame(r.piece) * r.local
+		elif r.has("anchor_pos"):
+			anchor = r.anchor_pos
+		if anchor == Vector2.INF:
+			continue
+		var sp := to_screen(anchor)
+		if not Rect2(Vector2(-200, -200), size() + Vector2(400, 400)).has_point(sp):
+			continue
+		if not tag_birth.has(key) or tag_birth[key][0] != r.t:
+			tag_birth[key] = [r.t, t]
+		var age: float = t - tag_birth[key][1]
+		var stale: bool = g.sys.stale(r)
+		var label: String = r.at
+		var val: String = r.text
+		if age < 0.45 and not stale:
+			# digits tumble before they settle
+			var sc := ""
+			for ch in val:
+				sc += str(randi() % 10) if ch >= "0" and ch <= "9" else ch
+			val = sc
+		if r.has("inspect"):
+			val = r.inspect + "  ·  " + r.text
+		var off := Vector2(16, -26)
+		if key.ends_with("/T") or key.ends_with("/V"):
+			off = Vector2(16, -6)
+		var pos := sp + off
+		for prev in rects:
+			if prev.intersects(Rect2(pos - Vector2(0, 16), Vector2(160, 22))):
+				pos.y = prev.position.y - 10.0
+		var tw := _tw(label, 12) + _tw(val, 15, font_b) + 30.0
+		var rect := Rect2(pos - Vector2(0, 16), Vector2(tw, 22))
+		rects.append(rect)
+		var pop := Pal.back(clampf(age / 0.25, 0.0, 1.0), 2.0)
+		var a := 1.0 if not stale else 0.5
+		c.draw_line(sp, pos + Vector2(0, 6), Pal.ink(0.3 * a), 1.0, true)
+		c.draw_circle(sp, 2.5, Pal.ink(0.8 * a))
+		var rr := Rect2(rect.position, Vector2(rect.size.x * pop, rect.size.y))
+		c.draw_rect(rr, Color(0.03, 0.032, 0.037, 0.88))
+		c.draw_rect(Rect2(rr.position, Vector2(2, rr.size.y)), _kind_col(r.kind, a))
+		if pop > 0.6:
+			_text(label, pos + Vector2(8, 0), 12, Pal.ink(0.45 * a), font)
+			var vcol := Pal.ink(0.95 * a) if not stale else Pal.ink(0.4)
+			var vx := pos.x + 16 + _tw(label, 12)
+			_text(val, Vector2(vx, pos.y + 1), 15, vcol, font_b)
+			if stale:
+				c.draw_line(Vector2(vx - 2, pos.y - 5), Vector2(vx + _tw(val, 15, font_b) + 2, pos.y - 5), Pal.ink(0.5), 1.0)
+		if rect.has_point(mouse):
+			hovered = [r, rect, stale]
+	if hovered != null:
+		var r: Dictionary = hovered[0]
+		var rect: Rect2 = hovered[1]
+		var lines := [
+			"%s  %s" % [game.txt("read_by"), game.txt(r.inst)],
+			"%s  %s" % [game.txt("read_at"), r.at],
+			"%s  T+%s" % [game.txt("read_time"), _clock(r.t)],
+		]
+		if hovered[2]:
+			lines.append(game.txt("stale"))
+		var box := Rect2(rect.position + Vector2(0, 26), Vector2(260, 22 * lines.size() + 10))
+		_panel(box, 0.92)
+		for i in lines.size():
+			_text(lines[i], box.position + Vector2(10, 22 + i * 22), 13, Pal.ink(0.7) if i < 3 else Pal.heat(0.9, 1.0), font)
+
+
+func _clock(sec: float) -> String:
+	return "%02d:%02d" % [int(sec) / 60, int(sec) % 60]
+
+
+func _kind_col(kind: String, a: float) -> Color:
+	match kind:
+		"pressure": return Pal.tint(Pal.AIR, a)
+		"volts": return Pal.tint(Pal.VOLT, a)
+		"fluid", "temp": return Pal.tint(Pal.FLUID, a)
+	return Pal.ink(0.6 * a)
+
+
+func _messages() -> void:
+	for m in game.messages:
+		var age: float = m[2]
+		var sp := to_screen(m[1])
+		var a := clampf(age / 0.12, 0.0, 1.0) * clampf((2.6 - age) / 0.5, 0.0, 1.0)
+		var y := sp.y - 30.0 - Pal.ease_out(age / 2.6) * 26.0
+		var txt: String = m[3]
+		var w := _tw(txt, 15)
+		c.draw_rect(Rect2(sp.x - w * 0.5 - 8, y - 17, w + 16, 24), Color(0.02, 0.022, 0.026, 0.7 * a))
+		_text(txt, Vector2(sp.x, y), 15, Pal.ink(0.95 * a), font, 0)
+
+
+func _cursor_label() -> void:
+	var g = game
+	var h: Dictionary = g.tools.hover
+	var mp := c.get_local_mouse_position()
+	if g.tools.tool == 2:
+		return
+	if h.is_empty():
+		return
+	var name := ""
+	var act := ""
+	match h.kind:
+		"ctrl":
+			name = h.ctrl.id
+			act = _ctrl_action(h.ctrl)
+		"joint":
+			name = h.label if h.label != "" else g.txt("j_" + h.joint.type)
+			act = g.txt({"bolt": "act_unbolt", "lock": "act_unlock", "clamp": "act_clamp"}[h.joint.type])
+		"connector":
+			name = h.label
+			act = g.txt("act_unplug")
+		"line":
+			name = h.label
+			act = g.txt("act_measure")
+		"piece", "inspect":
+			name = Txt.piece_name(h.piece)
+			var m: float = g.world.group_mass(h.piece)
+			act = ("%.2f t" % m) if g.tools.tool == 3 else g.txt("act_inspect")
+	if not h.ok:
+		act = g.txt(h.reason)
+	var pos := mp + Vector2(22, 30)
+	var w := maxf(_tw(name, 14), _tw(act, 13)) + 20.0
+	c.draw_rect(Rect2(pos - Vector2(8, 16), Vector2(w, 42)), Color(0.02, 0.022, 0.026, 0.82))
+	_text(name, pos, 14, Pal.ink(0.95), font_b)
+	var heavy: bool = g.tools.tool == 3 and h.kind == "piece" and g.world.group_mass(h.piece) > Tools.GRAB_MAX_T
+	_text(act, pos + Vector2(0, 19), 13, Pal.heat(0.9, 1.1) if (not h.ok or heavy) else Pal.ink(0.55), font)
+
+
+func _ctrl_action(ctrl) -> String:
+	var g = game
+	match g.tools.tool:
+		1: return g.txt("act_measure")
+		5: return g.txt("act_hose_off") if g.sys.hoses.has(ctrl.id) else g.txt("act_hose_on")
+	match ctrl.kind:
+		"valve": return g.txt("act_valve_close") if ctrl.state else g.txt("act_valve_open")
+		"switch": return g.txt("act_switch_off") if ctrl.state else g.txt("act_switch_on")
+		"remote": return g.txt("act_remote")
+		"stop": return g.txt("act_stop")
+		"socket": return g.txt("act_socket")
+		"discharge": return g.txt("act_discharge")
+		"door": return g.txt("act_door")
+		"hatch": return g.txt("act_hatch")
+		"jam": return g.txt("act_jam")
+	return ""
+
+
+# ---------------------------------------------------------------- contract card
+
+func _contract_card(s: Vector2) -> void:
+	var k: float = clampf(card_k.x, 0.0, 1.2)
+	var a := clampf(k, 0.0, 1.0)
+	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.55 * a))
+	var w := 900.0
+	var h := 640.0
+	var r := Rect2(s.x * 0.5 - w * 0.5, s.y * 0.5 - h * 0.5 + (1.0 - k) * 60.0, w, h)
+	_panel(r, 0.95 * a)
+	c.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Pal.heat(a, 1.0))
+	var g = game
+	var x := r.position.x + 48
+	var y := r.position.y + 58
+	var rows: Array = []
+	rows.append(["h", g.txt("c_title"), 14])
+	rows.append(["t", g.txt("ship"), 30])
+	rows.append(["gap", "", 12])
+	rows.append(["h", g.txt("c_req"), 13])
+	for i in range(1, 5):
+		rows.append(["li", g.txt("c_req%d" % i), 16])
+	rows.append(["gap", "", 10])
+	rows.append(["h", g.txt("c_log"), 13])
+	for i in range(1, 6):
+		rows.append(["kv", g.txt("c_log%d" % i), g.txt("c_log%dv" % i)])
+	rows.append(["gap", "", 10])
+	rows.append(["p", g.txt("c_brief"), 15])
+	rows.append(["p", g.txt("c_drawing"), 15])
+	rows.append(["gap", "", 6])
+	rows.append(["h", g.txt("c_fee"), 13])
+	var i := 0
+	for row in rows:
+		var rk := Motion.stagger(card_t, i, 0.03, 0.3)
+		var ra := a * rk
+		var dx := (1.0 - Pal.ease_out(rk)) * 24.0
+		match row[0]:
+			"h":
+				_text(row[1], Vector2(x + dx, y), row[2], Pal.ink(0.45 * ra), font)
+				y += 26
+			"t":
+				_text(row[1], Vector2(x + dx, y + 8), row[2], Pal.ink(0.95 * ra), font_l)
+				y += 40
+			"li":
+				c.draw_circle(Vector2(x + 6 + dx, y - 5), 2.0, Pal.ink(0.7 * ra))
+				_text(row[1], Vector2(x + 20 + dx, y), row[2], Pal.ink(0.85 * ra), font)
+				y += 25
+			"kv":
+				_text(row[1], Vector2(x + 20 + dx, y), 15, Pal.ink(0.55 * ra), font)
+				_text(row[2], Vector2(x + 300 + dx, y), 15, Pal.ink(0.9 * ra), font_b)
+				y += 24
+			"p":
+				c.draw_multiline_string(font, Vector2(x + dx, y), row[1], HORIZONTAL_ALIGNMENT_LEFT, w - 100, row[2], 3, Pal.ink(0.75 * ra))
+				y += 48
+			"gap":
+				y += row[2]
+		i += 1
+	var pulse := 0.6 + 0.4 * sin(t * 3.0)
+	_text(g.txt("c_start"), Vector2(r.end.x - 48, r.end.y - 30), 16, Pal.ink(pulse * a), font_b, 1)
+
+
+# ---------------------------------------------------------------- pause menu
+
+func _menu_items() -> Array:
+	var g = game
+	return [
+		["resume", g.txt("m_resume")],
+		["end", g.txt("m_end") if menu_confirm != 1 else g.txt("m_confirm")],
+		["lang", g.txt("m_lang")],
+		["hints", g.txt("m_hints") if g.hints_on else g.txt("m_hints_off")],
+		["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
+	]
+
+
+func _menu_rect(i: int) -> Rect2:
+	var s := size()
+	return Rect2(s.x * 0.5 - 220, s.y * 0.5 - 120 + i * 58, 440, 48)
+
+
+func _menu_hover() -> void:
+	var m := c.get_local_mouse_position()
+	menu_hover = -1
+	for i in 5:
+		if _menu_rect(i).has_point(m):
+			menu_hover = i
+
+
+func _menu_click() -> void:
+	if menu_hover < 0:
+		return
+	var id: String = _menu_items()[menu_hover][0]
+	game.sfx.play("ok")
+	match id:
+		"resume":
+			game.toggle_menu()
+		"end":
+			if menu_confirm == 1:
+				game.toggle_menu()
+				game.finish_contract(true)
+			else:
+				menu_confirm = 1
+		"lang":
+			Txt.zh = not Txt.zh
+			Txt.save_settings(game.testing)
+		"hints":
+			game.hints_on = not game.hints_on
+			Txt.hints = game.hints_on
+			Txt.save_settings(game.testing)
+		"title":
+			if menu_confirm == 4:
+				game.to_title()
+			else:
+				menu_confirm = 4
+
+
+func _menu(s: Vector2) -> void:
+	var k: float = clampf(menu_k.x, 0.0, 1.0)
+	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.6 * k))
+	_text(game.txt("m_paused"), Vector2(s.x * 0.5, s.y * 0.5 - 170), 30, Pal.ink(0.9 * k), font_l, 0)
+	var items := _menu_items()
+	for i in items.size():
+		var r := _menu_rect(i)
+		var rk := Motion.stagger(menu_k.x * 0.6, i, 0.04, 0.2)
+		r.position.y += (1.0 - rk) * 20.0
+		if i == menu_hover:
+			Pal.band(c, r, 0.12 * k)
+			c.draw_rect(Rect2(r.position.x + r.size.x * 0.5 - 40, r.end.y - 2, 80, 2), Pal.heat(k, 1.0))
+		_text(items[i][1], Vector2(r.get_center().x, r.position.y + 32), 20, Pal.ink((0.95 if i == menu_hover else 0.6) * k * rk), font, 0)
+
+
+# ---------------------------------------------------------------- settlement
+
+func _settlement(s: Vector2) -> void:
+	var g = game
+	var e := end_t - (0.2 if end_early else 1.6)
+	if e < 0.0:
+		return
+	var a := clampf(e / 0.5, 0.0, 1.0)
+	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.5 * a))
+	var cx := s.x * 0.5
+	var y := s.y * 0.5 - 300.0
+	_text(g.txt("e_done") if not end_early else g.txt("e_early"), Vector2(cx, y), 20, Pal.ink(0.7 * a), font, 0)
+	_text(g.txt("e_contract") + " · " + (g.txt("e_must_ok") if g.bb_ok and g.gen_ok else g.txt("e_must_no")), Vector2(cx, y + 30), 14, Pal.ink(0.45 * a), font, 0)
+	# the big number rolls up
+	var rk := clampf((e - 0.3) / 1.1, 0.0, 1.0)
+	var pct: float = g.recovery_rate() * 100.0 * Pal.ease_out(rk)
+	var slam := Pal.back(clampf((e - 0.3) / 0.3, 0.0, 1.0), 2.6)
+	_text("%.1f%%" % pct, Vector2(cx, y + 130), int(96 * slam) if slam > 0.05 else 1, Pal.ink(0.98 * a), font_l, 0)
+	_text(g.txt("e_rate"), Vector2(cx, y + 166), 15, Pal.ink(0.5 * a), font, 0)
+	var ry := y + 220.0
+	for i in end_rows.size():
+		var re := e - 1.5 - i * 0.32
+		if re < 0.0:
+			break
+		var rs := Pal.back(clampf(re / 0.22, 0.0, 1.0), 2.2)
+		var row: Array = end_rows[i]
+		var v: float = row[1]
+		var col := Pal.ink(0.9) if v >= 0 else Pal.heat(0.95, 1.1)
+		var dy := (1.0 - rs) * -18.0
+		_text(g.txt(row[0]), Vector2(cx - 260, ry + i * 34 + dy), 17, Pal.ink(0.55 * clampf(re / 0.15, 0.0, 1.0)), font)
+		_text(("+" if v > 0.5 else "") + Pal.money(v), Vector2(cx + 260, ry + i * 34 + dy), int(20 * (0.7 + 0.3 * rs)), col, font_b, 1)
+	var ne := e - 1.5 - end_rows.size() * 0.32 - 0.3
+	if ne > 0.0:
+		var ns := Pal.back(clampf(ne / 0.3, 0.0, 1.0), 2.4)
+		var ny := ry + end_rows.size() * 34 + 30
+		c.draw_line(Vector2(cx - 260, ny - 28), Vector2(cx + 260, ny - 28), Pal.ink(0.25), 1.0)
+		_text(g.txt("e_net"), Vector2(cx - 260, ny + 10), 18, Pal.ink(0.7), font)
+		_text(Pal.money(g.net() * Pal.ease_out(clampf(ne / 0.8, 0.0, 1.0))), Vector2(cx + 260, ny + 14), int(44 * ns) if ns > 0.05 else 1, Pal.ink(0.98), font_l, 1)
+		_text(g.txt("e_time") + "  " + _clock(g.playtime), Vector2(cx - 260, ny + 46), 14, Pal.ink(0.4), font)
+	var ge := ne - 0.9
+	if ge > 0.0:
+		_stamp(Vector2(cx + 330, y + 100), ge)
+		var pulse := 0.5 + 0.4 * sin(t * 3.0)
+		_text(g.txt("e_again"), Vector2(cx, s.y - 80), 16, Pal.ink(pulse), font_b, 0)
+
+
+func grade() -> int:
+	var g = game
+	var r: float = g.recovery_rate()
+	if not (g.bb_ok and g.gen_ok) or r < 0.7:
+		return 0
+	if r >= 0.92:
+		return 3
+	if r >= 0.8:
+		return 2
+	return 1
+
+
+func _stamp(p: Vector2, e: float) -> void:
+	var gr := grade()
+	var k := Pal.back(clampf(e / 0.25, 0.0, 1.0), 3.0)
+	var sc := lerpf(2.2, 1.0, clampf(e / 0.2, 0.0, 1.0))
+	var a := clampf(e / 0.12, 0.0, 1.0)
+	var col := Pal.heat(a, 1.2) if gr == 0 else Pal.ink(a)
+	var r := 74.0 * sc
+	c.draw_set_transform(p, -0.18, Vector2.ONE)
+	c.draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, col, 3.0, true)
+	c.draw_arc(Vector2.ZERO, r - 8, 0.0, TAU, 48, Color(col.r, col.g, col.b, col.a * 0.5), 1.0, true)
+	var txt := game.txt("grade_%d" % gr)
+	var w := _tw(txt, int(28 * sc), font_b)
+	c.draw_string(font_b, Vector2(-w * 0.5, 10 * sc), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, int(28 * sc), col)
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if e < 0.3 and k > 0.0:
+		game.shake(0.02)
+
+
+func _draw_add() -> void:
+	if game == null:
+		return
+	var tex: Texture2D = game.fx.glow_tex
+	for f in flyers:
+		var k: float = f[2] / 0.6
+		var e := Pal.ease_in(k)
+		var p: Vector2 = (f[0] as Vector2).lerp(f[1], e) + Vector2(0, -sin(k * PI) * 80.0)
+		var r := 10.0 + 6.0 * (1.0 - k)
+		fadd.draw_texture_rect(tex, Rect2(p - Vector2(r, r), Vector2(r, r) * 2.0), false, Pal.ink(0.9, 1.6))
+	if credit_pop > 0.0:
+		var s := size()
+		fadd.draw_texture_rect(tex, Rect2(Vector2(s.x - 260, 40), Vector2(240, 70)), false, Pal.ink(0.12 * credit_pop, 1.4))
