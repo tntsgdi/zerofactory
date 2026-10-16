@@ -305,6 +305,10 @@ const S := {
 	# pieces
 	"p_console": ["驾驶控制台", "FLIGHT CONSOLE"],
 	"p_nav": ["导航电脑", "NAV COMPUTER"],
+	"p_seat_p": ["驾驶座", "PILOT SEAT"],
+	"p_seat_c": ["副驾驶座", "CO-PILOT SEAT"],
+	"p_ovh": ["顶部开关面板", "OVERHEAD PANEL"],
+	"p_o2cab": ["应急氧气柜", "EMERGENCY O₂"],
 	"p_blackbox": ["黑匣子", "FLIGHT RECORDER"],
 	"p_cover": ["检修盖", "SERVICE COVER"],
 	"p_gastank": ["储气罐", "GAS BOTTLE"],

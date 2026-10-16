@@ -85,8 +85,9 @@ func _prep() -> void:
 				say("bus now %s" % s.readings["E-D01"].text)
 				for id in s.hoses.keys():
 					game.do_hose(c(id))
-				for tk in ["TK-B1", "TK-B2"]:
+				for tk in ["TK-B1", "TK-B2", "EM-A"]:
 					game.world.reveal("B", game.world.rooms["B"].from)
+					game.world.reveal("A", game.world.rooms["A"].from)
 					game.do_hose(c(tk))
 				phase = "tanks"
 				phase_t = 0
@@ -95,9 +96,9 @@ func _prep() -> void:
 func _tanks() -> void:
 	var s = game.sys
 	Engine.time_scale = 4.0
-	if s.P("T1") < 50.0 and s.P("T2") < 50.0 or phase_t > 2400:
+	if s.P("T1") < 50.0 and s.P("T2") < 50.0 and s.P("T3") < 50.0 or phase_t > 2400:
 		Engine.time_scale = 1.0
-		for tk in ["TK-B1", "TK-B2"]:
+		for tk in ["TK-B1", "TK-B2", "EM-A"]:
 			game.do_hose(c(tk))
 		say("bottles %.0f / %.0f kPa" % [s.P("T1"), s.P("T2")])
 		for n in game.world.rooms:

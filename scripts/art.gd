@@ -28,6 +28,29 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				ring(ci, Vector2(w * (0.68 + i * 0.1), h * 0.3), w * 0.035, 0.5)
 			for i in 7:
 				L(ci, Vector2(w * (0.1 + i * 0.12), h * 0.7), Vector2(w * (0.1 + i * 0.12), h * 0.86), 0.3)
+		"nav_rack":
+			for i in 5:
+				box(ci, Rect2(w * 0.12, h * (0.06 + i * 0.18), w * 0.76, h * 0.14), 0.4)
+				ci.draw_circle(Vector2(w * 0.76, h * (0.13 + i * 0.18)), 1.3, Pal.ink(0.55))
+				L(ci, Vector2(w * 0.2, h * (0.13 + i * 0.18)), Vector2(w * 0.5, h * (0.13 + i * 0.18)), 0.3)
+		"seat":
+			# the piece itself is the couch's outline; here only its seams, the harness and the side stick
+			L(ci, Vector2(w * 0.83, h * 0.17), Vector2(w * 0.97, h * 0.2), 0.4)
+			L(ci, Vector2(w * 0.06, h * 0.69), Vector2(w * 0.62, h * 0.68), 0.3)
+			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.88, h * 0.24), Vector2(w * 0.42, h * 0.5), Vector2(w * 0.2, h * 0.64)]), Pal.ink(0.35), 1.0, true)
+			L(ci, Vector2(w * 0.12, h * 0.64), Vector2(w * 0.1, h * 0.5), 0.5, 1.2)
+			ci.draw_circle(Vector2(w * 0.1, h * 0.49), 1.6, Pal.ink(0.5))
+		"overhead":
+			for i in 7:
+				ci.draw_circle(Vector2(w * (0.1 + i * 0.13), h * 0.55), 1.4, Pal.ink(0.55))
+			L(ci, Vector2(w * 0.05, h * 0.85), Vector2(w * 0.95, h * 0.85), 0.3)
+		"o2cab":
+			box(ci, Rect2(w * 0.08, h * 0.06, w * 0.84, h * 0.88), 0.4)
+			var rr := w * 0.24
+			ci.draw_arc(Vector2(w * 0.5, h * 0.18 + rr), rr, PI, TAU, 12, Pal.ink(0.55), 1.0, true)
+			L(ci, Vector2(w * 0.26, h * 0.18 + rr), Vector2(w * 0.26, h * 0.86), 0.55)
+			L(ci, Vector2(w * 0.74, h * 0.18 + rr), Vector2(w * 0.74, h * 0.86), 0.55)
+			ci.draw_string(font, Vector2(w * 0.3, h * 0.66), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.5))
 		"console":
 			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.1, h), Vector2(w * 0.1, h * 0.45), Vector2(w * 0.95, h * 0.2), Vector2(w * 0.95, h)]), Pal.ink(0.5), 1.0)
 			for i in 4:

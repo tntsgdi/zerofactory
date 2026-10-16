@@ -19,6 +19,9 @@ const BOT_STATIONS := [33.0, 30.0, 27.0, 24.2, 21.0, 17.8, 14.6, 11.4, 8.0, 4.6]
 const STERN_STATIONS := [-4.0, -1.4, 0.6, 4.0]
 
 static var inner: Array = []
+const SEAT_SHAPE := [Vector2(0.02, 1.0), Vector2(0.98, 1.0), Vector2(0.98, 0.92), Vector2(0.6, 0.92), Vector2(0.6, 0.75), Vector2(0.78, 0.72),
+	Vector2(1.0, 0.18), Vector2(1.0, 0.02), Vector2(0.86, 0.0), Vector2(0.82, 0.15), Vector2(0.6, 0.63), Vector2(0.02, 0.64),
+	Vector2(0.02, 0.75), Vector2(0.38, 0.75), Vector2(0.38, 0.92), Vector2(0.02, 0.92)]
 static var w
 static var by_tag := {}
 
@@ -317,9 +320,39 @@ static func _equipment() -> void:
 	for x in [1.44, 2.11]:
 		var hit := _below(x, lerpf(fl0, fl1, (x - 1.25) / 1.05) - 0.06)
 		_bolt(con, hit[0], x, hit[1])
-	r = sit(2.6, 3.8, 1.0)
-	var nav = _equip("NAV-01", "nav", r, {"mass": 0.45, "value": 6000.0, "fragile": 0.85, "room": "A", "name_key": "p_nav"})
-	_sit_bolts(nav, r, null, "bolt", 4)
+	# the nav computer in a rack on the aft wall; the floor behind the console is the crew's
+	var aft_wall = w.piece_at(p(5.0, -1.0), ["bulkhead"])
+	r = Rect2(4.2, -1.75, 0.62, 1.4)
+	var nav = _equip("NAV-01", "nav_rack", r, {"mass": 0.45, "value": 6000.0, "fragile": 0.85, "room": "A", "name_key": "p_nav"})
+	_bolt(nav, aft_wall, 4.82, -1.5)
+	_bolt(nav, aft_wall, 4.82, -0.55)
+	# pilot and co-pilot seats on their floor rails: two bolts and a track lock each
+	for i in 2:
+		var x0 := 2.4 + i * 0.76
+		r = sit(x0, x0 + 0.74, 2.05)
+		var st = _equip("SEAT-P" if i == 0 else "SEAT-C", "seat", r, {"mass": 0.12, "value": 600.0, "fragile": 0.3, "room": "A", "name_key": "p_seat_p" if i == 0 else "p_seat_c"})
+		# the outline of a crash couch in profile, facing the bow: rail, pedestal, pan, reclined back
+		var sp := PackedVector2Array()
+		for q in SEAT_SHAPE:
+			sp.append(p(r.position.x + q.x * r.size.x, r.position.y + q.y * r.size.y))
+		st.poly = sp
+		_sit_bolts(st, r, null)
+		var hit := _below(x0 + 0.37, r.end.y)
+		_bolt(st, hit[0], x0 + 0.37, hit[1], "lock")
+	# the overhead switch panel, hung along the sloping ceiling
+	var ceil0 := ceil_at(3.45)
+	var ceil1 := ceil_at(4.45)
+	var ang := atan2(ceil1 - ceil0, 1.0)
+	var ovh = _equip("OVH-A", "overhead", Rect2(3.45, ceil0 + 0.04, 1.0, 0.28), {"mass": 0.08, "value": 900.0, "fragile": 0.5, "room": "A", "name_key": "p_ovh"}, ang, Vector2(3.45, ceil0 + 0.04))
+	for t in [0.15, 0.85]:
+		var bx: float = 3.45 + t * cos(ang)
+		var by: float = ceil0 + 0.04 + t * sin(ang)
+		_bolt(ovh, w.piece_at(p(bx, by - 0.2), ["hull"]), bx, by)
+	# emergency oxygen: a small charged bottle in a cabinet on the aft wall
+	r = Rect2(4.27, -2.75, 0.55, 0.8)
+	var em = _equip("EM-A", "o2cab", r, {"mass": 0.1, "value": 400.0, "fragile": 0.3, "room": "A", "hazard": "gas_tank", "name_key": "p_o2cab"})
+	_bolt(em, aft_wall, 4.82, -2.55)
+	_bolt(em, aft_wall, 4.82, -2.15)
 	r = sit(4.0, 4.48, 0.42)
 	var bb = _equip("BB-01", "blackbox", r, {"mass": 0.12, "value": 2000.0, "fragile": 0.2, "room": "A", "mandatory": true, "name_key": "p_blackbox"})
 	_sit_bolts(bb, r, null)
@@ -482,7 +515,7 @@ static func _lines() -> void:
 	_line("c7", "cable", "power", "LAMP-C", Vector2(17.4, -3.12), "LAMP-B", Vector2(7.5, -3.4), [Vector2(10.6, -3.12), Vector2(10.3, -2.95), Vector2(7.5, -2.95)])
 	_line("c8", "cable", "power", "LAMP-B", Vector2(7.3, -3.4), "LAMP-A", Vector2(3.0, -2.87), [Vector2(7.3, -2.9), Vector2(4.6, -2.9), Vector2(3.0, -2.7)])
 	_line("c9", "cable", "power", "SWB", Vector2(32.1, -2.75), "HATCH-2", Vector2(21.0, -3.6), [Vector2(32.1, -2.95), Vector2(27.6, -2.95), Vector2(26.7, -3.05), Vector2(21.0, -3.05)])
-	_line("cn", "cable", "nav", "NAV-01", Vector2(3.8, 2.8), "CON-A", Vector2(2.3, 2.6), [Vector2(3.95, 2.8), Vector2(3.95, 2.3), Vector2(2.4, 2.3)])
+	_line("cn", "cable", "nav", "NAV-01", Vector2(4.25, -0.4), "CON-A", Vector2(2.3, 2.6), [Vector2(4.1, -0.3), Vector2(4.1, 2.45), Vector2(2.4, 2.45)])
 	# coolant loop: pump -> generator -> engine -> radiator -> (broken) -> pump
 	_line("q1", "pipe", "coolant", "CP-E", Vector2(28.0, 2.05), "G-01", Vector2(28.0, -0.4), [Vector2(28.0, 1.4), Vector2(28.95, 1.4), Vector2(28.95, 0.0), Vector2(28.95, -0.4)])
 	_line("q2", "pipe", "coolant", "G-01", Vector2(29.7, -0.5), "ENG-F", Vector2(34.2, -1.1), [Vector2(30.0, -0.5), Vector2(30.0, -0.35), Vector2(32.4, -0.35), Vector2(33.6, -1.25), Vector2(34.2, -1.25)])
@@ -519,6 +552,7 @@ static func _controls() -> void:
 	_ctrl("G-LOCAL", "stop", by_tag["G-01"], Vector2(28.15, -1.62), {"target": "G", "hidden_room": "D"})
 	_ctrl("TK-B1", "port", by_tag["TK-B1"], Vector2(5.85, 1.12), {"medium": "gas", "target": "T1", "hidden_room": "B"})
 	_ctrl("TK-B2", "port", by_tag["TK-B2"], Vector2(6.85, 1.12), {"medium": "gas", "target": "T2", "hidden_room": "B"})
+	_ctrl("EM-A", "port", by_tag["EM-A"], Vector2(4.4, -2.0), {"medium": "gas", "target": "T3", "hidden_room": "A"})
 	_ctrl("COOL-E", "port", by_tag["CP-E"], Vector2(27.7, 2.25), {"medium": "coolant", "target": "loop", "hidden_room": "E"})
 	_ctrl("V-E1", "valve", by_tag["K4"], Vector2(28.75, 2.85), {"target": "V-E1", "state": true, "hidden_room": "E"})
 	_ctrl("V-E2", "valve", by_tag["K4"], Vector2(30.25, 2.85), {"target": "V-E2", "state": true, "hidden_room": "E"})
@@ -657,7 +691,7 @@ static func meta() -> Dictionary:
 		"name": "GR-7 GREY HERON",
 		"contract": "GR-001",
 		"length": 42.0,
-		"value": {"total": 120000.0, "metal": 12000.0},
+		"value": {"total": 122500.0, "metal": 12000.0},
 		"clamps": [[7.0, 4.0], [15.8, 4.0], [23.4, 4.0], [28.6, 4.0]],
 		"room_names": {"A": "room_A", "B": "room_B", "C": "room_C", "D": "room_D", "E": "room_E"},
 		"gas": {
@@ -666,6 +700,7 @@ static func meta() -> Dictionary:
 				"SC": {"V": 0.05, "kpa": 0.0, "dead_leg": "V-C01"},
 				"T1": {"V": 0.6, "kpa": 1820.0, "piece": "TK-B1", "burst": 200.0},
 				"T2": {"V": 0.6, "kpa": 1760.0, "piece": "TK-B2", "burst": 200.0},
+				"T3": {"V": 0.04, "kpa": 1500.0, "piece": "EM-A", "burst": 200.0},
 			},
 			"valves": [{"ctrl": "V-C01", "a": "C", "b": "SC", "g": 20.0}],
 			"value": 1200.0,
@@ -702,13 +737,14 @@ static func meta() -> Dictionary:
 			"GAS-D": {"rate": 6.0},
 			"TK-B1": {"rate": 0.2},
 			"TK-B2": {"rate": 0.2},
+			"EM-A": {"rate": 0.2},
 			"FUEL-F": {"blocked_by": "GUARD-F"},
 			"HATCH-SW": {"doors": ["HATCH-1", "HATCH-2"], "jam": "HATCH-JAM", "cable": "c9"},
 			"G-STOP": {"target": "G-01"},
 			"G-LOCAL": {"target": "G-01"},
 			"E-D02": {"target": "CAP-01"},
 		},
-		"labels": {"TK-B1": "O₂", "TK-B2": "N₂", "C-01": "IND. METAL", "C-02": "PRECISION", "C-03": "ELECTRONIC", "G-01": "FUEL CELL", "T-F01": "PROP"},
+		"labels": {"TK-B1": "O₂", "TK-B2": "N₂", "EM-A": "O₂", "C-01": "IND. METAL", "C-02": "PRECISION", "C-03": "ELECTRONIC", "G-01": "FUEL CELL", "T-F01": "PROP"},
 		# hints that name this ship's own fittings (the generic ones live in Txt)
 		"hints": {
 			"dead_leg": ["读数来自测压口实际连通的那一段。按 Tab 看图纸：P-C01 和货舱之间还有一个阀门 V-C01。", "A gauge reads whatever its port is connected to. Press Tab: there is a valve, V-C01, between P-C01 and the hold."],
