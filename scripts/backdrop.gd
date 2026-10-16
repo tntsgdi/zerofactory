@@ -6,6 +6,7 @@ extends Node2D
 var game: Game
 var stars: Array = []   # [base offset (screen px), size, parallax, phase]
 const TILE := Vector2(2600, 1600)
+var batch := Batch.new()
 
 
 func _init() -> void:
@@ -38,6 +39,6 @@ func _draw() -> void:
 	for s in stars:
 		var off: Vector2 = s[0] - cam * s[2] * z
 		off = Vector2(fposmod(off.x, TILE.x), fposmod(off.y, TILE.y)) - TILE * 0.5
-		var p := cam + off / z
 		var tw := 0.6 + 0.4 * sin(t * 0.9 + s[3])
-		draw_circle(p, s[1] / z, Pal.ink(0.28 * tw * s[1] / 1.5))
+		batch.dot(cam + off / z, s[1] * 1.9 / z, Pal.ink(0.32 * tw * s[1] / 1.5))
+	batch.flush(self, game.fx.soft_tex)

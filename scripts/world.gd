@@ -7,6 +7,7 @@ extends Node2D
 signal piece_freed(body)
 
 const KERF := 3.4
+const BOLT_RING := [Vector2(1, 0), Vector2(0.7071, 0.7071), Vector2(0, 1), Vector2(-0.7071, 0.7071), Vector2(-1, 0), Vector2(-0.7071, -0.7071), Vector2(0, -1), Vector2(0.7071, -0.7071)]
 
 var game: Game
 var pieces := {}
@@ -29,6 +30,7 @@ var light_layer: Node2D
 var dirty_links := false
 var dirty_cols := {}
 var dirty_draw := false
+var dirty_back := false
 var metal_price := 120.0
 var structural_mass := 0.0
 var bodies: Array = []
@@ -155,7 +157,7 @@ func finalize() -> void:
 	for n in rooms:
 		rooms[n].shell0 = _room_shell(rooms[n])
 	relink()
-	redraw_all()
+	redraw_all(true)
 
 
 # how much of the structure around a room is still there (back wall fades with it)
@@ -441,7 +443,7 @@ func make_body(group: Array, from_body):
 		b.rebuild_cols(p)
 	b.refresh()
 	bodies.append(b)
-	redraw_all()
+	redraw_all(true)
 	piece_freed.emit(b)
 	return b
 
@@ -499,7 +501,7 @@ func remove_piece(p) -> void:
 		static_cols.erase(p.id)
 	p.body = null
 	dirty_links = true
-	redraw_all()
+	redraw_all(true)
 
 
 func remove_body(b) -> void:
@@ -603,19 +605,24 @@ func _process(dt: float) -> void:
 	if hot or heat_layer.get_meta("was_hot", false):
 		heat_layer.queue_redraw()
 	heat_layer.set_meta("was_hot", hot)
+	if dirty_back:
+		dirty_back = false
+		back_layer.queue_redraw()
 	if dirty_draw:
 		dirty_draw = false
 		piece_layer.queue_redraw()
 		line_layer.queue_redraw()
 		light_layer.queue_redraw()
-		back_layer.queue_redraw()
 		for b in bodies:
 			if is_instance_valid(b):
 				b.view.queue_redraw()
 
 
-func redraw_all() -> void:
+# back = the room backs too (their wall fades with the structure around them)
+func redraw_all(back: bool = false) -> void:
 	dirty_draw = true
+	if back:
+		dirty_back = true
 
 
 func reveal(room: String, from: Vector2) -> void:
@@ -838,13 +845,7 @@ func _weld_touching(q) -> void:
 
 # ---------------------------------------------------------------- drawing
 
-func draw_piece(ci: CanvasItem, p) -> void:
-	if p.gone:
-		return
-	var off := door_offset(p)
-	var poly: PackedVector2Array = p.poly
-	if off != Vector2.ZERO:
-		poly = Transform2D(0.0, off) * poly
+func _style(p) -> Array:
 	var fill := Pal.PLATE
 	var line_c := Pal.ink(0.82)
 	match p.kind:
@@ -869,29 +870,72 @@ func draw_piece(ci: CanvasItem, p) -> void:
 		line_c = Pal.ink(0.42)
 	if p.contam:
 		line_c = line_c.lerp(Pal.tint(Pal.FLUID, line_c.a), 0.55)
-	if _valid_cached(p):
-		ci.draw_colored_polygon(poly, fill)
-	var closed := poly.duplicate()
-	closed.append(poly[0])
-	ci.draw_polyline(closed, line_c, 1.3, true)
-	if p.art != "":
-		var xf: Transform2D = Transform2D(0.0, off) * p.art_xf
-		ci.draw_set_transform_matrix(xf)
-		Art.draw(ci, p.art, p.art_size, p, font)
-		ci.draw_set_transform_matrix(Transform2D.IDENTITY)
-	elif p.cls == "equip" and not p.intact:
-		_scars(ci, poly)
+	return [fill, line_c]
 
 
-# triangulating every outline on every redraw is the expensive part: remember it
-func _valid_cached(p) -> bool:
-	var sig: int = p.poly.size() * 1000003 + int(p.poly[0].x * 7.0 + p.poly[0].y * 13.0) if p.poly.size() > 0 else 0
-	if p.has_meta("vsig") and p.get_meta("vsig") == sig:
-		return p.get_meta("vok")
-	var ok: bool = Geom.valid(p.poly)
-	p.set_meta("vsig", sig)
-	p.set_meta("vok", ok)
-	return ok
+func draw_piece(ci: CanvasItem, p) -> void:
+	draw_pieces(ci, [p])
+
+
+# Every piece of a group in a handful of draw calls: one triangle array for
+# all the fills, one line batch for all the outlines, then the equipment art.
+func draw_pieces(ci: CanvasItem, list: Array) -> void:
+	var fp := PackedVector2Array()
+	var fc := PackedColorArray()
+	var fi := PackedInt32Array()
+	var segs := PackedVector2Array()
+	var sc := PackedColorArray()
+	var arts: Array = []
+	for p in list:
+		if p.gone:
+			continue
+		var off := door_offset(p)
+		var poly: PackedVector2Array = p.poly
+		if off != Vector2.ZERO:
+			poly = Transform2D(0.0, off) * poly
+		var st := _style(p)
+		var tri := _tri_cached(p)
+		if not tri.is_empty():
+			var base := fp.size()
+			fp.append_array(poly)
+			var cs := PackedColorArray()
+			cs.resize(poly.size())
+			cs.fill(st[0])
+			fc.append_array(cs)
+			for k in tri:
+				fi.append(base + k)
+		var n := poly.size()
+		for i in n:
+			segs.append(poly[i])
+			segs.append(poly[(i + 1) % n])
+			sc.append(st[1])
+		if p.art != "" or (p.cls == "equip" and not p.intact):
+			arts.append([p, poly, off])
+	if not fi.is_empty():
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), fi, fp, fc)
+	if not segs.is_empty():
+		ci.draw_multiline_colors(segs, sc, 1.3)
+	for a in arts:
+		var p = a[0]
+		if p.art != "":
+			var xf: Transform2D = Transform2D(0.0, a[2]) * p.art_xf
+			ci.draw_set_transform_matrix(xf)
+			Art.draw(ci, p.art, p.art_size, p, font)
+			ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+		else:
+			_scars(ci, a[1])
+
+
+# triangulating every outline on every redraw is the expensive part: remember
+# the triangles until the outline changes (the same array object is kept, so
+# an identity check is enough)
+func _tri_cached(p) -> PackedInt32Array:
+	var sig: int = hash(p.poly)
+	if p.tri_sig == sig:
+		return p.tri
+	p.tri_sig = sig
+	p.tri = Geometry2D.triangulate_polygon(p.poly) if p.poly.size() >= 3 else PackedInt32Array()
+	return p.tri
 
 
 func _scars(ci: CanvasItem, poly: PackedVector2Array) -> void:
@@ -914,6 +958,9 @@ func draw_joints_of(ci: CanvasItem, list: Array) -> void:
 	var ids := {}
 	for p in list:
 		ids[p.id] = p
+	var dots := PackedVector2Array()
+	var rects: Array = []
+	var welds := PackedVector2Array()
 	for j in joints:
 		if not j.alive or not ids.has(j.a):
 			continue
@@ -923,15 +970,37 @@ func draw_joints_of(ci: CanvasItem, list: Array) -> void:
 			continue
 		match j.type:
 			"bolt":
-				ci.draw_circle(pos, 2.6, Pal.ink(0.75))
-				ci.draw_circle(pos, 1.1, Pal.BG)
+				dots.append(pos)
 			"lock":
-				ci.draw_rect(Rect2(pos - Vector2(3.2, 2.4), Vector2(6.4, 4.8)), Pal.ink(0.8), false, 1.2)
-				ci.draw_rect(Rect2(pos - Vector2(1.2, 1.0), Vector2(2.4, 2.0)), Pal.ink(0.8))
+				rects.append(pos)
 			"weld":
-				ci.draw_line(pos - Vector2(1.6, 0), pos + Vector2(1.6, 0), Pal.ink(0.25), 1.0)
-			"clamp":
-				pass
+				welds.append(pos - Vector2(1.6, 0))
+				welds.append(pos + Vector2(1.6, 0))
+	if not welds.is_empty():
+		ci.draw_multiline(welds, Pal.ink(0.25), 1.0)
+	if not dots.is_empty():
+		# bolt heads: an ink disc with a dark centre, all in one triangle array
+		var pts := PackedVector2Array()
+		var cols := PackedColorArray()
+		var idx := PackedInt32Array()
+		for c in dots:
+			for ring in 2:
+				var r := 2.6 if ring == 0 else 1.1
+				var col := Pal.ink(0.75) if ring == 0 else Pal.BG
+				var b0 := pts.size()
+				pts.append(c)
+				cols.append(col)
+				for i in 8:
+					pts.append(c + BOLT_RING[i] * r)
+					cols.append(col)
+				for i in 8:
+					idx.append(b0)
+					idx.append(b0 + 1 + i)
+					idx.append(b0 + 1 + (i + 1) % 8)
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, pts, cols)
+	for pos in rects:
+		ci.draw_rect(Rect2(pos - Vector2(3.2, 2.4), Vector2(6.4, 4.8)), Pal.ink(0.8), false, 1.2)
+		ci.draw_rect(Rect2(pos - Vector2(1.2, 1.0), Vector2(2.4, 2.0)), Pal.ink(0.8))
 
 
 func _draw_pieces() -> void:
@@ -946,8 +1015,8 @@ func _draw_pieces_inner() -> void:
 		var p = pieces[id]
 		if p.gone or p.body != null:
 			continue
-		draw_piece(piece_layer, p)
 		list.append(p)
+	draw_pieces(piece_layer, list)
 	draw_joints_of(piece_layer, list)
 
 
@@ -965,19 +1034,37 @@ func _draw_back() -> void:
 		back_layer.draw_colored_polygon(poly, Color(base.r, base.g, base.b, k))
 		if not r.revealed:
 			continue
-		var bb: Rect2 = r.bbox
-		var x := bb.position.x + 30.0
-		while x < bb.end.x:
-			var pl := PackedVector2Array([Vector2(x, bb.position.y - 2), Vector2(x, bb.end.y + 2)])
-			for seg in Geometry2D.intersect_polyline_with_polygon(pl, poly):
-				back_layer.draw_polyline(seg, Pal.ink(0.045 * k), 1.0)
-			x += Geom.M * 1.2
-		var y := bb.position.y + Geom.M * 1.6
-		while y < bb.end.y:
-			var pl := PackedVector2Array([Vector2(bb.position.x - 2, y), Vector2(bb.end.x + 2, y)])
-			for seg in Geometry2D.intersect_polyline_with_polygon(pl, poly):
-				back_layer.draw_polyline(seg, Pal.ink(0.03 * k), 1.0)
-			y += Geom.M * 1.6
+		if not r.has("grid"):
+			r.grid = _room_grid(r)
+		if r.grid[0].size() >= 2:
+			back_layer.draw_multiline(r.grid[0], Pal.ink(0.045 * k), 1.0)
+		if r.grid[1].size() >= 2:
+			back_layer.draw_multiline(r.grid[1], Pal.ink(0.03 * k), 1.0)
+
+
+# the panel seams on a room's back wall never move: clip them once
+func _room_grid(r) -> Array:
+	var poly: PackedVector2Array = r.poly
+	var bb: Rect2 = r.bbox
+	var vs := PackedVector2Array()
+	var hs := PackedVector2Array()
+	var x := bb.position.x + 30.0
+	while x < bb.end.x:
+		var pl := PackedVector2Array([Vector2(x, bb.position.y - 2), Vector2(x, bb.end.y + 2)])
+		for seg in Geometry2D.intersect_polyline_with_polygon(pl, poly):
+			for i in seg.size() - 1:
+				vs.append(seg[i])
+				vs.append(seg[i + 1])
+		x += Geom.M * 1.2
+	var y := bb.position.y + Geom.M * 1.6
+	while y < bb.end.y:
+		var pl := PackedVector2Array([Vector2(bb.position.x - 2, y), Vector2(bb.end.x + 2, y)])
+		for seg in Geometry2D.intersect_polyline_with_polygon(pl, poly):
+			for i in seg.size() - 1:
+				hs.append(seg[i])
+				hs.append(seg[i + 1])
+		y += Geom.M * 1.6
+	return [vs, hs]
 
 
 func _draw_light() -> void:
@@ -1090,8 +1177,8 @@ func draw_heat(ci: CanvasItem, p) -> void:
 			if pl.size() == 1:
 				ci.draw_circle(pl[0], KERF * 1.3, Pal.heat(0.55 * k, 1.0 + 2.2 * hot))
 			continue
-		ci.draw_polyline(pl, Pal.heat(0.55 * k, 1.0 + 2.2 * hot), KERF * 2.6, true)
-		ci.draw_polyline(pl, Pal.heat(0.9 * hot, 1.6 + 2.5 * hot), 1.6, true)
+		ci.draw_polyline(pl, Pal.heat(0.55 * k, 1.0 + 2.2 * hot), KERF * 2.6)
+		ci.draw_polyline(pl, Pal.heat(0.9 * hot, 1.6 + 2.5 * hot), 1.6)
 
 
 func _draw_heat_static() -> void:

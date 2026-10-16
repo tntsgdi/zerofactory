@@ -19,6 +19,7 @@ var add_layer: Node2D
 var glow_tex: Texture2D
 var soft_tex: Texture2D
 var num_font: Font
+var batch := Batch.new()
 var bounds := Rect2(-8 * 48, -15 * 48, 64 * 48, 25 * 48)
 
 
@@ -179,8 +180,9 @@ func _age(arr: Array, ti: int, di: int, dt: float) -> void:
 
 func _draw() -> void:
 	for m in motes:
-		var a := 0.05 + 0.035 * sin(m[2] * 0.7 + m[3] * 3.0)
-		draw_circle(m[0], m[3], Pal.ink(a))
+		var a := 0.06 + 0.04 * sin(m[2] * 0.7 + m[3] * 3.0)
+		batch.dot(m[0], m[3] * 1.9, Pal.ink(a))
+	batch.flush(self, soft_tex)
 	for s in mist:
 		var k: float = s[2] / s[3]
 		var r: float = lerpf(s[4], s[5], Pal.ease_out(k))
@@ -233,7 +235,8 @@ func _draw_add() -> void:
 		var k: float = s[2] / s[3]
 		# white-hot to orange to a dull ember
 		var c := Pal.heat(1.0 - k, 2.6 - 2.0 * k) if k < 0.85 else Color(0.35, 0.1, 0.05, (1.0 - k) * 4.0)
-		add_layer.draw_circle(s[0], s[4] * (1.0 - k * 0.5), c)
+		batch.dot(s[0], s[4] * (1.0 - k * 0.5) * 1.7, c)
+	batch.flush(add_layer, soft_tex)
 	for a in arcs:
 		_draw_arc_bolt(a)
 	for fl in flashes:

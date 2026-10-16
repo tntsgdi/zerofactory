@@ -692,10 +692,12 @@ func _cursor(z: float) -> void:
 
 func _dashed_circle(c: Vector2, r: float, col: Color, w: float) -> void:
 	var n := 72
-	for i in n:
-		if i % 2 == 0:
-			var a0 := TAU * i / n + t * 0.05
-			draw_arc(c, r, a0, a0 + TAU / n, 3, col, w, true)
+	var segs := PackedVector2Array()
+	for i in range(0, n, 2):
+		var a0 := TAU * i / n + t * 0.05
+		segs.append(c + Vector2.from_angle(a0) * r)
+		segs.append(c + Vector2.from_angle(a0 + TAU / n) * r)
+	draw_multiline(segs, col, w)
 
 
 func _dashed_line(a: Vector2, b: Vector2, col: Color, w: float) -> void:

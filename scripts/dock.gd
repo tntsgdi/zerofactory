@@ -36,6 +36,11 @@ var field_glow: Array = []  # [point on the field edge, strength]
 var bounds_body: StaticBody2D
 var font: Font
 var add_node: Node2D
+var static_node: Node2D
+var clamp_node: Node2D
+var _zh := Txt.zh
+var _clamp_drawn: Array = []
+var _was_busy := true
 var t := 0.0
 
 
@@ -69,6 +74,15 @@ func _init() -> void:
 	add_node.z_as_relative = false
 	add_node.draw.connect(_draw_add)
 	add_child(add_node)
+	# the berth itself never changes: drawn once, under everything that moves
+	static_node = Node2D.new()
+	static_node.show_behind_parent = true
+	static_node.draw.connect(_draw_static)
+	add_child(static_node)
+	clamp_node = Node2D.new()
+	clamp_node.show_behind_parent = true
+	clamp_node.draw.connect(_draw_clamps)
+	add_child(clamp_node)
 
 
 static func zpos(id: String) -> Vector2:
@@ -135,7 +149,22 @@ func _process(dt: float) -> void:
 			if j.alive and j.type == "clamp" and absf(j.pos.x / Geom.M - CLAMPS[i]) < 0.3:
 				alive = true
 		clamp_t[i] = move_toward(clamp_t[i], 0.0 if alive else 1.0, dt / 0.8)
-	queue_redraw()
+	if Txt.zh != _zh:
+		_zh = Txt.zh
+		static_node.queue_redraw()
+		queue_redraw()
+	# the moving parts only redraw while something moves
+	var busy := not hoses.is_empty() or not debris.is_empty() or game.state == "intro"
+	for id in zone_state:
+		var z: Dictionary = zone_state[id]
+		if z.glow > 0.0 or z.reject > 0.0 or z.eat > 0.0:
+			busy = true
+	if clamp_t != _clamp_drawn:
+		_clamp_drawn = clamp_t.duplicate()
+		clamp_node.queue_redraw()
+	if busy or _was_busy:
+		queue_redraw()
+	_was_busy = busy
 	add_node.queue_redraw()
 
 
@@ -288,64 +317,9 @@ func _step_hoses(dt: float) -> void:
 # ---------------------------------------------------------------- drawing
 
 func _draw() -> void:
-	var M := Geom.M
-	var ink := Pal.ink(0.32)
-	# the berth: floor platform with legs into the dark, the tower, the arm
-	_truss(Rect2(TOWER_X * M, FLOOR_Y * M, (FLOOR_X1 - TOWER_X) * M, 0.6 * M))
-	for lx in [-2.0, 10.0, 22.0, 34.0, 46.0]:
-		var l0 := Vector2(lx * M, (FLOOR_Y + 0.6) * M)
-		draw_line(l0, l0 + Vector2(-0.8 * M, 5.0 * M), Pal.ink(0.18), 1.4)
-		draw_line(l0 + Vector2(0.6 * M, 0), l0 + Vector2(1.4 * M, 5.0 * M), Pal.ink(0.18), 1.4)
-	_truss_v(Rect2(TOWER_X * M, -12.6 * M, 0.6 * M, (FLOOR_Y + 12.6) * M))
-	_truss(Rect2(TOWER_X * M, -10.6 * M, (ARM_X1 - TOWER_X) * M, 0.6 * M))
-	draw_line(Vector2(TOWER_X + 0.6, -6.0) * M, Vector2(TOWER_X + 6.0, -10.0) * M, Pal.ink(0.22), 2.0)
-	draw_rect(Rect2((ARM_X1 - 0.3) * M, -10.8 * M, 0.5 * M, 1.0 * M), Color(0.07, 0.073, 0.082))
-	draw_rect(Rect2((ARM_X1 - 0.3) * M, -10.8 * M, 0.5 * M, 1.0 * M), Pal.ink(0.5), false, 1.2)
-	draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Color(0.07, 0.073, 0.082))
-	draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Pal.ink(0.5), false, 1.2)
-	draw_string(font, Vector2(TOWER_X + 0.9, -11.4) * M, "BERTH 07  ·  SALVAGE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Pal.ink(0.32))
-	# dock floor markings under the ship
-	for x in range(0, 44, 3):
-		draw_line(Vector2(x * M, 8.85 * M), Vector2((x + 1.4) * M, 8.85 * M), Pal.ink(0.1), 2.0)
-	# clamp arms
-	for i in 4:
-		var x: float = CLAMPS[i] * M
-		var k: float = Pal.ease_io(clamp_t[i])
-		var top := lerpf(4.0 * M, 7.6 * M, k)
-		draw_rect(Rect2(x - 7, top + 10, 14, 9.0 * M - top - 10), Color(0.07, 0.073, 0.082))
-		draw_rect(Rect2(x - 7, top + 10, 14, 9.0 * M - top - 10), ink, false, 1.2)
-		for yy in range(int(top + 22), int(9.0 * M), 18):
-			draw_line(Vector2(x - 7, yy), Vector2(x + 7, yy + 9), Pal.ink(0.12), 1.0)
-		var open := k * 9.0
-		draw_polyline(PackedVector2Array([Vector2(x - 16 - open, top + 2), Vector2(x - 16 - open, top + 12), Vector2(x + 16 + open, top + 12), Vector2(x + 16 + open, top + 2)]), Pal.ink(0.75), 2.0, true)
-		draw_string(font, Vector2(x + 12, 8.6 * M), "CL-0%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Pal.ink(0.3))
 	# recovery mouths
 	for id in ZONES:
 		_mouth(id)
-	# debris net
-	var nc := NET * M
-	var net_pts := PackedVector2Array()
-	for i in 13:
-		var a := lerpf(PI * 1.1, PI * 1.9, i / 12.0)
-		net_pts.append(nc + Vector2(cos(a) * 70.0, -sin(a) * 26.0 + 30.0))
-	draw_polyline(net_pts, Pal.ink(0.5), 1.4, true)
-	for i in range(0, 13, 2):
-		draw_line(net_pts[i], nc + Vector2(0, 34), Pal.ink(0.14), 1.0)
-	draw_string(font, nc + Vector2(-48, 62), game.txt("net"), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.35))
-	# drone bay
-	var bc := BAY * M
-	draw_rect(Rect2(bc + Vector2(-90, -40), Vector2(90, 80)), Color(0.06, 0.063, 0.072))
-	draw_polyline(PackedVector2Array([bc + Vector2(0, -40), bc + Vector2(-90, -40), bc + Vector2(-90, 40), bc + Vector2(0, 40)]), Pal.ink(0.6), 1.6, true)
-	for i in 3:
-		draw_line(bc + Vector2(-80 + i * 26, -40), bc + Vector2(-80 + i * 26, 40), Pal.ink(0.1), 1.0)
-	draw_string(font, bc + Vector2(-86, -50), "R-02  BAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.4))
-	# hose masts (two on the arm, one on a pylon from the floor)
-	var pyl: Vector2 = MASTS[2] * M
-	_truss_v(Rect2(pyl.x - 0.25 * M, pyl.y, 0.5 * M, FLOOR_Y * M - pyl.y))
-	for m in MASTS:
-		var mp: Vector2 = m * M
-		draw_rect(Rect2(mp + Vector2(-10, -14), Vector2(20, 18)), Color(0.07, 0.073, 0.082))
-		draw_rect(Rect2(mp + Vector2(-10, -14), Vector2(20, 18)), Pal.ink(0.5), false, 1.2)
 	# hoses
 	for id in hoses:
 		var pts := PackedVector2Array(hoses[id].pts)
@@ -365,6 +339,68 @@ func _draw() -> void:
 		if cl.size() > 0:
 			cl.append(poly[0])
 			draw_polyline(cl, Pal.ink(0.6), 1.0, true)
+
+
+func _draw_static() -> void:
+	var ci := static_node
+	var M := Geom.M
+	# the berth: floor platform with legs into the dark, the tower, the arm
+	_truss(Rect2(TOWER_X * M, FLOOR_Y * M, (FLOOR_X1 - TOWER_X) * M, 0.6 * M))
+	for lx in [-2.0, 10.0, 22.0, 34.0, 46.0]:
+		var l0 := Vector2(lx * M, (FLOOR_Y + 0.6) * M)
+		ci.draw_line(l0, l0 + Vector2(-0.8 * M, 5.0 * M), Pal.ink(0.18), 1.4)
+		ci.draw_line(l0 + Vector2(0.6 * M, 0), l0 + Vector2(1.4 * M, 5.0 * M), Pal.ink(0.18), 1.4)
+	_truss_v(Rect2(TOWER_X * M, -12.6 * M, 0.6 * M, (FLOOR_Y + 12.6) * M))
+	_truss(Rect2(TOWER_X * M, -10.6 * M, (ARM_X1 - TOWER_X) * M, 0.6 * M))
+	ci.draw_line(Vector2(TOWER_X + 0.6, -6.0) * M, Vector2(TOWER_X + 6.0, -10.0) * M, Pal.ink(0.22), 2.0)
+	ci.draw_rect(Rect2((ARM_X1 - 0.3) * M, -10.8 * M, 0.5 * M, 1.0 * M), Color(0.07, 0.073, 0.082))
+	ci.draw_rect(Rect2((ARM_X1 - 0.3) * M, -10.8 * M, 0.5 * M, 1.0 * M), Pal.ink(0.5), false, 1.2)
+	ci.draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Color(0.07, 0.073, 0.082))
+	ci.draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Pal.ink(0.5), false, 1.2)
+	ci.draw_string(font, Vector2(TOWER_X + 0.9, -11.4) * M, "BERTH 07  ·  SALVAGE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Pal.ink(0.32))
+	# dock floor markings under the ship
+	for x in range(0, 44, 3):
+		ci.draw_line(Vector2(x * M, 8.85 * M), Vector2((x + 1.4) * M, 8.85 * M), Pal.ink(0.1), 2.0)
+	# debris net
+	var nc := NET * M
+	var net_pts := PackedVector2Array()
+	for i in 13:
+		var a := lerpf(PI * 1.1, PI * 1.9, i / 12.0)
+		net_pts.append(nc + Vector2(cos(a) * 70.0, -sin(a) * 26.0 + 30.0))
+	ci.draw_polyline(net_pts, Pal.ink(0.5), 1.4, true)
+	for i in range(0, 13, 2):
+		ci.draw_line(net_pts[i], nc + Vector2(0, 34), Pal.ink(0.14), 1.0)
+	ci.draw_string(font, nc + Vector2(-48, 62), game.txt("net"), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.35))
+	# drone bay
+	var bc := BAY * M
+	ci.draw_rect(Rect2(bc + Vector2(-90, -40), Vector2(90, 80)), Color(0.06, 0.063, 0.072))
+	ci.draw_polyline(PackedVector2Array([bc + Vector2(0, -40), bc + Vector2(-90, -40), bc + Vector2(-90, 40), bc + Vector2(0, 40)]), Pal.ink(0.6), 1.6, true)
+	for i in 3:
+		ci.draw_line(bc + Vector2(-80 + i * 26, -40), bc + Vector2(-80 + i * 26, 40), Pal.ink(0.1), 1.0)
+	ci.draw_string(font, bc + Vector2(-86, -50), "R-02  BAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.4))
+	# hose masts (two on the arm, one on a pylon from the floor)
+	var pyl: Vector2 = MASTS[2] * M
+	_truss_v(Rect2(pyl.x - 0.25 * M, pyl.y, 0.5 * M, FLOOR_Y * M - pyl.y))
+	for m in MASTS:
+		var mp: Vector2 = m * M
+		ci.draw_rect(Rect2(mp + Vector2(-10, -14), Vector2(20, 18)), Color(0.07, 0.073, 0.082))
+		ci.draw_rect(Rect2(mp + Vector2(-10, -14), Vector2(20, 18)), Pal.ink(0.5), false, 1.2)
+
+
+func _draw_clamps() -> void:
+	var M := Geom.M
+	var ink := Pal.ink(0.32)
+	for i in 4:
+		var x: float = CLAMPS[i] * M
+		var k: float = Pal.ease_io(clamp_t[i])
+		var top := lerpf(4.0 * M, 7.6 * M, k)
+		clamp_node.draw_rect(Rect2(x - 7, top + 10, 14, 9.0 * M - top - 10), Color(0.07, 0.073, 0.082))
+		clamp_node.draw_rect(Rect2(x - 7, top + 10, 14, 9.0 * M - top - 10), ink, false, 1.2)
+		for yy in range(int(top + 22), int(9.0 * M), 18):
+			clamp_node.draw_line(Vector2(x - 7, yy), Vector2(x + 7, yy + 9), Pal.ink(0.12), 1.0)
+		var open := k * 9.0
+		clamp_node.draw_polyline(PackedVector2Array([Vector2(x - 16 - open, top + 2), Vector2(x - 16 - open, top + 12), Vector2(x + 16 + open, top + 12), Vector2(x + 16 + open, top + 2)]), Pal.ink(0.75), 2.0, true)
+		clamp_node.draw_string(font, Vector2(x + 12, 8.6 * M), "CL-0%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Pal.ink(0.3))
 
 
 func tug_pos() -> Vector2:
@@ -426,33 +462,33 @@ func _mouth(id: String) -> void:
 
 
 func _truss(r: Rect2) -> void:
-	draw_rect(r, Color(0.055, 0.058, 0.066))
-	draw_line(r.position, Vector2(r.end.x, r.position.y), Pal.ink(0.32), 1.2)
-	draw_line(Vector2(r.position.x, r.end.y), r.end, Pal.ink(0.32), 1.2)
+	static_node.draw_rect(r, Color(0.055, 0.058, 0.066))
+	static_node.draw_line(r.position, Vector2(r.end.x, r.position.y), Pal.ink(0.32), 1.2)
+	static_node.draw_line(Vector2(r.position.x, r.end.y), r.end, Pal.ink(0.32), 1.2)
 	var x := r.position.x
 	var k := 0
 	while x < r.end.x:
 		var nx := minf(x + r.size.y, r.end.x)
 		if k % 2 == 0:
-			draw_line(Vector2(x, r.position.y), Vector2(nx, r.end.y), Pal.ink(0.12), 1.0)
+			static_node.draw_line(Vector2(x, r.position.y), Vector2(nx, r.end.y), Pal.ink(0.12), 1.0)
 		else:
-			draw_line(Vector2(x, r.end.y), Vector2(nx, r.position.y), Pal.ink(0.12), 1.0)
+			static_node.draw_line(Vector2(x, r.end.y), Vector2(nx, r.position.y), Pal.ink(0.12), 1.0)
 		x = nx
 		k += 1
 
 
 func _truss_v(r: Rect2) -> void:
-	draw_rect(r, Color(0.055, 0.058, 0.066))
-	draw_line(r.position, Vector2(r.position.x, r.end.y), Pal.ink(0.32), 1.2)
-	draw_line(Vector2(r.end.x, r.position.y), r.end, Pal.ink(0.32), 1.2)
+	static_node.draw_rect(r, Color(0.055, 0.058, 0.066))
+	static_node.draw_line(r.position, Vector2(r.position.x, r.end.y), Pal.ink(0.32), 1.2)
+	static_node.draw_line(Vector2(r.end.x, r.position.y), r.end, Pal.ink(0.32), 1.2)
 	var y := r.position.y
 	var k := 0
 	while y < r.end.y:
 		var ny := minf(y + r.size.x, r.end.y)
 		if k % 2 == 0:
-			draw_line(Vector2(r.position.x, y), Vector2(r.end.x, ny), Pal.ink(0.12), 1.0)
+			static_node.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, ny), Pal.ink(0.12), 1.0)
 		else:
-			draw_line(Vector2(r.end.x, y), Vector2(r.position.x, ny), Pal.ink(0.12), 1.0)
+			static_node.draw_line(Vector2(r.end.x, y), Vector2(r.position.x, ny), Pal.ink(0.12), 1.0)
 		y = ny
 		k += 1
 

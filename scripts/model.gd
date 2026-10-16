@@ -40,6 +40,8 @@ class Piece:
 	var dest := "metal"       # where it pays most: metal | equip | hazard
 	var hidden_by := -1       # a cover piece that has to come off first
 	var seen := false
+	var tri := PackedInt32Array()   # cached triangulation of poly (drawing)
+	var tri_sig := 0
 
 	func world_xf() -> Transform2D:
 		return body.global_transform if body != null else Transform2D.IDENTITY

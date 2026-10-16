@@ -115,8 +115,7 @@ func _process(_dt: float) -> void:
 
 
 func _draw_view() -> void:
-	for p in pieces:
-		world.draw_piece(view, p)
+	world.draw_pieces(view, pieces)
 	world.draw_joints_of(view, pieces)
 
 
