@@ -22,6 +22,7 @@ const BERTH := [
 	["drone2", "facility", 200000.0, "fa_drone2", "fa_drone2_d", false],
 	["mast", "facility", 80000.0, "fa_mast", "fa_mast_d", false],
 	["scanner", "facility", 120000.0, "fa_scan", "fa_scan_d", false],
+	["training", "training", 0.0, "tm_training", "tm_training_d", true],
 ]
 
 var font: Font
@@ -323,6 +324,14 @@ func buy(it: Array) -> void:
 	var id: String = it[0]
 	var price: float = it[2]
 	var d := Career.data
+	if it[1] == "training":
+		# back to TS-1; finishing or leaving the course comes back here
+		leave_from = _item_rect(sel)
+		Game.start_ship = "ts1"
+		Game.contract = {}
+		SaveGame.load_requested = SaveGame.exists(SaveGame.train_path)
+		leaving = 0.0
+		return
 	if it[1] == "loan":
 		var paid := Career.repay(price)
 		if paid <= 0.0:
@@ -544,8 +553,17 @@ func _market(s: Vector2, a: float) -> void:
 		_text("%d m" % int(ty.get("length", 0)), Vector2(r.end.x - 28, y + 34), 14, Pal.ink(0.45 * k), font, 1)
 		_stars(int(o.stars), Vector2(x + 7, y + 64), k, 0.25 + i * 0.07)
 		_text(Txt.t("tm_risk"), Vector2(x + 70, y + 69), 12, Pal.ink(0.4 * k), font)
+		var scope: String = o.get("scope", "full")
+		var sct := Txt.t("sc_" + scope)
+		var scw := font_b.get_string_size(sct, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 18.0
+		var scr := Rect2(r.end.x - 28 - scw, y + 54, scw, 22)
+		draw_rect(scr, (Pal.heat(0.16 * k, 1.0) if scope != "full" else Pal.ink(0.05 * k)))
+		draw_rect(scr, (Pal.heat(0.6 * k, 1.1) if scope != "full" else Pal.ink(0.2 * k)), false, 1.0)
+		_text(sct, Vector2(scr.get_center().x, y + 70), 13, (Pal.heat(0.95 * k, 1.2) if scope != "full" else Pal.ink(0.6 * k)), font_b, 0)
 		_text(Txt.t("tm_reason"), Vector2(x, y + 108), 12, Pal.ink(0.4 * row_k.call(2)), font)
 		_wrap(Copy.slot(o.reason), Vector2(x, y + 132), r.size.x - 56, 15, Pal.ink(0.85 * row_k.call(2)))
+		if scope != "full":
+			_wrap(Market.scope_text(o), Vector2(x, y + 160), r.size.x - 56, 12, Pal.heat(0.85 * row_k.call(2), 1.1))
 		# figures count up as the card lands
 		var cnt := Pal.ease_out(clampf((deal_t - 0.2 - i * 0.07) / 0.7, 0.0, 1.0))
 		var rows := [
@@ -608,6 +626,8 @@ func _list(list: Array, a: float) -> void:
 			right = Txt.t("tm_later")
 		elif owned:
 			right = "✓  " + Txt.t("tm_owned")
+		elif it[1] == "training":
+			right = Txt.t("tm_training_go") + "  →"
 		elif it[1] == "item":
 			right = "%s   ·   %s %d" % [Pal.money(it[2]), Txt.t("tm_stock"), int(d.items.get(it[0], 0))]
 		elif it[1] == "loan":

@@ -18,6 +18,55 @@ const LEVELS := [["trainee", 0], ["certified", 6], ["senior", 16], ["chief", 30]
 
 static var path := PATH           # tests point this at their own file
 static var data: Dictionary = {}
+# three save slots, each a career with its own contract and training files;
+# slot 1 keeps the file names from before slots, so an old career is slot 1
+const SLOTS := 3
+static var slot := 1
+
+
+static func slot_files(n: int) -> Array:
+	if n <= 1:
+		return [PATH, SaveGame.PATH, SaveGame.TRAIN_PATH]
+	return ["user://zp_slot%d_career.json" % n, "user://zp_slot%d_save.json" % n, "user://zp_slot%d_training.json" % n]
+
+
+static func use_slot(n: int) -> void:
+	var f := slot_files(n)
+	slot = n
+	path = f[0]
+	SaveGame.path = f[1]
+	SaveGame.train_path = f[2]
+	data = {}
+
+
+# what a slot card shows, read without switching to it ({} when empty;
+# a test run never looks at the player's files)
+static func peek(n: int) -> Dictionary:
+	if _test_run():
+		return {}
+	var f := slot_files(n)
+	if SaveGame.exists(f[0]):
+		var d := SaveGame.read_career(f[0])
+		if not d.is_empty():
+			return d
+	if SaveGame.exists(f[1]) or SaveGame.exists(f[2]):
+		return {"done": 0, "money": 0.0, "loan": LOAN_START, "time": 0.0, "certified": SaveGame.exists(f[1])}
+	return {}
+
+
+# a slot emptied: its files are moved aside (.old), never deleted
+static func clear_slot(n: int) -> void:
+	if _test_run():
+		return
+	for f in slot_files(n):
+		for ext in ["", ".bak"]:
+			if FileAccess.file_exists(f + ext):
+				var full := ProjectSettings.globalize_path(f + ext)
+				if FileAccess.file_exists(f + ext + ".old"):
+					DirAccess.remove_absolute(full + ".old")
+				DirAccess.rename_absolute(full, full + ".old")
+	if slot == n:
+		data = {}
 
 
 # a test run never touches the player's own career file
@@ -48,6 +97,9 @@ static func fresh() -> Dictionary:
 		"seed": randi(),
 		"archive": {},
 		"log": [],
+		"company": "",
+		"time": 0.0,               # seconds played on this slot (training included)
+		"certified": false,        # through the training course, or skipped it
 	}
 
 
@@ -59,6 +111,9 @@ static func load_or_new() -> Dictionary:
 	if data.is_empty():
 		var d := SaveGame.read_career(path) if usable() else {}
 		data = d if not d.is_empty() else fresh()
+		# a career from before slots: whoever had one had passed or skipped training
+		if not d.is_empty() and not d.has("certified"):
+			data.certified = true
 		for k in fresh():
 			if not data.has(k):
 				data[k] = fresh()[k]
@@ -90,6 +145,14 @@ static func start_new() -> void:
 		if FileAccess.file_exists(path + ".bak"):
 			DirAccess.remove_absolute(full + ".bak")
 	data = fresh()
+	save()
+
+
+# through training (or past it): this slot goes straight to the berth from now on
+static func certify() -> void:
+	if data.is_empty() or not usable():
+		return
+	data.certified = true
 	save()
 
 

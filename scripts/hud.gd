@@ -141,7 +141,7 @@ func start_ending(early: bool) -> void:
 	end_rows = [
 		["e_equip", g.income_equip],
 		["e_metal", g.income_metal + g.income_hazard],
-		["e_fluid", g.sys.gas_value() + g.sys.fluid_value()],
+		["e_fluid", g.sys.gas_value() + g.sys.fluid_value() if g.scope() == "full" else 0.0],
 		["e_loss", -g.losses],
 		["e_fee_paid" if g.job.get("fee_paid", false) else "e_fee", -g.fee],
 	]
@@ -481,6 +481,8 @@ func _contract_panel() -> void:
 	var x := 40.0
 	var y := 46.0
 	_text(g.txt("contract") + " " + g.ship.get("contract", ""), Vector2(x, y), 13, Pal.ink(0.45), font)
+	if g.scope() != "full":
+		_text(g.txt("sc_" + g.scope()), Vector2(x + 300, y), 13, Pal.heat(0.95, 1.2), font_b, 1)
 	_text(g.ship.get("name", ""), Vector2(x, y + 24), 20, Pal.ink(0.92), font_b)
 	# mandatory items
 	var items: Array = g.mandatory_items()
@@ -503,8 +505,8 @@ func _contract_panel() -> void:
 			c.draw_arc(dc, 6.0 + 22.0 * e, 0.0, TAU, 24, Pal.ink(0.8 * (1.0 - e), 1.3), 1.5, true)
 			Pal.band(c, Rect2(x + 18, yy - 17, 300.0 * e, 22), 0.12 * (1.0 - e))
 		_text(items[i][1] + "  " + items[i][0], Vector2(x + 22, yy), 14, Pal.ink(0.55 + 0.4 * k), font)
-	# recovery bar
-	var by := y + 120
+	# recovery bar (below however many items the contract asks for)
+	var by := maxf(y + 120, y + 56 + items.size() * 24 + 18)
 	_text(g.txt("rate"), Vector2(x, by), 13, Pal.ink(0.45), font)
 	var pct: float = rate_roll.shown
 	_text("%.1f%%" % pct, Vector2(x + 300, by + 2), 22, Pal.ink(0.95), font_l, 1)
@@ -534,11 +536,22 @@ func _contract_panel() -> void:
 	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 12, Pal.ink(0.3), font)
 	if g.story != null and not g.story.items.is_empty():
 		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 12, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
+	elif g.time_limit() > 0.0:
+		# a hard stop: the clock runs down, and burns in the last minute
+		var left := maxf(0.0, g.time_limit() - g.playtime)
+		var hot := left < 60.0
+		_text(g.txt("sc_left") + " " + _clock(left), Vector2(x + 300, by + 36), 13 if hot else 12, Pal.heat(0.7 + 0.3 * sin(t * 8.0), 1.3) if hot else Pal.ink(0.55), font_b if hot else font, 1)
 	elif g.standard_time() > 0.0:
 		# the clock against the standard time: past it, the time bonus starts to shrink
 		var late: bool = g.playtime > g.standard_time()
 		_text(_clock(g.playtime) + " / " + _clock(g.standard_time()), Vector2(x + 300, by + 36), 12, Pal.heat(0.8, 1.0) if late else Pal.ink(0.45), font, 1)
-	_recall(x, by + 70)
+	var ry := by + 70
+	if g.scope() != "full":
+		c.draw_rect(Rect2(x - 8, by + 48, 316, 42), Color(0.03, 0.032, 0.037, 0.8))
+		c.draw_rect(Rect2(x - 8, by + 48, 2, 42), Pal.heat(0.9, 1.1))
+		c.draw_multiline_string(font, Vector2(x, by + 64), Market.scope_text(g.job), HORIZONTAL_ALIGNMENT_LEFT, 300, 12, 2, Pal.ink(0.75))
+		ry += 36
+	_recall(x, ry)
 
 
 # training recall cards slide in, then fold into the notes under the contract
@@ -859,6 +872,8 @@ func _cursor_label() -> void:
 			name = Txt.piece_name(h.piece)
 			var m: float = g.world.group_mass(h.piece)
 			act = ("%.2f t" % m) if g.tools.tool == 3 else g.txt("act_inspect")
+			if not h.piece.scope:
+				act += "  ·  " + g.txt("sc_out")
 	if not h.ok:
 		act = g.txt(h.reason)
 	if name != cur_key:
@@ -1000,6 +1015,9 @@ func _offer_rows() -> Array:
 		rows.append(["li", Copy.slot(lid), 16])
 	rows.append(["gap", "", 6])
 	rows.append(["p", g.txt("c_drawing"), 15])
+	if o.get("scope", "full") != "full":
+		rows.append(["h", g.txt("sc_" + o.scope), 13])
+		rows.append(["p", Market.scope_text(o), 15])
 	rows.append(["h", g.txt("c_fee_n") % [Pal.money(float(o.get("fee", 0.0))), int(float(o.get("time", 0.0)) / 60.0)], 13])
 	return rows
 

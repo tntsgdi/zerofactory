@@ -700,7 +700,7 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 	var all_parts: Array = [p]
 	for i in range(1, parts.size()):
 		var q = add_piece(p.kind, parts[i], {})
-		for prop in ["density", "cls", "value", "cond", "intact", "fragile", "contam", "cut_speed", "room", "barrier", "temp", "dest", "body", "hazard"]:
+		for prop in ["density", "cls", "value", "cond", "intact", "fragile", "contam", "cut_speed", "room", "barrier", "temp", "dest", "body", "hazard", "scope"]:
 			q.set(prop, p.get(prop))
 		q.value = 0.0
 		q.intact = false

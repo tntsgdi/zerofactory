@@ -338,6 +338,20 @@ func _go_strip() -> void:
 			return -1
 		return rank.get(p.kind, 5)
 	order.sort_custom(func(a, b): return rk.call(a) < rk.call(b))
+	if g.scope() != "full":
+		# a part-ship contract: only what it pays for, and the roof plates over it to get in
+		var lo := INF
+		var hi := -INF
+		for id in order:
+			var p = g.world.pieces[id]
+			if p.scope:
+				var cx: float = Geom.centroid(p.poly).x
+				lo = minf(lo, cx)
+				hi = maxf(hi, cx)
+		order = order.filter(func(id):
+			var p = g.world.pieces[id]
+			var c: Vector2 = Geom.centroid(p.poly)
+			return p.scope or (p.kind == "hull" and c.y < -3.5 * M and c.x > lo - M and c.x < hi + M))
 	phase = "strip"
 	phase_t = 0
 	Engine.time_scale = 1.0
@@ -392,6 +406,9 @@ func _strip_paced() -> void:
 		if not is_instance_valid(b) or b.capture != null or sent.has(b) or b.get_meta("arm", false):
 			continue
 		if g.arm != null and g.arm.takes(b):
+			continue
+		# outside a part-ship contract's scope: pushed aside, not hauled
+		if not b.pieces.any(func(q): return q.scope):
 			continue
 		# hauling a piece with a crack nobody has seen: it gives way on the way
 		var crack = _crack_in(b)
@@ -450,10 +467,10 @@ func _strip_paced() -> void:
 			w.kill_line(l)
 		_work(sec)
 		return
-	if w.bodies.is_empty() and phase_t % 120 == 0:
+	if phase_t % 120 == 0 and not w.bodies.any(func(b): return is_instance_valid(b) and b.pieces.any(func(q): return q.scope)):
 		for id in w.order:
 			var p = w.pieces[id]
-			if not p.gone and p.body == null:
+			if not p.gone and p.body == null and p.scope:
 				order.append(id)
 
 

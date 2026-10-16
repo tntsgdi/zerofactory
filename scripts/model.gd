@@ -38,6 +38,7 @@ class Piece:
 	var temp := 20.0
 	var gone := false
 	var mandatory := false
+	var scope := true         # inside what the contract pays for
 	var dest := "metal"       # where it pays most: metal | equip | hazard
 	var hidden_by := -1       # a cover piece that has to come off first
 	var seen := false

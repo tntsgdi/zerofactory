@@ -11,6 +11,8 @@ const REASONS := 8
 const LOGS := 8
 const BASE_TIME := 18.0 * 60.0    # s, a one-star contract
 const STAR_TIME := 4.0 * 60.0     # s more per extra star
+# the short jobs on part of a ship: standard time (the hold's is also its hard stop)
+const SHORT_TIME := {"aft": 12.0 * 60.0, "rescue": 8.0 * 60.0, "hold": 10.0 * 60.0}
 const TRIES := 30                 # draws per offer before the market gives up on that slot
 
 static var stats := {"made": 0, "discarded": 0, "reasons": {}}   # what the contract validator threw away
@@ -59,6 +61,15 @@ static func valid_offer(rng: RandomNumberGenerator, career: Dictionary, stars: i
 	return {}
 
 
+# what a contract's scope pays for, in a line
+static func scope_text(o: Dictionary) -> String:
+	match o.get("scope", "full"):
+		"aft": return Txt.t("sc_aft_d")
+		"rescue": return Txt.t("sc_rescue_d") % " · ".join(o.get("scope_tags", []))
+		"hold": return Txt.t("sc_hold_d") % int(Variant.HOLD_LIMIT / 60.0)
+	return ""
+
+
 # one offer at a given risk; `used` keeps registrations apart on one market
 static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, used: Dictionary = {}) -> Dictionary:
 	var ship := "gr7"
@@ -68,10 +79,13 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 		reg = "%s-%d" % [t["class"], rng.randi_range(10, 99)]
 	used[reg] = true
 	var traps := pick_traps(rng, stars, int(career.get("rep", 0)))
+	# how much of the ship is bought: the whole of it, or a short job on part of it
+	var scope: String = ["full", "full", "aft", "rescue", "hold"][rng.randi_range(0, 4)]
 	var o := {
 		"id": "%03d-%s" % [int(career.get("done", 0)) + 2, reg],
 		"ship": ship, "reg": reg, "stars": stars, "traps": traps,
-		"time": BASE_TIME + STAR_TIME * (stars - 1),
+		"time": BASE_TIME + STAR_TIME * (stars - 1) if scope == "full" else SHORT_TIME[scope],
+		"scope": scope,
 		"reason": "R_reason_%02d" % rng.randi_range(1, REASONS),
 		"variant": rng.randi(),
 	}
@@ -81,6 +95,7 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 	o.value = snappedf(value, 100.0)
 	# riskier ships come cheaper: 12% of the value at one star, 8% at three
 	o.fee = snappedf(value * (0.12 - 0.02 * (stars - 1)), 500.0)
+	o.scope_tags = d.get("scope", {}).get("tags", [])
 	o.logs = _logs(rng, traps)
 	var cargo: Array = []
 	for c in Variant.CONTAINERS:

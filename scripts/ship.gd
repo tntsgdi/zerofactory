@@ -49,7 +49,7 @@ static func build(w, d: Dictionary) -> Dictionary:
 	var hidden := []
 	for pd in d.get("pieces", []):
 		var opts := {}
-		for k in ["density", "cut_speed", "tag", "name_key", "cls", "value", "cond", "art", "fragile", "room", "barrier", "door", "door_open", "hazard", "temp", "mandatory", "dest", "mass"]:
+		for k in ["density", "cut_speed", "tag", "name_key", "cls", "value", "cond", "art", "fragile", "room", "barrier", "door", "door_open", "hazard", "temp", "mandatory", "dest", "mass", "scope"]:
 			if pd.has(k):
 				opts[k] = pd[k]
 		if pd.has("art_xf"):

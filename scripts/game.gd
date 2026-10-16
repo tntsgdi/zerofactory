@@ -359,6 +359,12 @@ func _process(dt: float) -> void:
 	state_t += rdt
 	if state == "play" and not menu_open:
 		playtime += dt
+		if (training or career()) and not Career.data.is_empty() and Career.usable():
+			Career.data.time = float(Career.data.get("time", 0.0)) + rdt
+		if time_limit() > 0.0 and playtime >= time_limit() and not ended:
+			# the hold contract's hard stop: the berth's slot is over
+			say("sc_time_up", drone.global_position)
+			finish_contract(true)
 		if standard_time() > 0.0 and playtime > standard_time() and not hints_seen.has("late"):
 			hints_seen["late"] = true
 			Copy.say(radio, "L_late")
@@ -740,12 +746,15 @@ func skip_training() -> void:
 		Txt.certified = true
 		Txt.cert_kind = "skipped"
 		Txt.save_settings(testing)
+	Career.certify()
 	after_training("contract")
 
 
 func to_title() -> void:
 	if state == "play":
 		SaveGame.save(self)
+	if (training or career()) and not Career.data.is_empty():
+		Career.save()
 	Engine.time_scale = 1.0
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/title.tscn")
@@ -778,7 +787,19 @@ static func play_career(tree: SceneTree) -> void:
 # ---------------------------------------------------------------- economy
 
 func earned() -> float:
+	# a part-ship contract buys pieces, not the ship's gas and fluids
+	if scope() != "full":
+		return income_equip + income_metal + income_hazard
 	return income_equip + income_metal + income_hazard + sys.gas_value() + sys.fluid_value()
+
+
+# "full" | "aft" | "rescue" | "hold" (Variant._scope)
+func scope() -> String:
+	return ship.get("scope", {}).get("kind", "full")
+
+
+func time_limit() -> float:
+	return float(ship.get("scope", {}).get("limit", 0.0))
 
 
 func recovery_rate() -> float:
@@ -817,6 +838,12 @@ func gain(kind: String, amount: float, at: Vector2, label: String) -> void:
 
 
 func piece_value(p, zone: String) -> float:
+	if not p.scope:
+		return 0.0
+	return _piece_value(p, zone) * float(ship.get("scope", {}).get("premium", 1.0))
+
+
+func _piece_value(p, zone: String) -> float:
 	var scrap: float = p.mass * world.metal_price
 	var dest: String = sys.dest_of(p)
 	var v := 0.0
@@ -896,6 +923,8 @@ func on_swallowed(b, zone: String) -> void:
 		if sys.src.has(p.tag) and sys.src[p.tag].kind == "cap":
 			sys.drain_source(p.tag)
 	var label := ", ".join(names) if not names.is_empty() else txt("scrap_metal")
+	if not b.pieces.any(func(p): return p.scope):
+		label = txt("sc_out")
 	ledger.append([label, zone, v])
 	if b.get_meta("arm_drop", -1.0) >= 0.0 or not b.get_meta("hauled", false):
 		# the arm brought it, or it drifted in on the mouth's own pull: nobody's hands
@@ -965,7 +994,7 @@ func _check_done() -> void:
 	if state != "play" or training or exam != null:
 		return
 	for id in world.order:
-		if not world.pieces[id].gone:
+		if not world.pieces[id].gone and world.pieces[id].scope:
 			return
 	if not dock.debris.is_empty() or not dock.swallowing.is_empty():
 		await get_tree().create_timer(0.8).timeout
@@ -989,7 +1018,7 @@ func on_body_freed(b) -> void:
 		# tiny cut-offs go straight to the debris net
 		var vel: Vector2 = (b.global_position - SHIP_CENTER).normalized() * randf_range(60, 140)
 		for p in b.pieces:
-			dock.add_debris(world.world_poly(p), vel, p.mass * world.metal_price)
+			dock.add_debris(world.world_poly(p), vel, p.mass * world.metal_price * float(ship.get("scope", {}).get("premium", 1.0)) if p.scope else 0.0)
 		world.remove_body(b)
 		sfx.play("debris")
 		return

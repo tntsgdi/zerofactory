@@ -40,6 +40,7 @@ static func make(base: Dictionary, job: Dictionary) -> Dictionary:
 	for t in traps:
 		Traps.apply(d, t, rng, notes)
 	revalue(d)
+	_scope(d, job)
 	d.variant = {"seed": int(job.get("variant", 0)), "traps": traps.duplicate(), "notes": notes, "targets": d.get("variant_targets", {})}
 	d.erase("variant_targets")
 	return d
@@ -201,6 +202,85 @@ static func revalue(d: Dictionary) -> void:
 		if pd.get("cls", "") == "equip":
 			sum += float(pd.get("value", 0.0))
 	d.value.total = snappedf(sum, 1.0)
+
+
+# ---------------------------------------------------------------- contract scope
+
+# Not every contract is the whole ship. "aft": only what is aft of frame 27
+# (rooms D, E, the engines and the hull around them). "rescue": three named
+# pieces of equipment, delivered whole; done when they are in. "hold": what
+# is in the cargo hold, against a hard time limit. Pieces outside the scope
+# stay where they are as far as the owner is concerned: nothing is paid for
+# them. The hull itself never changes; only what is bought.
+const SCOPES := ["full", "aft", "rescue", "hold"]
+const AFT_X := 27.0                 # m, frame 27
+const HOLD_LIMIT := 10.0 * 60.0     # s
+# a short job pays a premium on what it buys (the owner wants it fast): enough
+# to bring it to about 30% of the whole ship's value, within these bounds
+const PREMIUM := {"aft": [1.0, 1.0], "rescue": [1.0, 2.5], "hold": [1.0, 3.5]}
+const SHORT_SHARE := 0.3
+
+
+static func _scope(d: Dictionary, job: Dictionary) -> void:
+	var kind: String = job.get("scope", "full")
+	if kind == "full" or not kind in SCOPES:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(job.get("variant", 0)) + 7919
+	var metal_m := 0.0
+	for pd in d.pieces:
+		if pd.get("cls", "metal") == "metal":
+			metal_m += _mass(pd)
+	var price: float = float(d.value.get("metal", 12000.0)) / maxf(1.0, metal_m)
+	var keep := {}
+	var picked: Array = []
+	match kind:
+		"aft":
+			for pd in d.pieces:
+				if _cx(pd) > AFT_X:
+					keep[pd.key] = true
+		"hold":
+			for pd in d.pieces:
+				if pd.get("room", "") == "C":
+					keep[pd.key] = true
+		"rescue":
+			var pool: Array = []
+			for pd in d.pieces:
+				if pd.get("cls", "") == "equip" and float(pd.get("value", 0.0)) >= 2000.0 and pd.get("tag", "") != "" and pd.get("hazard", "") == "":
+					pool.append(pd)
+			for i in mini(3, pool.size()):
+				var pd = pool.pop_at(rng.randi_range(0, pool.size() - 1))
+				keep[pd.key] = true
+				picked.append(pd.tag)
+	var total := 0.0
+	for pd in d.pieces:
+		var inside: bool = keep.has(pd.key)
+		pd.scope = inside
+		if not inside:
+			pd.mandatory = false
+		elif kind == "rescue":
+			pd.mandatory = true
+		if inside:
+			total += float(pd.get("value", 0.0)) if pd.get("cls", "") == "equip" else _mass(pd) * price
+	var k: float = clampf(SHORT_SHARE * float(d.value.total) / maxf(1.0, total), PREMIUM[kind][0], PREMIUM[kind][1])
+	d.value.total = snappedf(total * k, 1.0)
+	d.scope = {"kind": kind, "limit": HOLD_LIMIT if kind == "hold" else 0.0, "tags": picked, "premium": k}
+
+
+static func _cx(pd: Dictionary) -> float:
+	var x := 0.0
+	for q in pd.poly:
+		x += float(q[0])
+	return x / maxf(1.0, pd.poly.size())
+
+
+static func _mass(pd: Dictionary) -> float:
+	if pd.has("mass"):
+		return float(pd.mass)
+	var pts := PackedVector2Array()
+	for q in pd.poly:
+		pts.append(Vector2(q[0], q[1]))
+	return absf(Geom.area(pts)) * float(pd.get("density", 1.0))
 
 
 # ---------------------------------------------------------------- what a ship asks of you

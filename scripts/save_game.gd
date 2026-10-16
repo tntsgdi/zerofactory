@@ -100,6 +100,7 @@ static func save(g) -> void:
 			"frag": p.fragile, "contam": p.contam, "cs": p.cut_speed, "room": p.room, "bar": p.barrier,
 			"door": p.door, "open": p.door_open, "odir": _v2(p.open_dir), "haz": p.hazard, "temp": p.temp,
 			"must": p.mandatory, "dest": p.dest, "hid": p.hidden_by, "seen": p.seen, "label": p.label,
+			"scope": p.scope,
 		})
 	var joints: Array = []
 	for j in w.joints:
@@ -288,6 +289,7 @@ static func apply(g, d: Dictionary) -> bool:
 		p.art_size = _p2(pd.asz)
 		p.fragile = pd.frag
 		p.contam = pd.contam
+		p.scope = pd.get("scope", true)
 		p.cut_speed = pd.cs
 		p.room = pd.room
 		p.barrier = pd.bar

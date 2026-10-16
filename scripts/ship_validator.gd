@@ -414,7 +414,8 @@ static func _mandatory(d: Dictionary, w, bad: Array) -> void:
 			continue
 		if p.cls != "equip" or p.value <= 0.0:
 			bad.append("mandatory %s is not valuable equipment" % p.tag)
-		if not procs.has(p.tag):
+		# a rescue contract's named pieces are plain equipment (never a hazard): no procedure needed
+		if not procs.has(p.tag) and not (d.has("scope") and p.hazard == ""):
 			bad.append("mandatory %s has no safe-removal procedure" % p.tag)
 	for k in procs:
 		for step in procs[k]:
@@ -438,6 +439,14 @@ static func _settle(d: Dictionary, w, bad: Array) -> void:
 		var p = w.pieces[id]
 		if p.cls == "equip":
 			sum += p.value
+	# part of a ship: only what is inside the scope is paid, gas and fluids not at all
+	if d.has("scope"):
+		sum = 0.0
+		for id in w.order:
+			var p = w.pieces[id]
+			if p.scope:
+				sum += p.value if p.cls == "equip" else p.mass * w.metal_price
+		sum *= float(d.scope.get("premium", 1.0))
 	if absf(sum - total) > total * 0.05:
 		bad.append("parts add up to $%d but the contract is worth $%d" % [int(sum), int(total)])
 	if w.structural_mass <= 0.0:
