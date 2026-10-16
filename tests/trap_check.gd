@@ -264,7 +264,7 @@ func _t_hidden_damage(seed: int) -> void:
 	var r := inspect(rib)
 	var found_t: float = g.playtime
 	var found_n: int = g.incidents.size()
-	check(visible(rib) and str(r.get("inspect", "")).find(Txt.t("j_crack")) >= 0, "found: the precision kit's inspection of the rib: %s" % r.get("inspect", ""))
+	check(visible(rib) and str(r.get("inspect", "")).find(Txt.t("j_crack")) >= 0, "found: the precision kit's inspection of the roof plate: %s" % r.get("inspect", ""))
 	# free it (its fixings, not the crack) and haul it with the grapple
 	var other = g.world.pieces[crack.b if crack.a == rib.id else crack.a]
 	for p in [rib, other]:
@@ -282,7 +282,7 @@ func _t_hidden_damage(seed: int) -> void:
 	g.prev_lmb = true
 	await _frames(90)
 	g.bot.lmb = false
-	check(g.incidents.any(func(x): return x[1] == "snap"), "bites: hauling the rib snaps it at the crack")
+	check(g.incidents.any(func(x): return x[1] == "snap"), "bites: hauling the plate off snaps it at the crack")
 	check(found_n == 0 and not g.incidents.is_empty(), "found before it bit (no incident yet when it was found)")
 	g.tools.release_grab(false)
 

@@ -3,7 +3,7 @@ extends SceneTree
 # way the market draws them go through VALIDATE CONTRACT. The static half
 # (scripts/contract_validator.gd) throws some away — counted by reason. Every
 # contract that passes it is then played for real: a save / load round trip,
-# twenty seconds left alone with nothing happening, and the salvage bot
+# twenty seconds left alone (8× warp) with nothing happening, and the salvage bot
 # taking the whole ship apart with no incident and nothing forced. Shards run
 # side by side and write tests/out/contracts_<shard>.json; "report" adds them up.
 # godot --headless --path . --fixed-fps 60 -s tests/contract_validate.gd -- from=0 count=250 [trap=<id>] [shard=a]
@@ -136,8 +136,8 @@ func _play(o: Dictionary) -> Array:
 	var p0 := {}
 	for n in g.world.rooms:
 		p0[n] = g.sys.P(n)
-	Engine.time_scale = 4.0
-	await _frames(300)
+	Engine.time_scale = 8.0
+	await _frames(150)
 	Engine.time_scale = 1.0
 	if not g.incidents.is_empty():
 		bad.append("left alone: %s" % str(g.incidents))

@@ -42,6 +42,7 @@ var overweight := false
 var tether_target := Vector2.ZERO
 var tether_force := 0.0
 var crack_t := 0.0
+var stroke_cuts := 0
 
 # wrench / measure / hose actions in progress
 var job := {}              # {"kind", "t", "dur", "target", "pos"}
@@ -508,6 +509,7 @@ func _commit(id: int) -> void:
 	var pl: PackedVector2Array = pd.pl
 	var res: Dictionary = world.commit_cut(p, pl)
 	game.on_kerf(p, res)
+	stroke_cuts += 1
 	# keep cutting from where the front is now, on whatever holds that point
 	if not res.gone:
 		var last := pl[pl.size() - 1]
@@ -519,6 +521,10 @@ func _commit(id: int) -> void:
 
 func _finish_cut() -> void:
 	cutting = false
+	# one stroke that went through something is one cutting decision
+	if stroke_cuts > 0 or not pending.is_empty():
+		game.log_op("cut")
+	stroke_cuts = 0
 	for id in pending.keys():
 		if pending.has(id) and pending[id].pl.size() >= 1:
 			_commit(id)
@@ -635,7 +641,7 @@ func physics_step(dt: float) -> void:
 	if held_body != null and is_instance_valid(held_body):
 		held_body.tethered = true
 		var m: float = held_body.total_mass()
-		overweight = m > GRAB_MAX_T + 0.001
+		overweight = m > game.grab_max() + 0.001
 		if overweight:
 			strain = minf(1.0, strain + dt * 2.0)
 			tether_force = 1.0
@@ -661,7 +667,7 @@ func physics_step(dt: float) -> void:
 	else:
 		# still fixed to the ship: the beam pulls, the fixings decide
 		var m2: float = world.group_mass(held_piece)
-		overweight = m2 > GRAB_MAX_T + 0.001
+		overweight = m2 > game.grab_max() + 0.001
 		var pull := clampf((tether_target - g).length() / (1.2 * 48.0), 0.0, 1.0)
 		tether_force = pull
 		var fixed := 0
@@ -812,8 +818,10 @@ func _draw_add() -> void:
 		var b := grab_point()
 		var tension: float = maxf(strain, tether_force * 0.6)
 		var col := Pal.ink(0.55, 1.4).lerp(Pal.heat(0.9, 2.0), clampf(strain + (0.5 if overweight else 0.0), 0.0, 1.0))
-		for i in 3:
-			var off := (i - 1) * 4.0 / z
+		# the 5 t grapple pulls with five strands of beam, the stock one with three
+		var strands := 5 if game.has_upgrade("grapple5") else 3
+		for i in strands:
+			var off := (i - (strands - 1) * 0.5) * 4.0 / z
 			var nrm := (b - a).normalized().orthogonal()
 			var wob := sin(t * (30.0 + i * 7.0)) * (2.0 + 6.0 * tension) / z
 			var mid := (a + b) * 0.5 + nrm * (off + wob)

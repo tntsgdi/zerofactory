@@ -12,7 +12,7 @@ class_name Traps
 #   welded_hatch    the cargo hatch's seams welded shut; the drive burns out on it
 #   rerouted_line   a coolant run moved under the engine room's roof
 #   second_source   an emergency generator feeding the bus from the stern
-#   hidden_damage   a cracked rib in the hold that snaps when hauled
+#   hidden_damage   a hold roof plate cracked along an old seam: hauled off, it snaps and half drops in
 #   explosive_cargo a container of dangerous goods under an ordinary stencil
 #   fire_system     the fire suppression bottle never discharged
 
@@ -27,11 +27,11 @@ const FITTINGS := {
 	"hidden_tank": {"pieces": ["TK-X1"], "ctrls": ["TK-X1"]},
 	"live_cargo": {"ctrls": ["K-RF"], "lines": ["cr"]},
 	"second_source": {"pieces": ["EG-01"], "ctrls": ["K-EG"], "lines": ["ce"]},
-	"hidden_damage": {"pieces": ["p47~", "p48~", "p49~"], "reshaped": ["p47", "p48", "p49"]},
+	"hidden_damage": {"pieces": ["p7~", "p10~", "p11~"], "reshaped": ["p7", "p10", "p11"]},
 	"fire_system": {"pieces": ["FX-01"], "ctrls": ["FX-P"]},
 }
 const TANK_SLOTS := [24.0, 25.7]          # x of an undeclared bottle on the hold floor (m)
-const RIBS := ["p47", "p48", "p49"]
+const PLATES := ["p7", "p10", "p11"]     # the hold's roof plates a crack can run through
 
 
 static func fittings(traps: Array) -> Dictionary:
@@ -71,6 +71,27 @@ static func evidence(d: Dictionary, trap: String) -> Array:
 		"fire_system":
 			return [["piece", "FX-01"], ["ctrl", "FX-P"]]
 	return []
+
+
+# A survey report (the intel consumable): the true state behind one trap, as
+# a reading — [Txt key, arguments]. Read from the contract's own ship.
+static func intel(d: Dictionary, trap: String) -> Array:
+	var tg: String = d.get("variant", {}).get("targets", {}).get(trap, "")
+	var gas: Dictionary = d.get("gas", {})
+	match trap:
+		"wrong_valve":
+			return ["in_wrong_valve", [int(float(gas.rooms.get("C", 0.0)))]]
+		"hidden_tank":
+			return ["in_hidden_tank", [int(float(gas.vessels.get("TX", {}).get("kpa", 0.0)))]]
+		"fire_system":
+			return ["in_fire_system", [int(float(gas.vessels.get("FX", {}).get("kpa", 0.0)))]]
+		"live_cargo", "explosive_cargo":
+			return ["in_" + trap, [tg]]
+		"hidden_damage":
+			# a roof plate has no name a player knows: say where it is
+			var pd = Variant.piece(d, tg)
+			return ["in_hidden_damage", [int(round(Variant._bbox(pd.poly).get_center().x)) if pd != null else 0]]
+	return ["in_" + trap, []]
 
 
 # did the trap bite on this contract? (an incident of its kind, where it was)
@@ -196,10 +217,9 @@ static func apply(d: Dictionary, trap: String, rng: RandomNumberGenerator, notes
 					out.append(st)
 				return out)
 		"hidden_damage":
-			var rib: String = RIBS[rng.randi_range(0, RIBS.size() - 1)]
-			_target(d, trap, rib)
-			var yc := snappedf(rng.randf_range(-1.6, 1.2), 0.01)
-			_crack(d, rib, yc)
+			var plate: String = PLATES[rng.randi_range(0, PLATES.size() - 1)]
+			_target(d, trap, plate)
+			_crack(d, plate, rng.randf_range(0.3, 0.7))
 		"explosive_cargo":
 			var c: String = Variant.CONTAINERS[rng.randi_range(0, 2)]
 			_target(d, trap, c)
@@ -220,26 +240,59 @@ static func _add_bottle(d: Dictionary, tag: String, vol: String, room: String, x
 	d.gas.vessels[vol] = {"V": v, "burst": 200.0, "kpa": snappedf(kpa, 1.0), "piece": tag}
 
 
-# a rib cracked across at height yc: two pieces held only by the crack
-static func _crack(d: Dictionary, rib: String, yc: float) -> void:
-	var pd = Variant.piece(d, rib)
+# a plate cracked straight across at fraction f of its width: two pieces held
+# only by the crack (fixings, controls and line ends go with the side they are on)
+static func _crack(d: Dictionary, key: String, f: float) -> void:
+	var pd = Variant.piece(d, key)
 	if pd == null:
 		return
 	var bb := Variant._bbox(pd.poly)
-	var low: Dictionary = pd.duplicate(true)
-	low.key = rib + "~"
-	pd.poly = [[bb.position.x, bb.position.y], [bb.end.x, bb.position.y], [bb.end.x, yc], [bb.position.x, yc]]
-	low.poly = [[bb.position.x, yc], [bb.end.x, yc], [bb.end.x, bb.end.y], [bb.position.x, bb.end.y]]
+	var xc := snappedf(bb.position.x + bb.size.x * f, 0.01)
+	var left := Geometry2D.clip_polygons(_pv(pd.poly), PackedVector2Array([Vector2(xc, -99), Vector2(99, -99), Vector2(99, 99), Vector2(xc, 99)]))
+	var right := Geometry2D.clip_polygons(_pv(pd.poly), PackedVector2Array([Vector2(-99, -99), Vector2(xc, -99), Vector2(xc, 99), Vector2(-99, 99)]))
+	if left.is_empty() or right.is_empty():
+		return
+	var other: Dictionary = pd.duplicate(true)
+	other.key = key + "~"
+	pd.poly = _arr(left[0])
+	other.poly = _arr(right[0])
 	var m: float = float(pd.get("mass", 0.0))
-	var k := (yc - bb.position.y) / bb.size.y
+	var k := Geom.area(left[0]) / (Geom.area(left[0]) + Geom.area(right[0]))
 	pd.mass = snappedf(m * k, 0.001)
-	low.mass = snappedf(m - pd.mass, 0.001)
-	d.pieces.insert(d.pieces.find(pd) + 1, low)
+	other.mass = snappedf(m - pd.mass, 0.001)
+	d.pieces.insert(d.pieces.find(pd) + 1, other)
 	for j in d.joints:
 		for side in ["a", "b"]:
-			if j[side] == rib and float(j.at[1]) > yc:
-				j[side] = low.key
-	d.joints.append({"a": rib, "b": low.key, "type": "crack", "at": [snappedf(bb.get_center().x, 0.01), yc]})
+			if j[side] == key and float(j.at[0]) > xc:
+				j[side] = other.key
+	for c in d.ctrls:
+		if c.piece == key and float(c.at[0]) > xc:
+			c.piece = other.key
+	for l in d.lines:
+		if l.a == key and float(l.pa[0]) > xc:
+			l.a = other.key
+		if l.b == key and float(l.pb[0]) > xc:
+			l.b = other.key
+	var ys: Array = []
+	for q in d.pieces[d.pieces.find(pd)].poly:
+		if absf(float(q[0]) - xc) < 0.02:
+			ys.append(float(q[1]))
+	var yc: float = (ys.min() + ys.max()) * 0.5 if ys.size() >= 2 else bb.get_center().y
+	d.joints.append({"a": key, "b": other.key, "type": "crack", "at": [xc, snappedf(yc, 0.01)]})
+
+
+static func _pv(a: Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for q in a:
+		out.append(Vector2(q[0], q[1]))
+	return out
+
+
+static func _arr(p: PackedVector2Array) -> Array:
+	var out: Array = []
+	for q in p:
+		out.append([snappedf(q.x, 0.0001), snappedf(q.y, 0.0001)])
+	return out
 
 
 static func _patch_proc(d: Dictionary, key: String, fn: Callable) -> void:

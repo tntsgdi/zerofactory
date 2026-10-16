@@ -404,10 +404,17 @@ func _draw_static() -> void:
 	# hose masts (two on the arm, one on a pylon from the floor)
 	var pyl: Vector2 = MASTS[2] * M
 	_truss_v(Rect2(pyl.x - 0.25 * M, pyl.y, 0.5 * M, FLOOR_Y * M - pyl.y))
+	var pump2: bool = game != null and game.has_upgrade("pump2")
 	for m in MASTS:
 		var mp: Vector2 = m * M
 		ci.draw_rect(Rect2(mp + Vector2(-10, -14), Vector2(20, 18)), Color(0.07, 0.073, 0.082))
 		ci.draw_rect(Rect2(mp + Vector2(-10, -14), Vector2(20, 18)), Pal.ink(0.5), false, 1.2)
+		if pump2:
+			# the high-flow pump: a second, bigger housing with an impeller ring
+			ci.draw_rect(Rect2(mp + Vector2(12, -18), Vector2(22, 22)), Color(0.07, 0.073, 0.082))
+			ci.draw_rect(Rect2(mp + Vector2(12, -18), Vector2(22, 22)), Pal.ink(0.6), false, 1.4)
+			ci.draw_arc(mp + Vector2(23, -7), 7.0, 0.0, TAU, 16, Pal.ink(0.55), 1.2, true)
+			ci.draw_line(mp + Vector2(10, -6), mp + Vector2(12, -6), Pal.ink(0.5), 2.0)
 
 
 func _draw_clamps() -> void:

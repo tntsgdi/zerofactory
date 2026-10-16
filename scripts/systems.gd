@@ -317,7 +317,9 @@ func _step_gas(dt: float) -> void:
 	var before := {}
 	for n in room_ids:
 		before[n] = P(n)
-	var sub := 4
+	# never more than 1/240 s a substep, whatever the time warp (a warped step lets
+	# a small vessel run dry inside one substep)
+	var sub := maxi(4, ceili(dt * 240.0 - 0.001))
 	var h := dt / sub
 	for s in sub:
 		for l in links:
@@ -347,7 +349,7 @@ func _step_gas(dt: float) -> void:
 			if c == null or c.medium != "gas" or not vols.has(c.target):
 				continue
 			var v: String = c.target
-			var k := port_rate(port_id)
+			var k := port_rate(port_id) * pump_k()
 			var hose: Dictionary = hoses[port_id]
 			if hose.mode == "vent":
 				k *= 3.0
@@ -377,6 +379,11 @@ func _step_gas(dt: float) -> void:
 			var p := P(l[0])
 			if p > 1.5:
 				game.on_jet(l[0], l[3], l[4], p, l[2])
+
+
+# the high-flow recovery pump draws gas and fluid twice as fast
+func pump_k() -> float:
+	return 2.0 if game != null and game.has_upgrade("pump2") else 1.0
 
 
 # how fast a gas port's hose draws (m² of the volume per second)
@@ -704,14 +711,14 @@ func _step_fluids(dt: float) -> void:
 			continue
 		var v: Dictionary = fvol[vk]
 		var pump: Array = v.get("pump", [0.1, 0.005])
-		var take := minf(v.amount, (float(pump[0]) * v.amount + float(pump[1])) * dt)
+		var take := minf(v.amount, (float(pump[0]) * v.amount + float(pump[1])) * dt * pump_k())
 		v.amount -= take
 		fluid_rec[v.fluid] += take
 		# a pump on the tank also draws the line it feeds through an open valve
 		for jn in joins:
 			if jn.a == vk and joined.has(jn.b) and jn.has("pump_through"):
 				var b: Dictionary = fvol[jn.b]
-				var t2 := minf(b.amount, float(jn.pump_through) * dt)
+				var t2 := minf(b.amount, float(jn.pump_through) * dt * pump_k())
 				b.amount -= t2
 				fluid_rec[b.fluid] += t2
 	# leaks drain what they are attached to

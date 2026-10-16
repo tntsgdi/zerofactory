@@ -58,7 +58,7 @@ func _initialize() -> void:
 			if b == null:
 				if not fit.ctrls.has(c.id):
 					bad.append("%s: control %s is not the factory's" % [o.id, c.id])
-			elif c.kind != b.kind or c.piece != b.piece or str(c.get("target", "")) != str(b.get("target", "")):
+			elif c.kind != b.kind or (c.piece != b.piece and not (fit.reshaped.has(b.piece) and c.piece == b.piece + "~")) or str(c.get("target", "")) != str(b.get("target", "")):
 				bad.append("%s: control %s changed what it is" % [o.id, c.id])
 		for l in d.lines:
 			var b = blines.get(l.id)

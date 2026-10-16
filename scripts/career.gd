@@ -10,6 +10,7 @@ const VERSION := 1
 const LOAN_START := 300000.0
 const INSTALLMENT := 20000.0      # taken at every settlement
 const INTEREST := 0.02            # of the principal still owed, every settlement
+const BONUS := 0.2                # of the net profit, finished within the standard time
 const FIRST := "GR-001"           # the first contract is the hand-made Heron
 # reputation points per settlement grade (fail, pass, good, excellent) and the levels
 const REP_GAIN := [-1, 1, 2, 3]
@@ -132,21 +133,75 @@ static func accept(i: int) -> Dictionary:
 	data.loan = float(data.loan) + short
 	o.fee_paid = true
 	o.borrowed = short
+	# the berth goes to work with what it owns at signing
+	o.kit = data.get("upgrades", {}).duplicate()
+	o.items = data.get("items", {}).duplicate()
+	o.notes = data.get("archive", {}).get(o.get("ship", ""), {}).duplicate(true)
+	# what was bought at the terminal since the last contract goes on this one's log
+	o.desk = data.get("desk", {}).duplicate()
+	data.desk = {}
 	data.active = o
 	data.offers = []
 	save()
 	return o
 
 
+# ---------------------------------------------------------------- the engineering archive
+
+# what was checked by hand on a ship goes into the type's notes (newest wins)
+static func file_notes(ship: String, verified: Dictionary) -> void:
+	var arch: Dictionary = data.get("archive", {})
+	var n: Dictionary = arch.get(ship, {"pieces": {}, "ports": {}, "lines": {}, "ctrls": {}, "ships": 0})
+	for k in ["pieces", "ports", "lines", "ctrls"]:
+		var into: Dictionary = n.get(k, {})
+		for id in verified.get(k, {}):
+			into[id] = verified[k][id]
+		n[k] = into
+	n.ships = int(n.get("ships", 0)) + 1
+	arch[ship] = n
+	data.archive = arch
+
+
 # ---------------------------------------------------------------- the books
 
-# A contract is over. r: {earned, losses, rate, grade, time, fee}. Returns the
-# settlement lines the ending shows: [text key, amount].
+# the time bonus: +20% of a positive net profit within the standard time,
+# falling off in a straight line to nothing at twice the standard time
+static func time_bonus(net: float, secs: float, standard: float) -> float:
+	if standard <= 0.0 or net <= 0.0:
+		return 0.0
+	return snappedf(net * BONUS * clampf((2.0 * standard - secs) / standard, 0.0, 1.0), 1.0)
+
+
+# pay off part of the loan from funds now; returns what was paid
+static func repay(amount: float) -> float:
+	var pay := minf(amount, minf(float(data.money), float(data.loan)))
+	if pay <= 0.0:
+		return 0.0
+	data.money = float(data.money) - pay
+	data.loan = float(data.loan) - pay
+	_paid_off()
+	save()
+	return pay
+
+
+# the loan is gone: BERTH 07 is the operator's (once; later ship types hang on this)
+static func _paid_off() -> bool:
+	if float(data.loan) > 0.5 or data.get("paid_off", false):
+		return false
+	data.loan = 0.0
+	data.paid_off = true
+	data.paid_off_at = int(data.get("done", 0))
+	return true
+
+
+# A contract is over. r: {earned, losses, rate, grade, time, fee, bonus}. Returns
+# what the settlement shows.
 static func settle(r: Dictionary) -> Dictionary:
 	var a: Dictionary = active()
 	var fee: float = r.get("fee", a.get("fee", 0.0))
 	var prepaid: bool = a.get("fee_paid", false)
-	var gross: float = float(r.get("earned", 0.0)) - float(r.get("losses", 0.0))
+	var bonus: float = float(r.get("bonus", 0.0))
+	var gross: float = float(r.get("earned", 0.0)) - float(r.get("losses", 0.0)) + bonus
 	var money_in := gross - (0.0 if prepaid else fee)
 	var cash: float = float(data.money) + money_in
 	# the loan: a fixed installment and interest on what is still owed
@@ -169,14 +224,19 @@ static func settle(r: Dictionary) -> Dictionary:
 	data.money = cash
 	data.loan = maxf(0.0, loan)
 	data.done = int(data.done) + 1
+	# consumables used on the contract come out of stock
+	var used: Dictionary = r.get("used", {})
+	for k in used:
+		data.items[k] = maxi(0, int(data.items.get(k, 0)) - int(used[k]))
 	data.market = true
 	data.history.append({"id": a.get("id", "?"), "ship": a.get("ship", "gr7"), "net": gross - fee, "rate": r.get("rate", 0.0),
-		"grade": grade, "time": r.get("time", 0.0), "stars": a.get("stars", 0)})
+		"grade": grade, "time": r.get("time", 0.0), "stars": a.get("stars", 0), "bonus": bonus, "loan": data.loan, "ops": r.get("ops", {})})
 	data.active = {}
 	data.offers = []
+	var paid_off := _paid_off()
 	save()
-	return {"installment": inst, "interest": interest, "paid": paid, "gross": gross, "prepaid": prepaid, "fee": fee,
-		"short": short, "money": cash, "loan": data.loan, "level_up": level() != rep_before, "level": level()}
+	return {"installment": inst, "interest": interest, "paid": paid, "gross": gross, "prepaid": prepaid, "fee": fee, "bonus": bonus,
+		"short": short, "money": cash, "loan": data.loan, "level_up": level() != rep_before, "level": level(), "paid_off": paid_off, "used": used}
 
 
 static func ensure_offers(make: Callable) -> void:

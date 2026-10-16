@@ -155,7 +155,7 @@ static func save(g) -> void:
 		"game": {"ie": g.income_equip, "im": g.income_metal, "ih": g.income_hazard, "loss": g.losses, "lines": g.loss_lines,
 			"must": g.mandatory_ok, "incidents": g.incidents, "time": g.playtime, "hints": g.hints_seen, "ledger": g.ledger,
 			"drone": {"p": _v2(g.drone.global_position), "v": _v2(g.drone.linear_velocity), "hp": g.drone.integrity, "alive": g.drone.alive},
-			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode, "reveals": g.reveal_count, "respawn": g.drone_respawn,
+			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode, "reveals": g.reveal_count, "respawn": g.drone_respawn, "used": g.used, "verified": g.verified, "ops": g.ops,
 			"debris": debris},
 	}
 	if not g.job.is_empty():
@@ -449,6 +449,12 @@ static func apply_late(g, d: Dictionary) -> void:
 	g.tools.hose_mode = gd.hose_mode
 	g.reveal_count = int(gd.reveals)
 	g.drone_respawn = gd.respawn
+	for k in gd.get("used", {}):
+		g.used[k] = int(gd.used[k])
+	for k in gd.get("ops", {}):
+		g.ops[k] = int(gd.ops[k])
+	for k in gd.get("verified", {}):
+		g.verified[k] = gd.verified[k]
 	for db in gd.debris:
 		g.dock.debris.append([_p2(db.p), _p2(db.v), db.t, _unpoly(db.poly), db.rot, db.spin, db.val, []])
 	var dr: Dictionary = gd.drone

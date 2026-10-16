@@ -197,6 +197,19 @@ func _draw() -> void:
 		var c: Vector2 = d * (R - 1.0)
 		var t := Vector2(-d.y, d.x)
 		draw_line(c + t * 5.0, c - t * 5.0, Pal.ink(0.8), 3.0)
+	# fitted upgrades show on the airframe
+	if game != null and game.has_upgrade("grapple5"):
+		# the bigger tractor emitter: a heavy ring round the lens and two coil blocks
+		draw_arc(Vector2.ZERO, 12.5, 0.0, TAU, 28, Pal.ink(0.7), 2.4, true)
+		for s in [-1.0, 1.0]:
+			var a: float = heading + s * 0.9
+			draw_rect(Rect2(Vector2.from_angle(a) * 13.0 - Vector2(3, 3), Vector2(6, 6)), Pal.ink(0.75))
+	if game != null and game.has_upgrade("scan_kit"):
+		# the precision inspection head: a small dish on a mast
+		var up := Vector2(0, -R - 2.0)
+		draw_line(Vector2(0, -R + 2.0), up + Vector2(0, -6), Pal.ink(0.7), 1.4)
+		draw_arc(up + Vector2(0, -6), 5.0, PI * 1.1, PI * 1.9, 10, Pal.ink(0.85), 1.6, true)
+		draw_circle(up + Vector2(0, -9), 1.4, Pal.tint(Pal.AIR, 0.9, 1.4))
 	# lens looks where you aim
 	var lens := Vector2.from_angle(heading) * 7.0
 	draw_circle(Vector2.ZERO, 8.5, Color(0.03, 0.03, 0.035))

@@ -18,6 +18,12 @@ var t := 0.0
 var x0 := -2.0 * 48.0     # drawn extent (px), from the ship's own size
 var x1 := 46.0 * 48.0
 var y_top := -4.0 * 48.0
+# "my engineering notes": what earlier ships of this type showed the operator's own hands
+var notes: Dictionary = {}
+var note_polys: Array = []   # [poly, tag, info]
+var note_runs: Array = []    # [path, id]
+var note_points: Array = []  # [pos, text]
+var notes_said := false
 
 
 func _init() -> void:
@@ -76,12 +82,48 @@ func snapshot() -> void:
 	# the designed clamps
 	for c in game.dock.clamps:
 		points.append([c * 48.0, "", "clamp"])
+	# my engineering notes, laid on the factory layout
+	notes = game.notes()
+	for tg in notes.get("pieces", {}):
+		var p = w.tag(tg)
+		if p != null:
+			note_polys.append([p.poly, tg, notes.pieces[tg]])
+	for id in notes.get("lines", {}):
+		if w.lines.has(id):
+			var l = w.lines[id]
+			var path: PackedVector2Array = l.path
+			if bp.get("lines", {}).has(id):
+				path = PackedVector2Array()
+				for q in bp.lines[id]:
+					path.append(Geom.m(q[0], q[1]))
+			note_runs.append([path, id.to_upper(), notes.lines[id]])
+	for id in notes.get("ports", {}):
+		if w.ctrls.has(id):
+			note_points.append([w.ctrl_world(w.ctrls[id]), "✓ %s → %s" % [id, notes.ports[id]]])
+	for id in notes.get("ctrls", {}):
+		if w.ctrls.has(id) and not notes.get("ports", {}).has(id):
+			note_points.append([w.ctrl_world(w.ctrls[id]), "✓ " + id])
 	w.free()
 
 
 func toggle() -> void:
 	on = not on
 	game.sfx.play("blueprint_on" if on else "blueprint_off")
+	if on and has_notes() and not notes_said:
+		notes_said = true
+		Copy.say(game.radio, "L_notes_first")
+
+
+func has_notes() -> bool:
+	return not (notes.get("pieces", {}).is_empty() and notes.get("ports", {}).is_empty() and notes.get("lines", {}).is_empty() and notes.get("ctrls", {}).is_empty())
+
+
+# the notes panel rows: [label, value]; the state of this ship's accident is never in the notes
+func notes_rows() -> Array:
+	var n := 0
+	for k in ["pieces", "ports", "lines", "ctrls"]:
+		n += notes.get(k, {}).size()
+	return [[game.txt("nt_checked"), str(n)], [game.txt("nt_ships"), str(int(notes.get("ships", 0)))], [game.txt("nt_now"), game.txt("nt_unverified")]]
 
 
 func _process(dt: float) -> void:
@@ -192,3 +234,35 @@ func _draw() -> void:
 		if p[1] != "":
 			_point_label(pos, p[1], Color(0.62, 0.86, 1.0, 0.9 * a))
 	_label(Vector2(x0 + 2.0 * 48.0, y_top - 1.2 * 48.0), game.ship.get("name", "") + "  ·  " + game.txt("blueprint"), 18, col, Vector2.ZERO)
+	if has_notes():
+		_draw_notes(lw, a)
+
+
+# what my own hands checked on earlier ships of the type: solid, warm, ticked
+func _draw_notes(lw: float, a: float) -> void:
+	var nc := Color(1.0, 0.78, 0.45, 0.85 * a)
+	for np in note_polys:
+		var poly: PackedVector2Array = np[0]
+		var cl := poly.duplicate()
+		cl.append(poly[0])
+		draw_polyline(cl, nc, lw * 1.6, true)
+		var info = np[2]
+		var txt: String = "✓ " + np[1]
+		if info is Dictionary and info.has("fix"):
+			txt += "  " + str(info.fix)
+		_label(Geom.bbox(poly).end + Vector2(2, 0), txt, 12, nc)
+	for r in note_runs:
+		draw_polyline(r[0], nc, lw * 2.2, true)
+		var ends = r[2]
+		var txt2: String = "✓ " + r[1]
+		if ends is Array and ends.size() == 2:
+			txt2 += "  %s → %s" % [ends[0], ends[1]]
+		_label(r[0][r[0].size() / 2], txt2, 12, nc, Vector2(4, 14))
+	for p in note_points:
+		_point_label(p[0], p[1], nc)
+	# the panel: how much is in the notes, and that none of it is about this ship's accident
+	var rows := notes_rows()
+	var at := Vector2(x0 + 2.0 * 48.0, y_top - 4.8 * 48.0)
+	_label(at, game.txt("nt_title"), 16, nc, Vector2.ZERO)
+	for i in rows.size():
+		_label(at + Vector2(0, (i + 1) * 0.5 * 48.0), "%s  %s" % rows[i], 13, nc if i < 2 else Pal.heat(0.9 * a, 1.2), Vector2.ZERO)

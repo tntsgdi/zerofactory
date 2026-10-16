@@ -705,5 +705,12 @@ func _report() -> void:
 	else:
 		var mins := total / 60.0
 		print("TUTORIAL %s  (all six lessons, certified)  time %.1f min vs target 15–20: %s" % ["PASS" if game.tutorial.done else "FAIL", mins, "in range" if ok else ("SHORTER" if mins < 15.0 else "LONGER")])
+	# roadmap 2.9: the course's share of repetitive hand work, for the growth curve
+	var sh: Dictionary = Game.op_share(game.ops)
+	print("OPLOG tutorial: %d hand-work, %d decisions → %.0f%% repetitive  %s" % [sh.manual, sh.decision, sh.share * 100.0, str(game.ops)])
+	if not chaos:
+		var f := FileAccess.open(ProjectSettings.globalize_path("res://tests/out/oplog_tutorial.json"), FileAccess.WRITE)
+		f.store_string(JSON.stringify({"ops": game.ops, "share": sh}))
+		f.close()
 	for ext in ["", ".bak", ".tmp"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveGame.train_path + ext))

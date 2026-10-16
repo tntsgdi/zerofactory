@@ -28,12 +28,35 @@ static var contract: Dictionary = {}   # the career's contract to play next (emp
 var job: Dictionary = {}     # the career contract this scene plays
 var fee := CONTRACT_FEE
 var career_result: Dictionary = {}     # the settlement with the career, once the contract is over
+var used: Dictionary = {}    # consumables used up on this contract (the career's stock drops at settlement)
+# what the operator checked with their own hands on this ship (factory names only):
+# pieces inspected or handled, ports read, lines traced, controls worked. Goes to
+# the career's engineering archive at the end; the next ship of the type shows it.
+var verified := {"pieces": {}, "ports": {}, "lines": {}, "ctrls": {}}
+var _factory := {}           # the type's factory names: what can go in the archive
+# The operation log (roadmap 2.9): every action counted under what it is.
+# Repetitive hand work: undoing bolts and locks, unplugging, doors, hauling
+# ordinary scrap, measuring the same point again, patching the drone.
+# Engineering decisions: the first reading of a point, isolating (switches,
+# valves, stops), choosing to hose, cutting (whether to cut and where to
+# segment), sending whole equipment or hazards to their mouth, firing a
+# breaching ring, picking the contract, buying kit. The machine's work (the
+# recovery arm) is counted apart and is nobody's hand work.
+const OP_CAT := {
+	"unfix": "manual", "unplug": "manual", "door": "manual", "haul_scrap": "manual", "remeasure": "manual", "repair": "manual",
+	"measure": "decision", "isolate": "decision", "hose": "decision", "cut": "decision", "deliver_equip": "decision",
+	"deliver_hazard": "decision", "ring": "decision", "pick_contract": "decision", "buy": "decision",
+	"arm_haul": "machine",
+}
+var ops := {}                # kind -> count
+var _measured := {}
 var training := false        # the ship file is a training course, not a contract
 var tutorial: Tutorial
 var assist: Assist
 var story: Story
 var exam: Exam
 var settings_panel: SettingsPanel
+var arm: RecoveryArm
 var radio := Radio.new()      # Liang and the berth terminal
 var player_moved := false
 var warp := false            # time runs x4 while the player holds =
@@ -131,6 +154,14 @@ func _ready() -> void:
 	if job.has("variant"):
 		ship = Variant.make(ship, job)
 	fee = float(job.get("fee", ship.get("fee", CONTRACT_FEE)))
+	var base := Ship.load_data(ship_id)
+	for pd in base.get("pieces", []):
+		if pd.get("tag", "") != "":
+			_factory["p:" + pd.tag] = true
+	for c in base.get("ctrls", []):
+		_factory["c:" + c.id] = true
+	for l in base.get("lines", []):
+		_factory["l:" + l.id] = true
 	dock.set_ship(ship)
 	if not data.is_empty() and SaveGame.apply(self, data):
 		Ship.rooms(world, ship)
@@ -185,6 +216,12 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
+	# the industrial recovery arm on the boom, once the berth has bought it
+	if has_upgrade("arm"):
+		arm = RecoveryArm.new()
+		arm.game = self
+		arm.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(arm)
 	if ship.has("exam"):
 		exam = Exam.new()
 		exam.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -241,6 +278,11 @@ func _ready() -> void:
 		cam_pos = drone.global_position
 		zoom_now = CAM_ZOOM
 	else:
+		# a career contract starts with the choices made at the terminal
+		if job.has("reg"):
+			log_op("pick_contract")
+		for k in job.get("desk", {}):
+			log_op(k, int(job.desk[k]))
 		if story != null:
 			story.on_arrive()
 		if bot != null and bot.get("skip_intro", false):
@@ -313,6 +355,9 @@ func _process(dt: float) -> void:
 	state_t += rdt
 	if state == "play" and not menu_open:
 		playtime += dt
+		if standard_time() > 0.0 and playtime > standard_time() and not hints_seen.has("late"):
+			hints_seen["late"] = true
+			Copy.say(radio, "L_late")
 		autosave_t += rdt
 		if autosave_t > 25.0:
 			autosave_t = 0.0
@@ -435,6 +480,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_4: tools.set_tool(4)
 			KEY_5: tools.set_tool(5)
 			KEY_TAB: blueprint.toggle()
+			KEY_6: repair_kit()
+			KEY_7: breaching_ring()
 			KEY_F:
 				drone.assist = not drone.assist
 				Txt.assist = drone.assist
@@ -479,6 +526,10 @@ func close_contract() -> void:
 	hud.contract_changed()
 	sfx.play("ok")
 	hint("start")
+	# Liang on the risk the operator just signed for
+	match int(job.get("stars", 0)):
+		1: Copy.say(radio, "L_accept_low")
+		3: Copy.say(radio, "L_accept_high")
 	if story != null:
 		story.on_start()
 
@@ -612,12 +663,28 @@ func finish_contract(early: bool) -> void:
 		best = SaveGame.record_best(recovery_rate(), net(), playtime, hud.grade())
 	if not job.is_empty() and Career.usable():
 		Career.load_or_new()
+		Career.file_notes(ship_id, verified)
 		career_result = Career.settle(settle_report())
+		if career_result.installment + career_result.interest > 0.0:
+			Copy.say(radio, "T_loan_installment", "term")
+		if career_result.bonus > 0.0 and playtime <= standard_time():
+			Copy.say(radio, "L_bonus")
+		if career_result.short > 0.5:
+			Copy.say(radio, "L_loan_short")
 
 
 # what the career needs to know about how this contract went
 func settle_report() -> Dictionary:
-	return {"earned": earned(), "losses": losses, "rate": recovery_rate(), "grade": hud.grade(), "time": playtime, "fee": fee}
+	return {"earned": earned(), "losses": losses, "rate": recovery_rate(), "grade": hud.grade(), "time": playtime, "fee": fee, "bonus": bonus(), "used": used, "ops": ops}
+
+
+# the contract's standard time (0: none, like the first contract)
+func standard_time() -> float:
+	return float(job.get("time", 0.0))
+
+
+func bonus() -> float:
+	return Career.time_bonus(net(), playtime, standard_time())
 
 
 func career() -> bool:
@@ -806,6 +873,7 @@ func on_swallowed(b, zone: String) -> void:
 		v += piece_value(p, zone)
 		if p.tag != "" and p.cls == "equip":
 			names.append(p.tag)
+			verify("pieces", p.tag, {"to": zone})
 		if zone == "equip" and p.intact and p.cls == "equip" and p.mandatory:
 			mandatory_ok[p.tag] = true
 		if story != null and p.intact:
@@ -820,6 +888,14 @@ func on_swallowed(b, zone: String) -> void:
 			sys.drain_source(p.tag)
 	var label := ", ".join(names) if not names.is_empty() else txt("scrap_metal")
 	ledger.append([label, zone, v])
+	if b.get_meta("arm_drop", -1.0) >= 0.0:
+		log_op("arm_haul")
+	elif zone == "hazard":
+		log_op("deliver_hazard")
+	elif b.pieces.any(func(p): return p.cls == "equip" and p.intact):
+		log_op("deliver_equip")
+	else:
+		log_op("haul_scrap")
 	if zone == "metal" and b.pieces.any(func(p): return p.cls == "equip" and p.intact):
 		say("equip_as_scrap", at)
 	if tutorial != null:
@@ -863,6 +939,11 @@ func _furnace_boom() -> void:
 	lose("loss_furnace", 3000.0, p + Vector2(0, -60))
 
 
+# the recovery arm let a load go over the furnace (the operation log counts it as the machine's)
+func on_arm_drop(_b) -> void:
+	sfx.play("release")
+
+
 func on_debris_in(value: float, at: Vector2) -> void:
 	income_metal += value
 	hud.fly_credits(at, value)
@@ -885,6 +966,13 @@ func _check_done() -> void:
 
 func on_body_freed(b) -> void:
 	var m: float = b.total_mass()
+	for p in b.pieces:
+		if p.has_meta("snap_kick"):
+			b.linear_velocity = p.get_meta("snap_kick") * 260.0
+			b.angular_velocity = randf_range(-1.5, 1.5)
+			p.remove_meta("snap_kick")
+			if p.kind == "hull":
+				_falls_in(p)
 	var all_metal := true
 	for p in b.pieces:
 		if p.cls == "equip":
@@ -1011,7 +1099,11 @@ func on_drone_destroyed() -> void:
 	tools.release_grab(false)
 	if tools.cutting:
 		tools._finish_cut()
-	lose("loss_drone", DRONE_FEE, p + Vector2(0, -50))
+	# a spare drone in stock replaces it at no charge
+	if use_item("spare"):
+		say("item_spare", p + Vector2(0, -50))
+	else:
+		lose("loss_drone", DRONE_FEE, p + Vector2(0, -50))
 	drone_respawn = 1.4 if training else 2.0
 	drone.linear_velocity = Vector2.ZERO
 	hint("drone_lost")
@@ -1129,6 +1221,10 @@ func on_snap(j) -> void:
 	var pa = world.pieces.get(j.a)
 	incident("snap", pa.get_meta("origin", pa.tag) if pa != null else "")
 	world.kill_joint(j)
+	# the part that let go drops away from the pull: a roof plate's half falls into the room below
+	var pb = world.pieces.get(j.b)
+	if pb != null:
+		pb.set_meta("snap_kick", Vector2(0, 1) if pb.kind == "hull" else Vector2.from_angle(randf() * TAU))
 	fx.flash(at, 120.0, 0.35, Pal.ink(0.9, 1.8))
 	fx.burst_shards(at, 12, 360.0, Pal.ink(0.8), 7.0)
 	fx.sparks(at, Vector2.from_angle(randf() * TAU), 18, Pal.ink(0.9, 1.4), 320.0, 0.35, PI)
@@ -1145,6 +1241,30 @@ func on_snap(j) -> void:
 	hitstop(0.05)
 	sfx.play("snap")
 	say("snapped", at)
+
+
+# half a roof plate drops into the room below: whatever stands under it takes the blow
+func _falls_in(p) -> void:
+	var bb := Geom.bbox(world.world_poly(p))
+	var room := world.room_at(bb.get_center() + Vector2(0, 1.5 * Geom.M))
+	if room == "":
+		return
+	var lost := 0.0
+	for id in world.order:
+		var q = world.pieces[id]
+		if q.gone or q.body != null or q.cls != "equip" or not q.intact or q.room != room:
+			continue
+		var qb := Geom.bbox(q.poly)
+		if qb.end.x < bb.position.x or qb.position.x > bb.end.x:
+			continue
+		var before: float = q.cond
+		q.cond = maxf(0.0, q.cond - 0.5 * q.fragile)
+		lost += (before - q.cond) * q.value
+		fx.sparks(Vector2(qb.get_center().x, qb.position.y), Vector2.UP, 16, Pal.ink(0.9, 1.4), 280.0, 0.35, PI)
+	if lost > 50.0:
+		incident("impact", "%d" % int(lost))
+		fx.number(bb.get_center() + Vector2(0, 2.0 * Geom.M), "−" + Pal.money(lost).trim_prefix("$"), Pal.heat(0.9, 1.3), 20)
+		shake(0.3)
 
 
 func _equip_near(c: Vector2, r: float) -> Array:
@@ -1247,6 +1367,7 @@ func on_ignite(cl: Dictionary, pos: Vector2) -> void:
 func cut_kerf(p, pl: PackedVector2Array) -> void:
 	if pl.is_empty():
 		return
+	log_op("cut")
 	on_cut_into(p, pl[0])
 	if pl.size() >= 2:
 		for hit in world.cut_lines(pl):
@@ -1273,9 +1394,9 @@ func on_grab(p) -> void:
 		if fixed > 0:
 			say("still_fixed", aim, str(fixed))
 			hint("fixings")
-		elif world.group_mass(p) > Tools.GRAB_MAX_T:
+		elif world.group_mass(p) > grab_max():
 			say("too_heavy", aim, "%.1f" % world.group_mass(p))
-	elif p.body.total_mass() > Tools.GRAB_MAX_T:
+	elif p.body.total_mass() > grab_max():
 		say("too_heavy", aim, "%.1f" % p.body.total_mass())
 		hint("heavy")
 
@@ -1316,9 +1437,13 @@ func on_tear(p, weak: Array, lines_held: Array, at: Vector2) -> void:
 # ---------------------------------------------------------------- measure / wrench / hose
 
 func do_measure(tg: Dictionary) -> void:
+	var mkey: String = str(tg.ctrl.id) if tg.kind == "ctrl" else (str(tg.line.id) if tg.kind == "line" else ("P:%d" % tg.piece.id if tg.has("piece") else ""))
+	log_op("remeasure" if _measured.has(mkey) else "measure")
+	_measured[mkey] = true
 	match tg.kind:
 		"ctrl":
 			var c = tg.ctrl
+			verify("ports", c.id, c.target)
 			if c.kind == "discharge":
 				sys.measure(c.id, "volts", c.id, "inst_volts", {"ctrl": c, "volts_fn": _ctrl_volts_fn(c)})
 			else:
@@ -1340,12 +1465,14 @@ func do_measure(tg: Dictionary) -> void:
 							sys.measure(c.id + "/T", "temp", c.id, "inst_temp", {"ctrl": c, "temp_fn": func(): return sys.loop_T})
 		"line":
 			var l = tg.line
+			verify("lines", l.id, [tag_of(l.a), tag_of(l.b)])
 			if l.kind == "cable":
 				sys.measure("L:" + l.id, "volts", l.id.to_upper(), "inst_volts", {"anchor_pos": tg.pos, "volts_fn": func(): return sys.line_volts(l)})
 			else:
 				sys.measure("L:" + l.id, "temp", l.id.to_upper(), "inst_temp", {"anchor_pos": tg.pos, "temp_fn": func(): return sys.line_temp(l)})
 		"inspect", "piece":
 			var p = tg.piece
+			verify("pieces", p.tag, {"fix": _inspect_text(p)})
 			var key := "P:%d" % p.id
 			var local: Vector2 = world.frame(p).affine_inverse() * tg.pos
 			var label: String = p.tag if p.tag != "" else Txt.piece_name(p)
@@ -1457,6 +1584,112 @@ func lines_behind(p) -> int:
 	return n
 
 
+# ---------------------------------------------------------------- the operation log
+
+func log_op(kind: String, n: int = 1) -> void:
+	ops[kind] = int(ops.get(kind, 0)) + n
+
+
+# {manual, decision, machine, share (manual / (manual + decision))}
+static func op_share(counts: Dictionary) -> Dictionary:
+	var out := {"manual": 0, "decision": 0, "machine": 0}
+	for k in counts:
+		out[OP_CAT.get(k, "manual")] += int(counts[k])
+	var hands: int = out.manual + out.decision
+	out.share = float(out.manual) / hands if hands > 0 else 0.0
+	return out
+
+
+# ---------------------------------------------------------------- the engineering archive
+
+# something checked by hand: kind pieces / ports / lines / ctrls, a factory name, what was found
+func verify(kind: String, id: String, info) -> void:
+	var pre: String = {"pieces": "p:", "ports": "c:", "lines": "l:", "ctrls": "c:"}[kind]
+	if id == "" or not _factory.has(pre + id):
+		return
+	var was = verified[kind].get(id)
+	if was is Dictionary and info is Dictionary:
+		was.merge(info, true)
+	else:
+		verified[kind][id] = info
+
+
+func tag_of(piece_id: int) -> String:
+	var p = world.pieces.get(piece_id)
+	return p.get_meta("origin", p.tag) if p != null else ""
+
+
+# notes from earlier ships of this type, as the contract was signed with them
+func notes() -> Dictionary:
+	return job.get("notes", {})
+
+
+# ---------------------------------------------------------------- consumables
+
+# what is left of a consumable for this contract: the stock it was signed with, less what is used
+func stock(id: String) -> int:
+	var have: Dictionary = job.get("items", {}) if bot == null or not bot.has("items") else bot.items
+	return int(have.get(id, 0)) - int(used.get(id, 0))
+
+
+func use_item(id: String) -> bool:
+	if stock(id) <= 0:
+		return false
+	used[id] = int(used.get(id, 0)) + 1
+	return true
+
+
+# +50 integrity on the spot
+func repair_kit() -> void:
+	if state != "play" or not drone.alive or drone.integrity >= 100.0:
+		return
+	if not use_item("repair"):
+		say("item_none", drone.global_position + Vector2(0, -44), txt("it_repair"))
+		sfx.play("deny")
+		return
+	drone.integrity = minf(100.0, drone.integrity + 50.0)
+	log_op("repair")
+	fx.ring(drone.global_position, 10.0, 60.0, 0.4, Pal.ink(0.8, 1.6), 2.0)
+	fx.sparks(drone.global_position, Vector2.UP, 14, Pal.ink(0.9, 1.4), 160.0, 0.4, PI)
+	say("item_repaired", drone.global_position + Vector2(0, -44))
+	sfx.play("ok")
+
+
+# clamped on a thick member at the cursor, it cuts clean through in one flash
+func breaching_ring() -> void:
+	if state != "play" or not drone.alive:
+		return
+	var p = world.piece_at(aim, ["keel", "beam", "rail"], false)
+	if p == null or world.hidden(aim) or not tools.in_range(aim):
+		say("ring_no_target", aim)
+		sfx.play("deny")
+		return
+	if not use_item("ring"):
+		say("item_none", aim, txt("it_ring"))
+		sfx.play("deny")
+		return
+	var bb := Geom.bbox(p.poly)
+	var pl: PackedVector2Array
+	if bb.size.x >= bb.size.y:
+		pl = PackedVector2Array([Vector2(aim.x, bb.position.y - 6.0), Vector2(aim.x, bb.end.y + 6.0)])
+	else:
+		pl = PackedVector2Array([Vector2(bb.position.x - 6.0, aim.y), Vector2(bb.end.x + 6.0, aim.y)])
+	cut_kerf(p, pl)
+	log_op("ring")
+	fx.flash(aim, 260.0, 0.5, Pal.heat(1.0, 3.0))
+	fx.ring(aim, 10.0, 160.0, 0.45, Pal.heat(0.9, 2.2), 3.0)
+	fx.sparks(aim, Vector2.UP, 40, Pal.heat(1.0, 2.6), 480.0, 0.5, PI)
+	hud.white_flash(0.2)
+	shake(0.4)
+	sfx.play("boom")
+	say("ring_fired", aim)
+
+
+# what the grapple can haul (the 5 t tractor grapple lifts the limit)
+func grab_max() -> float:
+	return 5.0 if has_upgrade("grapple5") else Tools.GRAB_MAX_T
+
+
 # the berth's upgrades this contract was taken with
 func has_upgrade(id: String) -> bool:
 	return job.get("kit", {}).has(id) or (bot != null and bot.get("kit", {}).has(id))
@@ -1477,6 +1710,8 @@ func do_wrench(tg: Dictionary) -> void:
 	match tg.kind:
 		"joint":
 			var j = tg.joint
+			log_op("unfix")
+			verify("pieces", tag_of(j.a), {"held": j.type})
 			var p: Vector2 = world.joint_world(j)
 			world.kill_joint(j)
 			fx.shard(p, Vector2(-3, 0), Vector2(3, 0), Vector2.from_angle(randf() * TAU) * 120.0, randf_range(-12, 12), 0.7, Pal.ink(0.9), 2.0)
@@ -1487,6 +1722,8 @@ func do_wrench(tg: Dictionary) -> void:
 				say("clamp_off", p, j.get_meta("tag", ""))
 		"connector":
 			var l = tg.line
+			log_op("unplug")
+			verify("lines", l.id, [tag_of(l.a), tag_of(l.b)])
 			if l.kind == "pipe":
 				var amt: float = sys.line_fluid(l)
 				if amt > 0.02:
@@ -1509,6 +1746,8 @@ func do_wrench(tg: Dictionary) -> void:
 			sfx.play("unplug")
 			fx.sparks(tg.pos, Vector2.UP, 4, Pal.ink(0.8, 1.2), 90.0, 0.2, PI)
 		"ctrl":
+			verify("ctrls", tg.ctrl.id, tg.ctrl.kind)
+			log_op("door" if tg.ctrl.kind in ["door", "hatch", "jam"] else "isolate")
 			_operate(tg.ctrl, tg.pos)
 
 
@@ -1611,6 +1850,7 @@ func _operate(c, at: Vector2) -> void:
 
 func do_hose(tg: Dictionary) -> void:
 	var c = tg.ctrl
+	log_op("hose")
 	if sys.hoses.has(c.id):
 		sys.hoses.erase(c.id)
 		dock.hose_detach(c.id)

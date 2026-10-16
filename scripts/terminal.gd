@@ -17,6 +17,7 @@ const SHOP := [
 	["intel", "item", 6000.0, "it_intel", "it_intel_d"],
 ]
 const BERTH := [
+	["repay", "loan", 20000.0, "tm_repay", "tm_repay_d", true],
 	["arm", "facility", 65000.0, "fa_arm", "fa_arm_d", true],
 	["drone2", "facility", 200000.0, "fa_drone2", "fa_drone2_d", false],
 	["mast", "facility", 80000.0, "fa_mast", "fa_mast_d", false],
@@ -39,6 +40,7 @@ var leaving := -1.0
 var radio := Radio.new()
 var testing := false
 var settings: SettingsPanel
+var milestone := -1.0      # the loan-paid-off moment on screen (seconds), -1 when not
 
 
 func _ready() -> void:
@@ -65,6 +67,7 @@ func _ready() -> void:
 		Copy.say(radio, "T_market_open", "term")
 		for k in ["L_market_open_1", "L_market_open_2", "L_market_open_3"]:
 			Copy.say(radio, k)
+	_check_milestone()
 	# a new reputation level since the terminal last opened
 	var lv := Career.level()
 	var seen_lv: Dictionary = Career.data.get("seen", {})
@@ -75,6 +78,20 @@ func _ready() -> void:
 		var names := [Txt.S["rep_" + lv][0], Txt.S["rep_" + lv][1]]
 		Copy.say(radio, "T_rep_up", "term", names)
 		Copy.say(radio, "L_rep_" + lv)
+
+
+# the loan is gone (at a settlement, or paid off here): BERTH 07 is yours, once
+func _check_milestone() -> void:
+	var seen: Dictionary = Career.data.get("seen", {})
+	if not Career.data.get("paid_off", false) or seen.has("paid_off"):
+		return
+	seen["paid_off"] = true
+	Career.data.seen = seen
+	Career.save()
+	milestone = 0.0
+	Copy.say(radio, "T_loan_paid", "term")
+	for k in ["L_loan_paid_1", "L_loan_paid_2", "L_loan_paid_3"]:
+		Copy.say(radio, k)
 
 
 func _is_test() -> bool:
@@ -97,6 +114,8 @@ func items() -> Array:
 func _process(dt: float) -> void:
 	t += dt
 	msg_t += dt
+	if milestone >= 0.0:
+		milestone += dt
 	flash = maxf(0.0, flash - dt * 3.0)
 	radio.step(dt, false)
 	var m := get_local_mouse_position()
@@ -119,6 +138,10 @@ func _process(dt: float) -> void:
 func _gui_input(ev: InputEvent) -> void:
 	if settings.is_open or leaving >= 0.0:
 		return
+	if ev is InputEventMouseButton and ev.pressed and milestone >= 0.0:
+		if milestone > 1.5:
+			milestone = -1.0
+		return
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		if hover_tab >= 0:
 			set_tab(hover_tab)
@@ -133,6 +156,10 @@ func _gui_input(ev: InputEvent) -> void:
 func _unhandled_input(ev: InputEvent) -> void:
 	if not (ev is InputEventKey and ev.pressed and not ev.echo) or leaving >= 0.0:
 		return
+	if milestone >= 0.0:
+		if milestone > 1.5:
+			milestone = -1.0
+		return
 	match ev.physical_keycode:
 		KEY_1, KEY_2, KEY_3:
 			set_tab(ev.physical_keycode - KEY_1)
@@ -142,6 +169,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 			sel = mini(items().size() - 1, sel + 1)
 		KEY_ENTER, KEY_SPACE:
 			act()
+		KEY_I:
+			if tab == 0:
+				use_intel(sel)
 		KEY_ESCAPE:
 			get_tree().change_scene_to_file("res://scenes/title.tscn")
 		KEY_O:
@@ -174,8 +204,37 @@ func take(i: int) -> void:
 		return
 	Game.start_ship = o.ship
 	Game.contract = o
+	Copy.say(radio, "T_contract_signed", "term")
 	SaveGame.load_requested = false
 	leaving = 0.0
+
+
+# a survey report on an offer: one hidden condition, read out before signing
+func use_intel(i: int) -> void:
+	if i < 0 or i >= offers().size():
+		return
+	var o: Dictionary = offers()[i]
+	var d := Career.data
+	if o.has("intel"):
+		return
+	if int(d.items.get("intel", 0)) <= 0:
+		say(Txt.t("item_none") % Txt.t("it_intel"))
+		return
+	var ship := Variant.make(Ship.load_data(o.ship), o)
+	var traps: Array = o.get("traps", [])
+	o.intel = Traps.intel(ship, traps[0]) if not traps.is_empty() else ["in_none", []]
+	d.items.intel = int(d.items.intel) - 1
+	Career.save()
+	flash = 1.0
+
+
+func intel_text(o: Dictionary) -> String:
+	var it: Array = o.get("intel", [])
+	if it.is_empty():
+		return ""
+	var s := Txt.t(it[0])
+	var args: Array = it[1]
+	return s % args if not args.is_empty() else s
 
 
 func buy(it: Array) -> void:
@@ -184,6 +243,15 @@ func buy(it: Array) -> void:
 	var id: String = it[0]
 	var price: float = it[2]
 	var d := Career.data
+	if it[1] == "loan":
+		var paid := Career.repay(price)
+		if paid <= 0.0:
+			say(Txt.t("tm_owned") if float(d.loan) <= 0.0 else Txt.t("tm_short") % Pal.money(price))
+			return
+		flash = 1.0
+		say(Txt.t("tm_repaid") % [Pal.money(paid), Pal.money(float(d.loan))])
+		_check_milestone()
+		return
 	if it[1] == "facility" and not it[5]:
 		say(Txt.t("tm_later"))
 		return
@@ -194,6 +262,9 @@ func buy(it: Array) -> void:
 		say(Txt.t("tm_short") % Pal.money(price - float(d.money)))
 		return
 	d.money = float(d.money) - price
+	var desk: Dictionary = d.get("desk", {})
+	desk["buy"] = int(desk.get("buy", 0)) + 1
+	d.desk = desk
 	if it[1] == "item":
 		d.items[id] = int(d.items.get(id, 0)) + 1
 	else:
@@ -262,6 +333,8 @@ func _draw() -> void:
 			_list(BERTH, a)
 	_bottom(s, a)
 	_radio(s, a)
+	if milestone >= 0.0:
+		_milestone(s)
 
 
 func _top(s: Vector2, a: float) -> void:
@@ -338,6 +411,10 @@ func _market(s: Vector2, a: float) -> void:
 			_text("›", Vector2(x, ly), 14, Pal.tint(Pal.AIR, 0.6 * k, 1.0), font)
 			_wrap(Copy.slot(lid), Vector2(x + 16, ly), r.size.x - 72, 14, Pal.tint(Pal.AIR, 0.8 * k, 1.0))
 			ly += 46.0
+		# a survey report bought for this offer
+		if o.has("intel"):
+			_text(Txt.t("tm_intel"), Vector2(x, r.end.y - 150), 12, Pal.tint(Pal.AIR, 0.7 * k, 1.0), font)
+			_wrap(intel_text(o), Vector2(x, r.end.y - 126), r.size.x - 56, 14, Pal.tint(Pal.AIR, 0.95 * k, 1.0))
 		# the manifest: what the paperwork says is in the hold
 		var cy := r.end.y - 96.0
 		_text(Txt.t("tm_cargo"), Vector2(x, cy), 12, Pal.ink(0.4 * k), font)
@@ -360,7 +437,7 @@ func _list(list: Array, a: float) -> void:
 		if on:
 			draw_rect(Rect2(r.position, Vector2(3, r.size.y)), Pal.heat(k, 1.0))
 		var open: bool = it[1] != "facility" or it[5]
-		var owned: bool = it[1] != "item" and d.upgrades.has(it[0])
+		var owned: bool = (it[1] in ["upgrade", "facility"] and d.upgrades.has(it[0])) or (it[1] == "loan" and float(d.loan) <= 0.0)
 		_text(Txt.t(it[3]), r.position + Vector2(24, 28), 17, Pal.ink((0.95 if open else 0.45) * k), font_b)
 		_text(Txt.t(it[4]), r.position + Vector2(24, 52), 13, Pal.ink((0.55 if open else 0.3) * k), font)
 		var right: String
@@ -370,6 +447,8 @@ func _list(list: Array, a: float) -> void:
 			right = Txt.t("tm_owned")
 		elif it[1] == "item":
 			right = "%s   ·   %s %d" % [Pal.money(it[2]), Txt.t("tm_stock"), int(d.items.get(it[0], 0))]
+		elif it[1] == "loan":
+			right = "%s   ·   %s %s" % [Pal.money(minf(it[2], float(d.loan))), Txt.t("tm_loan"), Pal.money(float(d.loan))]
 		else:
 			right = Pal.money(it[2])
 		_text(right, Vector2(r.end.x - 24, r.position.y + 40), 18, Pal.ink((0.9 if open and not owned else 0.4) * k), font_b, 1)
@@ -381,6 +460,8 @@ func _bottom(s: Vector2, a: float) -> void:
 	if tab == 0:
 		label = Txt.t("tm_take")
 		var o: Dictionary = offers()[sel] if sel < offers().size() else {}
+		if not o.is_empty() and not o.has("intel") and int(Career.data.items.get("intel", 0)) > 0:
+			_text(Txt.t("tm_use_intel") % int(Career.data.items.intel), Vector2(60, r.position.y + 38), 13, Pal.tint(Pal.AIR, 0.8 * a, 1.0), font)
 		if not o.is_empty() and float(Career.data.money) < float(o.fee):
 			_text(Txt.t("tm_borrow") % Pal.money(float(o.fee) - float(Career.data.money)), Vector2(r.position.x - 24, r.position.y + 38), 13, Pal.heat(0.85 * a, 1.0), font, 1)
 	else:
@@ -394,6 +475,24 @@ func _bottom(s: Vector2, a: float) -> void:
 		_text(msg, Vector2(60, s.y - 92), 16, Pal.ink(0.9 * a * clampf((3.0 - msg_t) / 0.4, 0.0, 1.0)), font_b)
 	if flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, s), Color(1, 1, 1, 0.08 * flash))
+
+
+# the loan paid off: the berth's name stamped across the terminal
+func _milestone(s: Vector2) -> void:
+	var e := milestone
+	var a := clampf(e / 0.4, 0.0, 1.0)
+	draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.82 * a))
+	var k := Pal.back(clampf((e - 0.3) / 0.35, 0.0, 1.0), 2.4)
+	if k > 0.02:
+		_text("BERTH 07", Vector2(s.x * 0.5, s.y * 0.42), int(120 * k), Pal.ink(0.96), font_l, 0)
+	var sa := clampf((e - 0.8) / 0.4, 0.0, 1.0)
+	draw_rect(Rect2(s.x * 0.5 - 140 * sa, s.y * 0.42 + 30, 280 * sa, 3), Pal.heat(sa, 1.4))
+	_text(Txt.t("tm_paid_off"), Vector2(s.x * 0.5, s.y * 0.42 + 76), 22, Pal.ink(0.8 * sa), font_b, 0)
+	_text(Txt.t("tm_paid_off_d") % int(Career.data.get("paid_off_at", 0)), Vector2(s.x * 0.5, s.y * 0.42 + 110), 14, Pal.ink(0.45 * sa), font, 0)
+	if e > 1.5:
+		_text(Txt.t("tm_any_key"), Vector2(s.x * 0.5, s.y - 80), 14, Pal.ink(0.3 + 0.2 * sin(t * 3.0)), font, 0)
+	if e < 0.5:
+		draw_rect(Rect2(Vector2.ZERO, s), Color(1, 1, 1, 0.25 * (1.0 - e / 0.5)))
 
 
 func _radio(s: Vector2, a: float) -> void:

@@ -124,6 +124,8 @@ func start_ending(early: bool) -> void:
 		["e_loss", -g.losses],
 		["e_fee_paid" if g.job.get("fee_paid", false) else "e_fee", -g.fee],
 	]
+	if g.standard_time() > 0.0:
+		end_rows.append(["e_bonus", g.bonus()])
 
 
 # the career's books after this contract: [label key, amount, kind]
@@ -134,6 +136,12 @@ func career_rows() -> Array:
 	var out: Array = [["e_inst", -float(r.installment), "money"], ["e_interest", -float(r.interest), "money"]]
 	if float(r.short) > 0.5:
 		out.append(["e_short", float(r.short), "note"])
+	var used: Dictionary = r.get("used", {})
+	if not used.is_empty():
+		var parts: Array = []
+		for k in used:
+			parts.append("%s ×%d" % [game.txt("it_" + k), int(used[k])])
+		out.append(["e_used", ", ".join(parts), "text"])
 	out.append(["e_loan_left", float(r.loan), "plain"])
 	out.append(["e_funds", float(r.money), "plain"])
 	return out
@@ -340,7 +348,7 @@ func _overweight() -> void:
 		return
 	var m: float = tl.held_body.total_mass() if tl.held_body != null and is_instance_valid(tl.held_body) else game.world.group_mass(tl.held_piece)
 	var p := to_screen(tl.grab_point()) + Vector2(24, -46)
-	var rows := ["TARGET MASS: %.1f t" % m, "RATED CAPACITY: %.1f t" % Tools.GRAB_MAX_T, "OPERATION REFUSED"]
+	var rows := ["TARGET MASS: %.1f t" % m, "RATED CAPACITY: %.1f t" % game.grab_max(), "OPERATION REFUSED"]
 	_panel(Rect2(p - Vector2(10, 18), Vector2(230, 70)), 0.86)
 	for i in 3:
 		_text(rows[i], p + Vector2(0, i * 20), 13, Pal.heat(0.95, 1.2) if i == 2 else Pal.ink(0.85), font_b if i == 2 else font)
@@ -399,6 +407,10 @@ func _contract_panel() -> void:
 	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 12, Pal.ink(0.3), font)
 	if g.story != null and not g.story.items.is_empty():
 		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 12, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
+	elif g.standard_time() > 0.0:
+		# the clock against the standard time: past it, the time bonus starts to shrink
+		var late: bool = g.playtime > g.standard_time()
+		_text(_clock(g.playtime) + " / " + _clock(g.standard_time()), Vector2(x + 300, by + 36), 12, Pal.heat(0.8, 1.0) if late else Pal.ink(0.45), font, 1)
 	_recall(x, by + 70)
 
 
@@ -510,6 +522,15 @@ func _drone_status(s: Vector2) -> void:
 	_text("%.1f m/s" % spd, Vector2(x + 60 + bw, y + 16), 12, Pal.ink(0.55), font, 1)
 	if not d.alive:
 		_text("R-02 …", Vector2(x, y - 30), 14, Pal.heat(0.9, 1.2), font)
+	# consumables in hand for this contract
+	if g.career():
+		var parts: Array = []
+		for it in [["repair", "6"], ["ring", "7"], ["spare", ""]]:
+			var n: int = g.stock(it[0])
+			if n > 0:
+				parts.append(("%s %s ×%d" % [it[1], g.txt("it_" + it[0]), n]).strip_edges())
+		if not parts.is_empty():
+			_text("   ·   ".join(parts), Vector2(x, y - 34), 12, Pal.ink(0.5), font)
 
 
 func _hint(s: Vector2) -> void:
@@ -694,7 +715,7 @@ func _cursor_label() -> void:
 	var w := maxf(_tw(name, 14), _tw(act, 13)) + 20.0
 	c.draw_rect(Rect2(pos - Vector2(8, 16), Vector2(w, 42)), Color(0.02, 0.022, 0.026, 0.82))
 	_text(name, pos, 14, Pal.ink(0.95), font_b)
-	var heavy: bool = g.tools.tool == 3 and h.kind == "piece" and g.world.group_mass(h.piece) > Tools.GRAB_MAX_T
+	var heavy: bool = g.tools.tool == 3 and h.kind == "piece" and g.world.group_mass(h.piece) > g.grab_max()
 	_text(act, pos + Vector2(0, 19), 13, Pal.heat(0.9, 1.1) if (not h.ok or heavy) else Pal.ink(0.55), font)
 
 
@@ -961,8 +982,11 @@ func _settlement(s: Vector2) -> void:
 		var ny := ry + end_rows.size() * 34 + 30
 		c.draw_line(Vector2(cx - 260, ny - 28), Vector2(cx + 260, ny - 28), Pal.ink(0.25), 1.0)
 		_text(g.txt("e_net"), Vector2(cx - 260, ny + 10), 18, Pal.ink(0.7), font)
-		_text(Pal.money(g.net() * Pal.ease_out(clampf(ne / 0.8, 0.0, 1.0))), Vector2(cx + 260, ny + 14), int(44 * ns) if ns > 0.05 else 1, Pal.ink(0.98), font_l, 1)
-		_text(g.txt("e_time") + "  " + _clock(g.playtime), Vector2(cx - 260, ny + 46), 14, Pal.ink(0.4), font)
+		_text(Pal.money((g.net() + g.bonus()) * Pal.ease_out(clampf(ne / 0.8, 0.0, 1.0))), Vector2(cx + 260, ny + 14), int(44 * ns) if ns > 0.05 else 1, Pal.ink(0.98), font_l, 1)
+		var tl: String = g.txt("e_time") + "  " + _clock(g.playtime)
+		if g.standard_time() > 0.0:
+			tl += "  /  " + g.txt("e_standard") + "  " + _clock(g.standard_time())
+		_text(tl, Vector2(cx - 260, ny + 46), 14, Pal.ink(0.4), font)
 		var crows := career_rows()
 		for i in crows.size():
 			var ce := ne - 0.6 - i * 0.18
@@ -971,15 +995,18 @@ func _settlement(s: Vector2) -> void:
 			var ca := clampf(ce / 0.2, 0.0, 1.0)
 			var cy := ny + 92 + i * 30
 			var row: Array = crows[i]
-			var v: float = row[1]
 			_text(g.txt(row[0]), Vector2(cx - 260, cy), 15, Pal.ink(0.5 * ca), font)
+			if row[2] == "text":
+				_text(str(row[1]), Vector2(cx + 260, cy), 15, Pal.ink(0.85 * ca), font, 1)
+				continue
+			var v: float = row[1]
 			var vt := Pal.money(v) if row[2] != "note" else "+" + Pal.money(v)
 			var col := Pal.heat(0.9 * ca, 1.1) if (row[2] == "money" and v < -0.5) or row[2] == "note" else Pal.ink(0.85 * ca)
 			_text(vt, Vector2(cx + 260, cy), 17, col, font_b, 1)
 	var te := e - 1.8
 	var traps: Array = g.job.get("traps", [])
 	if te > 0.0 and not traps.is_empty():
-		_trap_rows(traps, Vector2(cx - 900, ry), te)
+		_trap_rows(traps, Vector2(cx + 380, ry + 40), te)
 	var ge := ne - 0.9
 	if ge > 0.0:
 		_stamp(Vector2(cx + 330, y + 100), ge)
@@ -998,10 +1025,10 @@ func _trap_rows(traps: Array, at: Vector2, e: float) -> void:
 		var t: String = traps[i]
 		var hit := Traps.bit(t, game.incidents)
 		_text(Copy.slot("N_" + t), Vector2(at.x, yy), 17, Pal.ink(0.9 * ra), font_b)
-		_text(game.txt("e_trap_hit" if hit else "e_trap_ok"), Vector2(at.x + 560, yy), 15, Pal.heat(0.9 * ra, 1.1) if hit else Pal.ink(0.6 * ra), font, 1)
+		_text(game.txt("e_trap_hit" if hit else "e_trap_ok"), Vector2(at.x + 480, yy), 15, Pal.heat(0.9 * ra, 1.1) if hit else Pal.ink(0.6 * ra), font, 1)
 		yy += 26.0
 		if hit:
-			c.draw_multiline_string(font, Vector2(at.x, yy), Copy.slot("V_" + t), HORIZONTAL_ALIGNMENT_LEFT, 560, 13, 2, Pal.ink(0.6 * ra))
+			c.draw_multiline_string(font, Vector2(at.x, yy), Copy.slot("V_" + t), HORIZONTAL_ALIGNMENT_LEFT, 480, 13, 2, Pal.ink(0.6 * ra))
 			yy += 40.0
 		yy += 8.0
 
