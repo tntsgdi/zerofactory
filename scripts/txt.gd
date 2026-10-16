@@ -4,9 +4,28 @@ class_name Txt
 static var zh := true
 static var hints := true
 static var assist := true
+static var certified := false     # passed the training course (or skipped it)
+static var cert_kind := ""        # "full" | "skipped"
+static var exam_grade := ""       # best apprentice assessment: A B C
 const CFG := "user://zeropower_settings.cfg"
 
 const S := {
+	# training course
+	"tut_course": ["训练 · TS-1 训练舱段", "TRAINING · TS-1 SECTION"],
+	"tut_lesson": ["第 %d 课", "LESSON %d"],
+	"tut_lockstep": ["跟着做", "STEP BY STEP"],
+	"tut_goal": ["只给目标", "GOAL ONLY"],
+	"tut_q": ["按 Q 请求提示", "Q FOR A HINT"],
+	"tut_liang": ["工程师 · 梁工", "ENGINEER · LIANG"],
+	"tut_term": ["船坞终端", "BERTH TERMINAL"],
+	"tut_cert": ["零压认证", "ZERO-PRESSURE"],
+	"tut_done": ["训练完成", "TRAINING COMPLETE"],
+	"tut_exam": ["学徒考核", "APPRENTICE ASSESSMENT"],
+	"tut_contract": ["接第一份合同", "TAKE THE FIRST CONTRACT"],
+	"tool_locked": ["这一步还用不到这件工具", "NOT THIS TOOL YET"],
+	"interlock": ["训练安全联锁", "TRAINING INTERLOCK"],
+	"m_skip": ["跳过训练", "SKIP TRAINING"],
+	"t_train": ["训练", "TRAINING"],
 	# saves
 	"save_recovered": ["存档损坏，已从上一次自动存档恢复", "SAVE DAMAGED · RESTORED FROM THE PREVIOUS AUTOSAVE"],
 	# dock
@@ -314,6 +333,9 @@ static func load_settings(testing: bool) -> void:
 		zh = cf.get_value("ui", "zh", zh)
 		hints = cf.get_value("ui", "hints", true)
 		assist = cf.get_value("ui", "assist", true)
+		certified = cf.get_value("career", "certified", false)
+		cert_kind = cf.get_value("career", "cert_kind", "")
+		exam_grade = cf.get_value("career", "exam_grade", "")
 
 
 static func save_settings(testing: bool) -> void:
@@ -323,4 +345,7 @@ static func save_settings(testing: bool) -> void:
 	cf.set_value("ui", "zh", zh)
 	cf.set_value("ui", "hints", hints)
 	cf.set_value("ui", "assist", assist)
+	cf.set_value("career", "certified", certified)
+	cf.set_value("career", "cert_kind", cert_kind)
+	cf.set_value("career", "exam_grade", exam_grade)
 	cf.save(CFG)

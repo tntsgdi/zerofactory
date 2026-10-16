@@ -12,12 +12,19 @@ const MAGIC := "ZEROPRESSURE"
 
 static var load_requested := false
 static var path := PATH          # tests point this at their own file
+const TRAIN_PATH := "user://zeropower_training.json"
+static var train_path := TRAIN_PATH   # the training course in progress (its own file)
 static var allow_test := false
 static var recovered := false    # the last read() had to fall back to .bak
 
 
-static func exists() -> bool:
-	return FileAccess.file_exists(path) or FileAccess.file_exists(path + ".bak")
+static func exists(file: String = "") -> bool:
+	var f := path if file == "" else file
+	return FileAccess.file_exists(f) or FileAccess.file_exists(f + ".bak")
+
+
+static func file_for(g) -> String:
+	return train_path if g.training else path
 
 
 static func _v2(v: Vector2) -> Array:
@@ -142,7 +149,9 @@ static func save(g) -> void:
 			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode, "reveals": g.reveal_count, "respawn": g.drone_respawn,
 			"debris": debris},
 	}
-	write_file(path, d)
+	if g.tutorial != null:
+		d.tutorial = g.tutorial.save_state()
+	write_file(file_for(g), d)
 
 
 # tmp first, then swap: whatever happens mid-write, either the old save or the
@@ -163,11 +172,12 @@ static func write_file(file: String, d: Dictionary) -> bool:
 	return DirAccess.rename_absolute(full + ".tmp", full) == OK
 
 
-static func read() -> Dictionary:
+static func read(file: String = "") -> Dictionary:
 	recovered = false
-	var d := read_file(path)
-	if d.is_empty() and FileAccess.file_exists(path + ".bak"):
-		d = read_file(path + ".bak")
+	var f := path if file == "" else file
+	var d := read_file(f)
+	if d.is_empty() and FileAccess.file_exists(f + ".bak"):
+		d = read_file(f + ".bak")
 		recovered = not d.is_empty()
 		if recovered:
 			push_warning("save damaged, loaded the backup")
@@ -432,11 +442,12 @@ static func apply_late(g, d: Dictionary) -> void:
 
 
 # the contract is over: keep the files for reference, but never offer them as "continue"
-static func clear() -> void:
+static func clear(file: String = "") -> void:
+	var f := path if file == "" else file
 	for ext in ["", ".bak"]:
-		if FileAccess.file_exists(path + ext):
-			var full := ProjectSettings.globalize_path(path + ext)
-			if FileAccess.file_exists(path + ext + ".done"):
+		if FileAccess.file_exists(f + ext):
+			var full := ProjectSettings.globalize_path(f + ext)
+			if FileAccess.file_exists(f + ext + ".done"):
 				DirAccess.remove_absolute(full + ".done")
 			DirAccess.rename_absolute(full, full + ".done")
 

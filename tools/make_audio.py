@@ -335,8 +335,27 @@ def loops():
     write('ambience', pad_x + air + events_x, peak=0.6, rv=(0.9, 0.35), loop=True)
 
 
+# ---------------------------------------------------------------- training course (tutorial)
+
+def course():
+    # Liang keys his radio: a burst of static and the click of the transmitter
+    write('radio_on', mix(hiss(0.12, 1200, 6000, 0.002, 0.08) * 0.35, click(0.015, 2200) * 0.5, at(tone(1180, 0.05, 0.002, 0.02) * 0.12, 0.02)))
+    write('radio_off', mix(click(0.012, 1800) * 0.45, hiss(0.06, 1500, 5000, 0.002, 0.04) * 0.2))
+    # the berth terminal: two clean synth blips, no voice
+    write('term', mix(tone(1480, 0.07, 0.002, 0.03) * 0.25, at(tone(1975, 0.09, 0.002, 0.04) * 0.22, 0.06)), rv=(0.15, 0.06))
+    # a ring breaks into light: glass notes running up
+    write('ring', mix(*[at(tone(1046 * (1.26 ** i), 0.35, 0.002, 0.18, (1, 0.3)) * (0.14 - i * 0.015), i * 0.035) for i in range(6)]), rv=(0.6, 0.25))
+    # a step done: two short radio confirms
+    write('step_done', mix(click(0.012, 2600) * 0.3, tone(1320, 0.07, 0.002, 0.03) * 0.22, at(tone(1760, 0.09, 0.002, 0.04) * 0.2, 0.07)))
+    # props rebuilt as a hologram: a shimmering sweep
+    write('holo', mix(sweep(300, 2400, 0.7) * env(tv(0.7), 0.05, 0.4) * 0.12, hiss(0.7, 4000, 12000, 0.1, 0.4) * 0.06, *[at(tone(880 + i * 220, 0.2, 0.004, 0.1) * 0.05, i * 0.08) for i in range(6)]), rv=(0.7, 0.3))
+    # the certificate stamp: a low thud with a metal tail
+    write('stamp', mix(rumble(0.5, 55, 0.004, 0.35) * 0.9, metal_hit(0.6, 1.2, 0.6) * 0.35, click(0.02, 900) * 0.5), rv=(0.5, 0.2))
+
+
 if __name__ == '__main__':
     ui()
     tools()
     events()
     loops()
+    course()

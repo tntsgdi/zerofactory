@@ -87,8 +87,9 @@ static func build(world) -> void:
 	_j(shell, t2, "bolt", 17.52, -2.1)
 	_j(shell, t2, "bolt", 17.52, -1.9)
 	# dock clamps grip the floor plates
-	_j(b1, null, "clamp", 16.5, 2.15, "CL-01")
-	_j(b2, null, "clamp", 21.5, 2.15, "CL-02")
+	# (both on the left floor plate: the furnace mouth sits under the right half)
+	_j(b1, null, "clamp", 15.7, 2.15, "CL-01")
+	_j(b1, null, "clamp", 18.2, 2.15, "CL-02")
 	# ---- lessons 1–2: the service cover, four bolts down its edge
 	var cov = _equip("P-001", "cover", [14.75, -0.7, 15.0, 0.7], {"cls": "metal", "dest": "metal", "mass": 0.18, "density": 0.6, "cut_speed": 260.0, "name_key": "p_ts_cover"})
 	for y in [-0.6, -0.2, 0.2, 0.6]:
@@ -128,7 +129,7 @@ static func build(world) -> void:
 	_j(bm1, rw, "bolt", 23.32, 1.75)
 	_j(bm1, rw, "bolt", 23.32, 2.05)
 	for sx in [25.05, 26.7]:
-		var st = _piece("strut", [sx, -1.8, sx + 0.22, 1.6], {"density": 0.45, "cut_speed": 220.0, "name_key": "p_ts_strut"})
+		var st = _piece("strut", [sx, -1.8, sx + 0.22, 1.6], {"density": 0.45, "cut_speed": 220.0, "name_key": "p_ts_strut", "tag": "ST-1" if sx < 26.0 else "ST-2"})
 		_j(st, arm, "bolt", sx + 0.11, -1.8)
 		_j(st, bm1 if sx < 25.15 else bm2, "bolt", sx + 0.11, 1.6)
 	var tank = _equip("RT-T", "fueltank", [25.6, 0.85, 26.45, 1.6], {"mass": 0.3, "value": 300.0, "fragile": 0.35, "hazard": "fuel_tank", "name_key": "p_ts_tank"})
@@ -160,7 +161,7 @@ static func meta() -> Dictionary:
 		"name": "TS-1 TRAINING SECTION",
 		"length": 12.0,
 		"value": {"total": 10200.0, "metal": 4000.0},
-		"clamps": [[16.5, 2.2], [21.5, 2.2]],
+		"clamps": [[15.7, 2.2], [18.2, 2.2]],
 		"room_names": {"TC": "room_TC"},
 		"gas": {
 			"rooms": {"TC": 100.2},

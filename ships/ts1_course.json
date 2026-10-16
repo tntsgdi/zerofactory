@@ -1,0 +1,1166 @@
+{
+	"ship": "ts1",
+	"lines": {
+		"T00_1": {
+			"who": "liang",
+			"zh": "听得见吗？……行，通信正常。",
+			"en": "Can you hear me? ...Right, comms are good."
+		},
+		"T00_2": {
+			"who": "liang",
+			"zh": "欢迎来到 BERTH 07。今天第一天上班，先别碰停在外面的那些大船。",
+			"en": "Welcome to Berth 07. First day on the job — leave the big hulls outside alone for now."
+		},
+		"T00_3": {
+			"who": "liang",
+			"zh": "中间这个是 TS-1，报废穿梭机上切下来的训练舱段，正好拿来练手。",
+			"en": "That one in the middle is TS-1, a training section cut off a scrapped shuttle. Good for practice."
+		},
+		"T00_4": {
+			"who": "term",
+			"zh": "远程操作权限已确认。训练项目 TS-1 已载入。",
+			"en": "REMOTE OPERATION AUTHORISED. TRAINING ITEM TS-1 LOADED."
+		},
+		"T00_5": {
+			"who": "liang",
+			"zh": "今天只有一条规矩：不确定的东西，先查清楚再动。",
+			"en": "One rule today: if you're not sure, check before you touch it."
+		},
+		"T01_in": {
+			"who": "liang",
+			"zh": "先把无人机飞起来。穿过那几个光环。",
+			"en": "Get the drone moving first. Fly through those rings."
+		},
+		"T01_dash": {
+			"who": "liang",
+			"zh": "长的那个，按住 Shift 冲过去。",
+			"en": "The long one — hold Shift and dash through."
+		},
+		"T01_stop": {
+			"who": "liang",
+			"zh": "进框，按 Space 停稳。",
+			"en": "Into the box, Space to stop dead."
+		},
+		"T01_f": {
+			"who": "liang",
+			"zh": "F 是飞行稳定。关掉试试，再开回来。",
+			"en": "F is flight assist. Switch it off, feel it, switch it back on."
+		},
+		"T01_find": {
+			"who": "liang",
+			"zh": "看到左侧那块检修盖了吗？找找它的编号。",
+			"en": "See the service cover on the left side? Find its number."
+		},
+		"T01_found": {
+			"who": "term",
+			"zh": "设备 P-001 已识别。",
+			"en": "ITEM P-001 IDENTIFIED."
+		},
+		"T01_tab": {
+			"who": "liang",
+			"zh": "现在打开工程图。",
+			"en": "Now open the drawing."
+		},
+		"T01_bp1": {
+			"who": "liang",
+			"zh": "图纸是设计的时候画的，船是后来撞坏的。两边不一定对得上。",
+			"en": "The drawing was made at design time. The ship got wrecked later. They won't always agree."
+		},
+		"T01_bp2": {
+			"who": "liang",
+			"zh": "先用它找东西，至于东西现在是什么样，你自己检查。",
+			"en": "Use it to find things. What state they're in now — you check that yourself."
+		},
+		"T01_h1": {
+			"who": "liang",
+			"zh": "面板就在舱段左侧。先把镜头拉近。",
+			"en": "The panel is on the left end of the section. Zoom in first."
+		},
+		"T02_in1": {
+			"who": "liang",
+			"zh": "这块盖板已经检查过了，没有压力，也没接电。",
+			"en": "That cover's been checked. No pressure behind it, no power."
+		},
+		"T02_in2": {
+			"who": "liang",
+			"zh": "任务很简单，把它完整拆下来，送进回收口。别直接拿切割器烧。四颗螺栓。",
+			"en": "Simple job: take it off in one piece and into a mouth. Don't burn it off. Four bolts."
+		},
+		"T02_last": {
+			"who": "liang",
+			"zh": "先等等。最后一个螺栓拆掉，这块板就没东西固定了。用抓钩把它稳住。",
+			"en": "Hold on. Take the last bolt out and nothing holds that plate. Steady it with the grapple first."
+		},
+		"T02_drift": {
+			"who": "liang",
+			"zh": "看见没有？这地方没有地板替你接东西。下次先固定，再松最后一个连接。",
+			"en": "See that? There's no floor out here to catch things. Secure it first, then the last fixing."
+		},
+		"T02_done_t": {
+			"who": "term",
+			"zh": "金属结构回收完成。回收重量 0.18 t。资产价值 120 信用点。",
+			"en": "METAL RECOVERED. 0.18 t. VALUE 120 CR."
+		},
+		"T02_done_l": {
+			"who": "liang",
+			"zh": "第一笔收入，够买几杯咖啡。先别急着发财，接下来还有正事。",
+			"en": "First earnings — a few coffees' worth. Don't get rich yet, the real work's next."
+		},
+		"T02_h1": {
+			"who": "liang",
+			"zh": "四个角上那几颗螺栓，用维护工具一颗一颗拧。",
+			"en": "The bolts down its edge — wrench them out one by one."
+		},
+		"T03_in": {
+			"who": "liang",
+			"zh": "这块外壳后面是密封舱。想拆可以，先确认里面还有没有气。",
+			"en": "Behind that shell plate is a sealed bay. Fine to take it off — once you know there's no gas in there."
+		},
+		"T03_ask": {
+			"who": "liang",
+			"zh": "读数出来了。你觉得现在能拆吗？",
+			"en": "There's your reading. Safe to take it off now?"
+		},
+		"T03_A": {
+			"who": "liang",
+			"zh": "零倒是零。可它测的是哪儿？先把工程图打开。",
+			"en": "It's zero, sure. But zero where? Open the drawing."
+		},
+		"T03_B": {
+			"who": "liang",
+			"zh": "对，先确定你测的是哪一段。",
+			"en": "Right. First work out which bit you actually measured."
+		},
+		"T03_found": {
+			"who": "liang",
+			"zh": "阀门关着，压力表根本没连到舱室。仪器没坏。是你刚才不知道它测的是什么。",
+			"en": "The valve's shut — the gauge never saw the bay. The meter's fine. You just didn't know what it was measuring."
+		},
+		"T03_real": {
+			"who": "liang",
+			"zh": "这回才是舱里的压力。要是刚才直接拆开，里面的气就全跑到船坞里了。",
+			"en": "That's the bay. Open it a minute ago and all that gas goes into the berth."
+		},
+		"T03_wait": {
+			"who": "liang",
+			"zh": "这回不用着急，等泵把气收完。真空里工作，最没用的就是催机器。",
+			"en": "No hurry now. Let the pump take it. Out here, rushing machines gets you nothing."
+		},
+		"T03_empty_t": {
+			"who": "term",
+			"zh": "舱室压力进入训练允许范围。气体回收完成。",
+			"en": "BAY PRESSURE WITHIN TRAINING LIMIT. GAS RECOVERED."
+		},
+		"T03_empty_l": {
+			"who": "liang",
+			"zh": "好。现在可以处理这块外壳了。",
+			"en": "Good. Now the plate."
+		},
+		"T03_open": {
+			"who": "liang",
+			"zh": "这就是拆船。你不知道里面是什么，就得一点点把它查清楚。",
+			"en": "That's salvage. You don't know what's inside, so you find out, one thing at a time."
+		},
+		"T03_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：目标舱室状态未确认。",
+			"en": "TRAINING INTERLOCK: TARGET BAY NOT VERIFIED."
+		},
+		"T03_lock_l": {
+			"who": "liang",
+			"zh": "真船可不会替你拦这一下。",
+			"en": "A real ship won't stop you like that."
+		},
+		"T03_boom": {
+			"who": "liang",
+			"zh": "……还好不是人。重置一下，再来。",
+			"en": "...Good thing nobody was in there. Resetting. Again."
+		},
+		"T03_h1": {
+			"who": "liang",
+			"zh": "看看测压口和舱室之间，管子上还有什么。",
+			"en": "Look at what sits on the line between the port and the bay."
+		},
+		"T04_in1": {
+			"who": "liang",
+			"zh": "现在要回收这个供电模块。",
+			"en": "Next: recover the power module."
+		},
+		"T04_in2": {
+			"who": "liang",
+			"zh": "控制台说主电源关了。不过旁边那盏灯还亮着。你先查查。",
+			"en": "The panel says main power's off. That lamp next to it says otherwise. Check."
+		},
+		"T04_backup_t": {
+			"who": "term",
+			"zh": "检测到备用供电路径。",
+			"en": "BACKUP SUPPLY PATH DETECTED."
+		},
+		"T04_backup_l": {
+			"who": "liang",
+			"zh": "明白了吧？主电源停了，备用电池还在供电。船上的电源从来不保证只有一个。",
+			"en": "See? Main's off, the backup battery is still feeding it. A ship never promises just one source."
+		},
+		"T04_cap": {
+			"who": "liang",
+			"zh": "还有电容。先让设备完成受控放电和状态验证。别急着拆。",
+			"en": "And there's the capacitor. Bleed it through the plug and verify. Don't rush it."
+		},
+		"T04_ok_t": {
+			"who": "term",
+			"zh": "目标电气区域验证完成。允许进行指定模块拆卸。",
+			"en": "ELECTRICAL ZONE VERIFIED. MODULE REMOVAL PERMITTED."
+		},
+		"T04_done": {
+			"who": "liang",
+			"zh": "这就对了。要是把完整模块直接烧成废铁，老板估计比电容炸了还心疼。",
+			"en": "That's it. Burn a whole module down to scrap and the boss would cry harder than if the cap blew."
+		},
+		"T04_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：目标电气区域未验证。",
+			"en": "TRAINING INTERLOCK: ELECTRICAL ZONE NOT VERIFIED."
+		},
+		"T04_arc": {
+			"who": "liang",
+			"zh": "那一下，在真船上能要命。重置。",
+			"en": "On a real ship that one kills. Resetting."
+		},
+		"T04_h1": {
+			"who": "liang",
+			"zh": "灯还亮着，电是从哪儿来的？图纸的电路层里找找。",
+			"en": "The lamp's still lit — where's that power coming from? Look at the circuit in the drawing."
+		},
+		"T05_in1": {
+			"who": "liang",
+			"zh": "那边还有台冷却泵。这东西能卖点钱。你把它完整取下来。",
+			"en": "There's a coolant pump over there. Worth something. Get it out whole."
+		},
+		"T05_in2": {
+			"who": "liang",
+			"zh": "不用我再告诉你先查什么了吧？",
+			"en": "I don't need to tell you what to check first, do I?"
+		},
+		"T05_pull": {
+			"who": "liang",
+			"zh": "别拽了。看一眼，下面还有东西连着呢。",
+			"en": "Stop pulling. Look — something's still attached."
+		},
+		"T05_cut": {
+			"who": "liang",
+			"zh": "也行，至少能卖废金属。不过下次可以试着把整台拿下来，价钱差得不少。",
+			"en": "Fine, it'll sell as scrap. Next time try getting it out whole — big difference in price."
+		},
+		"T05_done_l": {
+			"who": "liang",
+			"zh": "不错。这才叫拆设备，不是拆垃圾。",
+			"en": "Nice. That's salvaging equipment, not shovelling junk."
+		},
+		"T05_h3": {
+			"who": "liang",
+			"zh": "还有一个连接没解。",
+			"en": "One connection is still on."
+		},
+		"T06_in": {
+			"who": "liang",
+			"zh": "最后剩这些骨架。拆完训练就结束。",
+			"en": "Just the frame left. Clear it and training's done."
+		},
+		"T06_heavy1": {
+			"who": "liang",
+			"zh": "超重了。你可以去仓库买台更大的设备，前提是老板愿意出钱。",
+			"en": "Too heavy. You could buy a bigger grapple — if the boss pays for it."
+		},
+		"T06_heavy2": {
+			"who": "liang",
+			"zh": "今天就用现有的工具。看看能不能把它分开。",
+			"en": "Today you use what you've got. See if it splits."
+		},
+		"T06_boom": {
+			"who": "liang",
+			"zh": "残液进炉子，就是这个下场。重置。",
+			"en": "Residue in the furnace — that's what happens. Resetting."
+		},
+		"T06_done_t": {
+			"who": "term",
+			"zh": "TS-1 拆解任务完成。训练舱段剩余可回收结构：0。",
+			"en": "TS-1 DISMANTLED. RECOVERABLE STRUCTURE REMAINING: 0."
+		},
+		"T06_done_l": {
+			"who": "liang",
+			"zh": "行，至少你没把船坞一起拆了。培训先到这儿。",
+			"en": "Well, you didn't take the berth apart with it. That's training."
+		},
+		"T06_h3": {
+			"who": "liang",
+			"zh": "看看图纸，那根梁是两段拼起来的。",
+			"en": "Check the drawing — that beam is two pieces joined together."
+		},
+		"T_exam_offer": {
+			"who": "liang",
+			"zh": "接下来有个小考核。想试就试，不想试也能直接接第一份合同。",
+			"en": "There's a short test next. Take it if you like — or go straight to your first contract."
+		}
+	},
+	"lessons": [
+		{
+			"id": "TUT_00",
+			"mode": "lockstep",
+			"title": {
+				"zh": "到岗",
+				"en": "ARRIVAL"
+			},
+			"done_flag": "TUT_00_COMPLETE",
+			"steps": [
+				{
+					"id": "comms",
+					"text": {
+						"zh": "等待接通",
+						"en": "COMMS CHECK"
+					},
+					"tools": [],
+					"done": {
+						"lines_done": true
+					},
+					"in": [
+						"T00_1",
+						"T00_2",
+						"T00_3",
+						"T00_4",
+						"T00_5"
+					]
+				}
+			]
+		},
+		{
+			"id": "TUT_01",
+			"mode": "lockstep",
+			"title": {
+				"zh": "先学会看",
+				"en": "LOOK FIRST"
+			},
+			"done_flag": "TUT_01_COMPLETE",
+			"steps": [
+				{
+					"id": "rings",
+					"text": {
+						"zh": "穿过 3 个光环",
+						"en": "FLY THROUGH 3 RINGS"
+					},
+					"tools": [],
+					"done": {
+						"rings": 3
+					},
+					"in": [
+						"T01_in"
+					],
+					"target": {
+						"ring": 0
+					}
+				},
+				{
+					"id": "dash",
+					"text": {
+						"zh": "按住 Shift 冲过长光环",
+						"en": "HOLD SHIFT THROUGH THE LONG RING"
+					},
+					"tools": [],
+					"done": {
+						"dash_ring": true
+					},
+					"in": [
+						"T01_dash"
+					],
+					"target": {
+						"ring": 3
+					}
+				},
+				{
+					"id": "stop",
+					"text": {
+						"zh": "进框，按 Space 停稳",
+						"en": "INTO THE BOX, SPACE TO STOP"
+					},
+					"tools": [],
+					"done": {
+						"stop_box": true
+					},
+					"in": [
+						"T01_stop"
+					],
+					"target": {
+						"box": true
+					}
+				},
+				{
+					"id": "assist",
+					"text": {
+						"zh": "按 F 关掉飞行稳定，再打开",
+						"en": "F: ASSIST OFF, THEN ON"
+					},
+					"tools": [],
+					"done": {
+						"assist_cycle": true
+					},
+					"in": [
+						"T01_f"
+					]
+				},
+				{
+					"id": "find",
+					"text": {
+						"zh": "用测量（1）点选检修盖 P-001",
+						"en": "MEASURE (1): SELECT COVER P-001"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"inspected": "P-001"
+					},
+					"in": [
+						"T01_find"
+					],
+					"out": [
+						"T01_found"
+					],
+					"target": {
+						"piece": "P-001"
+					},
+					"hint": "T01_h1",
+					"auto": [
+						13.9,
+						-0.6
+					]
+				},
+				{
+					"id": "tab",
+					"text": {
+						"zh": "按 Tab 打开工程图",
+						"en": "TAB: OPEN THE DRAWING"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"blueprint": true
+					},
+					"in": [
+						"T01_tab"
+					],
+					"out": [
+						"T01_bp1",
+						"T01_bp2"
+					]
+				}
+			]
+		},
+		{
+			"id": "TUT_02",
+			"mode": "lockstep",
+			"title": {
+				"zh": "你的第一块废铁",
+				"en": "FIRST SCRAP"
+			},
+			"done_flag": "TUT_02_COMPLETE",
+			"steps": [
+				{
+					"id": "unbolt",
+					"text": {
+						"zh": "用维护工具（4）拧下 P-001 的螺栓",
+						"en": "WRENCH (4): UNBOLT P-001"
+					},
+					"tools": [
+						4
+					],
+					"done": {
+						"joints_left": [
+							"P-001",
+							"<=",
+							1
+						]
+					},
+					"in": [
+						"T02_in1",
+						"T02_in2"
+					],
+					"target": {
+						"piece": "P-001"
+					},
+					"hint": "T02_h1",
+					"auto": [
+						13.9,
+						-0.4
+					]
+				},
+				{
+					"id": "hold",
+					"text": {
+						"zh": "先用磁力抓钩（3）稳住盖板",
+						"en": "GRAPPLE (3): STEADY THE COVER"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"done": {
+						"any": [
+							{
+								"held": "P-001"
+							},
+							{
+								"free": "P-001"
+							}
+						]
+					},
+					"in": [
+						"T02_last"
+					],
+					"target": {
+						"piece": "P-001"
+					}
+				},
+				{
+					"id": "last",
+					"text": {
+						"zh": "拧下最后一颗螺栓（抓钩不放）",
+						"en": "UNBOLT THE LAST ONE (KEEP HOLD)"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"done": {
+						"free": "P-001"
+					},
+					"target": {
+						"piece": "P-001"
+					}
+				},
+				{
+					"id": "furnace",
+					"text": {
+						"zh": "拖进金属熔炉",
+						"en": "HAUL IT INTO THE FURNACE"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"done": {
+						"recovered": [
+							"P-001",
+							"metal"
+						]
+					},
+					"out": [
+						"T02_done_t",
+						"T02_done_l"
+					],
+					"target": {
+						"zone": "metal"
+					}
+				}
+			]
+		},
+		{
+			"id": "TUT_03",
+			"mode": "lockstep",
+			"title": {
+				"zh": "零不代表安全",
+				"en": "ZERO ISN'T SAFE"
+			},
+			"done_flag": "TUT_03_COMPLETE",
+			"guard": {
+				"pieces": [
+					"P-002"
+				],
+				"until": {
+					"P": [
+						"TC",
+						"<",
+						5.0
+					]
+				},
+				"lock": [
+					"T03_lock_t",
+					"T03_lock_l"
+				],
+				"accident": [
+					"blowout"
+				],
+				"reset": [
+					"P-002"
+				],
+				"say": "T03_boom",
+				"restore": {
+					"gas": [
+						"TC",
+						"SC-T"
+					],
+					"ctrls": [
+						"V-02"
+					],
+					"hoses": [
+						"GAS-T1",
+						"PT-02"
+					],
+					"readings": [
+						"PT-02"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "measure",
+					"text": {
+						"zh": "用测量（1）测 PT-02",
+						"en": "MEASURE (1): PT-02"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"PT-02"
+						]
+					},
+					"in": [
+						"T03_in"
+					],
+					"target": {
+						"ctrl": "PT-02"
+					},
+					"auto": [
+						15.5,
+						-3.6
+					]
+				},
+				{
+					"id": "ask",
+					"text": {
+						"zh": "现在能拆吗？",
+						"en": "SAFE TO OPEN?"
+					},
+					"tools": [],
+					"done": {
+						"choice": true
+					},
+					"in": [
+						"T03_ask"
+					],
+					"choice": {
+						"a": {
+							"zh": "可以，仪器显示零压力",
+							"en": "YES — THE METER SAYS ZERO"
+						},
+						"b": {
+							"zh": "还不能确定，要检查测量通路",
+							"en": "NOT YET — CHECK WHAT IT MEASURED"
+						},
+						"a_line": "T03_A",
+						"b_line": "T03_B"
+					}
+				},
+				{
+					"id": "trace",
+					"text": {
+						"zh": "按 Tab，沿 PT-02 的管路找",
+						"en": "TAB: TRACE PT-02'S LINE"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"blueprint": true
+					},
+					"out": [
+						"T03_found"
+					],
+					"hint": "T03_h1"
+				},
+				{
+					"id": "valve",
+					"text": {
+						"zh": "用维护工具（4）打开 V-02",
+						"en": "WRENCH (4): OPEN V-02"
+					},
+					"tools": [
+						4
+					],
+					"done": {
+						"switch": [
+							"V-02",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "V-02"
+					},
+					"auto": [
+						15.8,
+						-3.6
+					]
+				},
+				{
+					"id": "remeasure",
+					"text": {
+						"zh": "重新测量 PT-02",
+						"en": "MEASURE PT-02 AGAIN"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"PT-02",
+							">",
+							90.0
+						]
+					},
+					"out": [
+						"T03_real"
+					],
+					"flag": "TUT_03_VALID_MEASUREMENT",
+					"target": {
+						"ctrl": "PT-02"
+					}
+				},
+				{
+					"id": "hose",
+					"text": {
+						"zh": "气液回收（5）：软管接 GAS-T1",
+						"en": "HOSE (5): CONNECT GAS-T1"
+					},
+					"tools": [
+						5
+					],
+					"done": {
+						"hose": "GAS-T1"
+					},
+					"out": [
+						"T03_wait"
+					],
+					"target": {
+						"ctrl": "GAS-T1"
+					},
+					"auto": [
+						18.3,
+						-3.6
+					]
+				},
+				{
+					"id": "wait",
+					"text": {
+						"zh": "等 TC-1 降到 5 kPa 以下（按住 = 加速）",
+						"en": "WAIT: TC-1 BELOW 5 kPa (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"P": [
+							"TC",
+							"<",
+							5.0
+						]
+					},
+					"out": [
+						"T03_empty_t",
+						"T03_empty_l"
+					],
+					"warp": true
+				},
+				{
+					"id": "plate",
+					"text": {
+						"zh": "拆下 P-002：螺栓（4）＋抓钩（3）",
+						"en": "TAKE OFF P-002: BOLTS (4) + GRAPPLE (3)"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"done": {
+						"free": "P-002"
+					},
+					"out": [
+						"T03_open"
+					],
+					"target": {
+						"piece": "P-002"
+					}
+				},
+				{
+					"id": "scrap",
+					"text": {
+						"zh": "送进金属熔炉",
+						"en": "INTO THE FURNACE"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"done": {
+						"recovered": [
+							"P-002",
+							"any"
+						]
+					},
+					"target": {
+						"zone": "metal"
+					}
+				}
+			]
+		},
+		{
+			"id": "TUT_04",
+			"mode": "lockstep",
+			"title": {
+				"zh": "关机不等于断电",
+				"en": "OFF ISN'T DEAD"
+			},
+			"done_flag": "TUT_04_COMPLETE",
+			"guard": {
+				"pieces": [
+					"G-T01",
+					"B-T01",
+					"C-T01",
+					"BUS-T",
+					"LAMP-T"
+				],
+				"until": {
+					"reading": [
+						"E-T01",
+						"<",
+						1.0
+					]
+				},
+				"lock": [
+					"T04_lock_t"
+				],
+				"accident": [
+					"arc",
+					"drone_hit"
+				],
+				"reset": [
+					"G-T01",
+					"B-T01",
+					"C-T01",
+					"BUS-T",
+					"LAMP-T"
+				],
+				"say": "T04_arc",
+				"restore": {
+					"power": true,
+					"ctrls": [
+						"K-BT",
+						"E-T02"
+					],
+					"readings": [
+						"E-T01",
+						"E-T02"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "test",
+					"text": {
+						"zh": "用测量（1）测 E-T01",
+						"en": "MEASURE (1): TEST POINT E-T01"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"E-T01",
+							">",
+							1.0
+						]
+					},
+					"in": [
+						"T04_in1",
+						"T04_in2"
+					],
+					"out": [
+						"T04_backup_t"
+					],
+					"target": {
+						"ctrl": "E-T01"
+					},
+					"hint": "T04_h1",
+					"auto": [
+						19.3,
+						-1.9
+					]
+				},
+				{
+					"id": "isolate",
+					"text": {
+						"zh": "断开备用电池的开关 K-BT（4）",
+						"en": "WRENCH (4): OPEN BATTERY SWITCH K-BT"
+					},
+					"tools": [
+						4
+					],
+					"done": {
+						"switch": [
+							"K-BT",
+							false
+						]
+					},
+					"in": [
+						"T04_backup_l"
+					],
+					"target": {
+						"ctrl": "K-BT"
+					},
+					"auto": [
+						19.0,
+						-1.9
+					]
+				},
+				{
+					"id": "retest",
+					"text": {
+						"zh": "再测 E-T01",
+						"en": "MEASURE E-T01 AGAIN"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading_after": [
+							"E-T01",
+							"isolate"
+						]
+					},
+					"out": [
+						"T04_cap"
+					],
+					"target": {
+						"ctrl": "E-T01"
+					}
+				},
+				{
+					"id": "bleed",
+					"text": {
+						"zh": "接上 E-T02 受控放电（4）",
+						"en": "WRENCH (4): PLUG IN BLEED E-T02"
+					},
+					"tools": [
+						4
+					],
+					"done": {
+						"charge": [
+							"C-T01",
+							"<",
+							0.002
+						]
+					},
+					"target": {
+						"ctrl": "E-T02"
+					},
+					"auto": [
+						19.0,
+						-1.5
+					]
+				},
+				{
+					"id": "verify",
+					"text": {
+						"zh": "再测 E-T01，确认 0 V",
+						"en": "MEASURE E-T01: CONFIRM 0 V"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"E-T01",
+							"<",
+							1.0
+						]
+					},
+					"out": [
+						"T04_ok_t"
+					],
+					"target": {
+						"ctrl": "E-T01"
+					}
+				},
+				{
+					"id": "free",
+					"text": {
+						"zh": "拆下 G-T01 的螺栓和接头（4）",
+						"en": "WRENCH (4): FREE G-T01"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"done": {
+						"free": "G-T01"
+					},
+					"target": {
+						"piece": "G-T01"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "完整送进设备回收口",
+						"en": "DELIVER IT WHOLE TO EQUIPMENT"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"done": {
+						"recovered": [
+							"G-T01",
+							"equip"
+						]
+					},
+					"out": [
+						"T04_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		},
+		{
+			"id": "TUT_05",
+			"mode": "goal",
+			"title": {
+				"zh": "你漏了一根管子",
+				"en": "YOU MISSED A PIPE"
+			},
+			"done_flag": "TUT_05_COMPLETE",
+			"steps": [
+				{
+					"id": "pump",
+					"text": {
+						"zh": "完整回收冷却泵 CP-T",
+						"en": "RECOVER COOLANT PUMP CP-T WHOLE"
+					},
+					"tools": [
+						1,
+						2,
+						3,
+						4,
+						5
+					],
+					"done": {
+						"recovered": [
+							"CP-T",
+							"any"
+						]
+					},
+					"in": [
+						"T05_in1",
+						"T05_in2"
+					],
+					"hint": "T05_h3",
+					"target": {
+						"piece": "CP-T"
+					}
+				}
+			]
+		},
+		{
+			"id": "TUT_06",
+			"mode": "goal",
+			"title": {
+				"zh": "重的东西不会听你的",
+				"en": "HEAVY THINGS DON'T LISTEN"
+			},
+			"done_flag": "TUT_06_COMPLETE",
+			"guard": {
+				"pieces": [],
+				"until": {},
+				"accident": [
+					"furnace"
+				],
+				"reset": [
+					"RT-T"
+				],
+				"say": "T06_boom"
+			},
+			"steps": [
+				{
+					"id": "frame",
+					"text": {
+						"zh": "清空框架",
+						"en": "CLEAR THE FRAME"
+					},
+					"tools": [
+						1,
+						2,
+						3,
+						4,
+						5
+					],
+					"done": {
+						"all_recovered": [
+							"ARM-T",
+							"BM-1",
+							"BM-2",
+							"RT-T",
+							"ST-1",
+							"ST-2"
+						]
+					},
+					"in": [
+						"T06_in"
+					],
+					"out": [
+						"T06_done_t",
+						"T06_done_l"
+					],
+					"hint": "T06_h3"
+				}
+			]
+		}
+	],
+	"rings": [
+		[
+			1.5,
+			-6.0,
+			0.9
+		],
+		[
+			5.5,
+			-7.3,
+			0.9
+		],
+		[
+			9.0,
+			-5.6,
+			0.9
+		]
+	],
+	"long_ring": [
+		[
+			11.0,
+			-6.4
+		],
+		[
+			16.0,
+			-6.4
+		],
+		0.9
+	],
+	"stop_box": [
+		19.4,
+		-6.9,
+		21.0,
+		-5.5
+	],
+	"exam_offer": "T_exam_offer"
+}

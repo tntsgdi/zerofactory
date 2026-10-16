@@ -44,6 +44,11 @@ var tether_force := 0.0
 
 # wrench / measure / hose actions in progress
 var job := {}              # {"kind", "t", "dur", "target", "pos"}
+var latched := false       # the grapple holds on while another tool is in hand
+var latch_d := Vector2.ZERO
+var laser_lock := {}       # piece id -> the training interlock stopped the beam here (this stroke)
+var denied_slot := 0       # a locked tool was asked for (the toolbar shakes it)
+var denied_t := 9.0
 var t := 0.0
 var add_node: Node2D
 
@@ -61,7 +66,14 @@ func _init() -> void:
 	add_child(add_node)
 
 
-func set_tool(n: int) -> void:
+func set_tool(n: int, force: bool = false) -> void:
+	# the training course opens one tool at a time
+	if not force and game.tutorial != null and not game.tutorial.tool_allowed(n):
+		denied_slot = n
+		denied_t = 0.0
+		game.sfx.play("deny")
+		game.say("tool_locked", drone.global_position + Vector2(0, -44))
+		return
 	if n == tool:
 		if n == 5:
 			hose_mode = "vent" if hose_mode == "recover" else "recover"
@@ -74,7 +86,12 @@ func set_tool(n: int) -> void:
 	if cutting:
 		_finish_cut()
 	if held_body != null or held_piece != null:
-		release_grab(false)
+		# the grapple can keep its hold while the wrench works (and back again)
+		if (n == 4 and tool == 3) or (n == 3 and tool == 4 and latched):
+			latched = true
+			latch_d = tether_target - drone.global_position
+		else:
+			release_grab(false)
 	job = {}
 	tool = n
 	game.sfx.play("tool")
@@ -91,12 +108,25 @@ func clamp_range(p: Vector2) -> Vector2:
 
 func step(dt: float) -> void:
 	t += dt
+	denied_t += dt
 	if not drone.alive:
 		if cutting:
 			_finish_cut()
 		release_grab(false)
 		job = {}
 		hover = {}
+		queue_redraw()
+		add_node.queue_redraw()
+		return
+	# a tool the training course has not opened yet does nothing
+	if game.tutorial != null and not game.tutorial.tool_allowed(tool):
+		hover = {}
+		if cutting:
+			_finish_cut()
+		if lmb_pressed:
+			denied_slot = tool
+			denied_t = 0.0
+			game.sfx.play("deny")
 		queue_redraw()
 		add_node.queue_redraw()
 		return
@@ -334,11 +364,24 @@ func _guarded(q) -> bool:
 	return q.cls == "equip" and q.intact and not auth.has(q.id)
 
 
+# the training interlock stops the beam at a piece it guards (once per lesson)
+func _locked(q) -> bool:
+	if game.tutorial == null:
+		return false
+	if laser_lock.has(q.id):
+		return true
+	if game.tutorial.interlock(q):
+		laser_lock[q.id] = true
+		return true
+	return false
+
+
 func _laser(dt: float) -> void:
 	if not lmb:
 		if cutting:
 			_finish_cut()
 		in_material = false
+		laser_lock = {}
 		return
 	var desired := clamp_range(aim)
 	if lmb_pressed or not cutting:
@@ -355,7 +398,9 @@ func _laser(dt: float) -> void:
 		var at: Array = _speed_at(start)
 		var guard_hit := false
 		for q in at[1]:
-			if _guarded(q):
+			if _locked(q):
+				guard_hit = true
+			elif _guarded(q):
 				guard_hit = true
 				blocked = {"piece": q.id, "t": t}
 				game.on_laser_blocked(q, start)
@@ -364,7 +409,7 @@ func _laser(dt: float) -> void:
 		front = start
 		front_prev = front
 		for q in _speed_at(front)[1]:
-			if not _guarded(q):
+			if not _guarded(q) and not laser_lock.has(q.id):
 				_kerf_point(q, front)
 				if not touched.has(q.id):
 					touched[q.id] = true
@@ -387,7 +432,9 @@ func _laser(dt: float) -> void:
 		var sa: Array = _speed_at(np)
 		var stop := false
 		for q in sa[1]:
-			if _guarded(q):
+			if _locked(q):
+				stop = true
+			elif _guarded(q):
 				if blocked.is_empty() or blocked.piece != q.id:
 					game.on_laser_blocked(q, np)
 				blocked = {"piece": q.id, "t": t}
@@ -523,6 +570,11 @@ func _cut_fx(dt: float, went: float) -> void:
 # ---------------------------------------------------------------- grapple
 
 func _grab_input() -> void:
+	if latched:
+		# back on the grapple after the wrench: the hold stays until the next click
+		if lmb_pressed:
+			latched = false
+		return
 	if lmb_pressed and held_body == null and held_piece == null:
 		if hover.get("ok", false) and hover.kind == "piece":
 			var p = hover.piece
@@ -549,6 +601,7 @@ func release_grab(thrown: bool) -> void:
 		held_body.tethered = false
 	held_body = null
 	held_piece = null
+	latched = false
 	strain = 0.0
 	overweight = false
 	tether_force = 0.0
@@ -568,7 +621,7 @@ func physics_step(dt: float) -> void:
 		return
 	if held_piece.body != held_body:
 		held_body = held_piece.body
-	var d: Vector2 = aim - drone.global_position
+	var d: Vector2 = aim - drone.global_position if not latched else latch_d
 	var reach := clampf(d.length(), 1.4 * 48.0, 3.4 * 48.0)
 	tether_target = drone.global_position + d.normalized() * reach
 	var g := grab_point()

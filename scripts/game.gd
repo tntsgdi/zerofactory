@@ -22,6 +22,12 @@ var cam: Camera2D
 var bot = null               # tests drive the game through this dict
 var ship_id := "gr7"         # which ship file this contract is about
 var ship: Dictionary = {}
+static var start_ship := ""  # the title screen picks the next ship (training, exam, contract)
+var training := false        # the ship file is a training course, not a contract
+var tutorial: Tutorial
+var player_moved := false
+var warp := false            # time runs x4 while the player holds =
+const WARP := 4.0
 var testing := false
 
 var state := "intro"         # intro play ending
@@ -89,13 +95,17 @@ func _ready() -> void:
 	dock.world = world
 	add_child(dock)
 	add_child(world)
+	if start_ship != "":
+		ship_id = start_ship
+		start_ship = ""
 	var data := {}
 	if SaveGame.load_requested and (not testing or SaveGame.allow_test):
-		data = SaveGame.read()
+		data = SaveGame.read(SaveGame.train_path if Ship.load_data(ship_id).get("training", false) else "")
 	SaveGame.load_requested = false
 	if not data.is_empty():
 		ship_id = data.get("ship", "gr7")
 	ship = Ship.load_data(ship_id)
+	training = ship.get("training", false)
 	dock.set_ship(ship)
 	if not data.is_empty() and SaveGame.apply(self, data):
 		Ship.rooms(world, ship)
@@ -148,6 +158,14 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
+	if training:
+		tutorial = Tutorial.new()
+		tutorial.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(tutorial)
+		tutorial.setup(self, ship_id)
+		var th := TutorialHud.new()
+		th.game = self
+		add_child(th)
 	for n in [dock, world, sys, fx, blueprint, drone, tools]:
 		n.process_mode = Node.PROCESS_MODE_PAUSABLE
 	world.position.x = ship_offset
@@ -157,6 +175,8 @@ func _ready() -> void:
 	state_t = 0.0
 	if not data.is_empty():
 		SaveGame.apply_late(self, data)
+		if tutorial != null and data.has("tutorial"):
+			tutorial.load_state(data.tutorial)
 		if SaveGame.recovered:
 			hud.show_hint(txt("save_recovered"))
 		world.position.x = 0.0
@@ -219,6 +239,11 @@ func _process(dt: float) -> void:
 			autosave_t = 0.0
 			SaveGame.save(self)
 	_read_input()
+	var want_warp: bool = state == "play" and not menu_open and (Input.is_physical_key_pressed(KEY_EQUAL) or (bot != null and bot.get("warp", false)))
+	if want_warp != warp:
+		warp = want_warp
+		if hitstop_t <= 0.0 and slowmo <= 0.0:
+			Engine.time_scale = WARP if warp else 1.0
 	match state:
 		"intro":
 			_intro(rdt)
@@ -233,10 +258,10 @@ func _process(dt: float) -> void:
 	_age_messages(rdt)
 	if hitstop_t > 0.0:
 		hitstop_t -= rdt
-		Engine.time_scale = 0.05 if hitstop_t > 0.0 else (0.28 if slowmo > 0.0 else 1.0)
+		Engine.time_scale = 0.05 if hitstop_t > 0.0 else (0.28 if slowmo > 0.0 else (WARP if warp else 1.0))
 	elif slowmo > 0.0:
 		slowmo -= rdt
-		Engine.time_scale = 0.28 if slowmo > 0.0 else 1.0
+		Engine.time_scale = 0.28 if slowmo > 0.0 else (WARP if warp else 1.0)
 
 
 func _physics_process(dt: float) -> void:
@@ -269,6 +294,11 @@ func _read_input() -> void:
 			mv.y -= 1
 		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
 			mv.y += 1
+	player_moved = mv != Vector2.ZERO
+	# Q hint in the training course: the drone flies itself to where the target shows
+	if tutorial != null and tutorial.autopilot != null and not player_moved:
+		var to: Vector2 = tutorial.autopilot - drone.global_position
+		mv = to.normalized() * clampf(to.length() / 90.0, 0.25, 1.0)
 	drone.input.move = mv if state == "play" else Vector2.ZERO
 	drone.input.dash = b.get("dash", Input.is_physical_key_pressed(KEY_SHIFT)) and state == "play"
 	drone.input.brake = b.get("brake", Input.is_physical_key_pressed(KEY_SPACE)) and state == "play"
@@ -297,6 +327,16 @@ func _unhandled_input(ev: InputEvent) -> void:
 			if k in [KEY_SPACE, KEY_ENTER]:
 				close_contract()
 			return
+		if tutorial != null:
+			if tutorial.choice_open() and k in [KEY_1, KEY_2]:
+				tutorial.pick("a" if k == KEY_1 else "b")
+				return
+			if k == KEY_Q:
+				tutorial.request_hint()
+				return
+			if tutorial.done and k in [KEY_1, KEY_2]:
+				after_training("exam" if k == KEY_1 else "contract")
+				return
 		match k:
 			KEY_1: tools.set_tool(1)
 			KEY_2: tools.set_tool(2)
@@ -436,7 +476,7 @@ func _end_intro() -> void:
 	zoom_override = -1.0
 	state = "play"
 	state_t = 0.0
-	if bot == null or not bot.get("skip_contract", false):
+	if (bot == null or not bot.get("skip_contract", false)) and not training:
 		open_contract()
 
 
@@ -482,6 +522,24 @@ func restart() -> void:
 	get_tree().reload_current_scene()
 
 
+# the course is over: the apprentice assessment, or straight to the first contract
+func after_training(where: String) -> void:
+	SaveGame.clear(SaveGame.train_path)
+	Engine.time_scale = 1.0
+	get_tree().paused = false
+	start_ship = "exam" if where == "exam" else "gr7"
+	SaveGame.load_requested = false
+	get_tree().reload_current_scene()
+
+
+func skip_training() -> void:
+	if not Txt.certified:
+		Txt.certified = true
+		Txt.cert_kind = "skipped"
+		Txt.save_settings(testing)
+	after_training("contract")
+
+
 func to_title() -> void:
 	if state == "play":
 		SaveGame.save(self)
@@ -509,6 +567,9 @@ func incident(kind: String, detail: String = "") -> void:
 
 
 func lose(key: String, amount: float, at: Vector2) -> void:
+	# the training rig is insured: a mistake costs a tenth
+	if training:
+		amount *= 0.1
 	losses += amount
 	loss_lines.append([key, amount])
 	fx.number(at, "−" + Pal.money(amount).trim_prefix("$"), Pal.heat(1.0, 1.4), 22)
@@ -606,6 +667,8 @@ func on_swallowed(b, zone: String) -> void:
 	ledger.append([label, zone, v])
 	if zone == "metal" and b.pieces.any(func(p): return p.cls == "equip" and p.intact):
 		say("equip_as_scrap", at)
+	if tutorial != null:
+		tutorial.on_recovered(b, zone)
 	gain("equip" if zone == "equip" else ("hazard" if zone == "hazard" else "metal"), v, at, label)
 	var col := Pal.heat(1.0, 2.2) if zone == "metal" else (Pal.tint(Pal.FLUID, 0.9, 1.4) if zone == "hazard" else Pal.ink(0.9, 1.5))
 	fx.flash(Dock.zpos(zone), 140.0, 0.5, col)
@@ -651,7 +714,7 @@ func on_debris_in(value: float, at: Vector2) -> void:
 
 
 func _check_done() -> void:
-	if state != "play":
+	if state != "play" or training:
 		return
 	for id in world.order:
 		if not world.pieces[id].gone:
@@ -792,7 +855,7 @@ func on_drone_destroyed() -> void:
 	if tools.cutting:
 		tools._finish_cut()
 	lose("loss_drone", DRONE_FEE, p + Vector2(0, -50))
-	drone_respawn = 2.0
+	drone_respawn = 1.4 if training else 2.0
 	drone.linear_velocity = Vector2.ZERO
 	hint("drone_lost")
 
@@ -1136,6 +1199,17 @@ func _inspect_text(p) -> String:
 
 
 func do_wrench(tg: Dictionary) -> void:
+	# the training interlock looks at what the wrench is about to undo
+	if tutorial != null:
+		var on_piece = null
+		match tg.kind:
+			"joint":
+				on_piece = world.pieces.get(tg.joint.a)
+			"connector":
+				on_piece = world.pieces.get(tg.line.a if tg.end == 0 else tg.line.b)
+		if on_piece != null and tutorial.interlock(on_piece):
+			return
+		tutorial.progress()
 	match tg.kind:
 		"joint":
 			var j = tg.joint
@@ -1377,7 +1451,8 @@ func _age_messages(dt: float) -> void:
 
 
 func hint(key: String) -> void:
-	if not hints_on or hints_seen.has(key):
+	# in the training course Liang does the explaining
+	if training or not hints_on or hints_seen.has(key):
 		return
 	if Txt.has("hint_" + key):
 		hints_seen[key] = true

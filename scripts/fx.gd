@@ -121,6 +121,26 @@ func number(pos: Vector2, text: String, c: Color, size: int = 22) -> void:
 	numbers.append([text, pos, Vector2(randf_range(-20, 20), -90.0), 0.0, 1.1, size, c])
 
 
+# a training ring breaking into 24 points of light
+func burst_ring(c: Vector2, r: float) -> void:
+	for i in 24:
+		var d := Vector2.from_angle(TAU * i / 24.0)
+		spark(c + d * r, d * randf_range(120.0, 260.0), randf_range(0.35, 0.6), Pal.ink(0.9, 2.0), 1.6, 8.0, 3.0)
+	ring(c, r, r * 1.8, 0.45, Pal.ink(0.7, 1.6), 2.0)
+	flash(c, r * 1.6, 0.3, Pal.ink(0.35, 1.6))
+
+
+# props coming back (or going away) as a hologram
+func holo(c: Vector2, r: float) -> void:
+	var col := Pal.tint(Pal.AIR, 0.9, 1.8)
+	ring(c, r * 0.3, r * 1.5, 0.6, col, 1.6)
+	ring(c, r * 0.1, r * 0.9, 0.45, Pal.tint(Pal.AIR, 0.6, 1.4), 1.0)
+	flash(c, r * 1.4, 0.5, Pal.tint(Pal.AIR, 0.4, 1.6))
+	for i in 16:
+		var d := Vector2.from_angle(randf() * TAU)
+		spark(c + d * r * randf_range(0.2, 0.9), Vector2(0, -randf_range(30.0, 90.0)), randf_range(0.4, 0.8), col, 1.2, 6.0, 1.5)
+
+
 func push_motes(center: Vector2, radius: float, strength: float) -> void:
 	for m in motes:
 		var d: Vector2 = m[0] - center

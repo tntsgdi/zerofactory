@@ -233,7 +233,11 @@ func _draw_hud() -> void:
 		_world_tags()
 		_messages()
 		_cursor_label()
-		_contract_panel()
+		if not g.training:
+			_contract_panel()
+		_overweight()
+		if g.warp:
+			_text("▶▶  ×%d" % int(Game.WARP), Vector2(s.x * 0.5, 40), 16, Pal.heat(0.6 + 0.3 * sin(t * 6.0), 1.2), font_b, 0)
 		_credits(s)
 		_toolbar(s)
 		_drone_status(s)
@@ -257,6 +261,19 @@ func _draw_hud() -> void:
 		_settlement(s)
 	if flash > 0.0:
 		c.draw_rect(Rect2(Vector2.ZERO, s), Color(1, 1, 1, flash * flash * 0.8))
+
+
+# the grapple refuses a load over its rating, and says so in numbers
+func _overweight() -> void:
+	var tl = game.tools
+	if not tl.overweight or tl.held_piece == null:
+		return
+	var m: float = tl.held_body.total_mass() if tl.held_body != null and is_instance_valid(tl.held_body) else game.world.group_mass(tl.held_piece)
+	var p := to_screen(tl.grab_point()) + Vector2(24, -46)
+	var rows := ["TARGET MASS: %.1f t" % m, "RATED CAPACITY: %.1f t" % Tools.GRAB_MAX_T, "OPERATION REFUSED"]
+	_panel(Rect2(p - Vector2(10, 18), Vector2(230, 70)), 0.86)
+	for i in 3:
+		_text(rows[i], p + Vector2(0, i * 20), 13, Pal.heat(0.95, 1.2) if i == 2 else Pal.ink(0.85), font_b if i == 2 else font)
 
 
 func _intro_overlay(s: Vector2) -> void:
@@ -633,6 +650,14 @@ func _contract_card(s: Vector2) -> void:
 
 func _menu_items() -> Array:
 	var g = game
+	if g.training:
+		return [
+			["resume", g.txt("m_resume")],
+			["skip", g.txt("m_skip") if menu_confirm != 1 else g.txt("m_confirm")],
+			["lang", g.txt("m_lang")],
+			["hints", g.txt("m_hints") if g.hints_on else g.txt("m_hints_off")],
+			["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
+		]
 	return [
 		["resume", g.txt("m_resume")],
 		["end", g.txt("m_end") if menu_confirm != 1 else g.txt("m_confirm")],
@@ -667,6 +692,12 @@ func _menu_click() -> void:
 			if menu_confirm == 1:
 				game.toggle_menu()
 				game.finish_contract(true)
+			else:
+				menu_confirm = 1
+		"skip":
+			if menu_confirm == 1:
+				game.toggle_menu()
+				game.skip_training()
 			else:
 				menu_confirm = 1
 		"lang":

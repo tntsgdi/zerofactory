@@ -58,7 +58,7 @@ func _items() -> Array:
 	var out: Array = []
 	if SaveGame.exists():
 		out.append(["continue", Txt.t("t_continue")])
-	out.append_array([["new", Txt.t("t_new")], ["lang", Txt.t("m_lang")], ["quit", Txt.t("t_quit")]])
+	out.append_array([["new", Txt.t("t_new")], ["train", Txt.t("t_train")], ["lang", Txt.t("m_lang")], ["quit", Txt.t("t_quit")]])
 	return out
 
 
@@ -106,11 +106,19 @@ func _pick(id: String) -> void:
 	match id:
 		"continue":
 			if leaving < 0.0:
+				Game.start_ship = ""
 				SaveGame.load_requested = true
 				leaving = 0.0
 		"new":
 			if leaving < 0.0:
-				SaveGame.load_requested = false
+				# a new operator goes through the training course first
+				Game.start_ship = "gr7" if Txt.certified else "ts1"
+				SaveGame.load_requested = not Txt.certified and SaveGame.exists(SaveGame.train_path)
+				leaving = 0.0
+		"train":
+			if leaving < 0.0:
+				Game.start_ship = "ts1"
+				SaveGame.load_requested = SaveGame.exists(SaveGame.train_path)
 				leaving = 0.0
 		"lang":
 			Txt.zh = not Txt.zh

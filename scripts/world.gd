@@ -444,6 +444,9 @@ func make_body(group: Array, from_body):
 		b.rebuild_cols(p)
 	b.refresh()
 	bodies.append(b)
+	# a wall that floats away leaves a hole, however it came loose
+	if group.any(func(q): return q.barrier) and game != null and game.sys != null:
+		game.sys.topology_dirty = true
 	redraw_all(true)
 	piece_freed.emit(b)
 	return b
@@ -502,6 +505,8 @@ func remove_piece(p) -> void:
 		static_cols.erase(p.id)
 	p.body = null
 	dirty_links = true
+	if p.barrier and game != null and game.sys != null:
+		game.sys.topology_dirty = true
 	redraw_all(true)
 
 
@@ -688,6 +693,10 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 		q.tag = ""
 		q.name_key = p.name_key if p.cls == "equip" else ""
 		q.art = ""
+		# the parts remember what they were cut from
+		var origin: String = p.get_meta("origin", p.tag)
+		if origin != "":
+			q.set_meta("origin", origin)
 		if p.body != null:
 			p.body.pieces.append(q)
 		# draw it right after its parent
