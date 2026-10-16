@@ -7,6 +7,8 @@ static var assist := true
 const CFG := "user://zeropower_settings.cfg"
 
 const S := {
+	# saves
+	"save_recovered": ["存档损坏，已从上一次自动存档恢复", "SAVE DAMAGED · RESTORED FROM THE PREVIOUS AUTOSAVE"],
 	# dock
 	"net": ["碎屑收集网", "DEBRIS NET"],
 	"zone_equip": ["设备回收", "EQUIPMENT"],

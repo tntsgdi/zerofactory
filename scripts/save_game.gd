@@ -1,19 +1,23 @@
 class_name SaveGame
 # The contract in progress, cut shapes and all, as JSON in user://.
-# Tests never read or write it (Game.testing). Every save first rotates the
-# previous file into .bak so a bad write can never cost the player a ship.
+# Tests never read or write it (Game.testing). A save is written to a .tmp
+# file first and only then swapped in, the previous save moves to .bak, and
+# every file carries a checksum: a torn or damaged save falls back to .bak.
+# Older versions are migrated one step at a time (see migrate()).
 
 const PATH := "user://zeropower_save.json"
 const BEST := "user://zeropower_best.json"
-const VERSION := 1
+const VERSION := 2
+const MAGIC := "ZEROPRESSURE"
 
 static var load_requested := false
 static var path := PATH          # tests point this at their own file
 static var allow_test := false
+static var recovered := false    # the last read() had to fall back to .bak
 
 
 static func exists() -> bool:
-	return FileAccess.file_exists(path)
+	return FileAccess.file_exists(path) or FileAccess.file_exists(path + ".bak")
 
 
 static func _v2(v: Vector2) -> Array:
@@ -54,11 +58,18 @@ static func save(g) -> void:
 	var s = g.sys
 	var body_ids := {}
 	var bodies: Array = []
+	var taken := {}
+	for sw in g.dock.swallowing:
+		taken[sw[0]] = Transform2D(sw[4], sw[3])
 	for b in w.bodies:
-		if not is_instance_valid(b) or b.capture != null:
+		if not is_instance_valid(b) or b.pieces.is_empty():
 			continue
 		body_ids[b] = bodies.size()
-		bodies.append({"xf": _xf(b.global_transform), "v": _v2(b.linear_velocity), "w": b.angular_velocity})
+		# a body half way down a recovery mouth goes back to where the mouth took it
+		if taken.has(b):
+			bodies.append({"xf": _xf(taken[b]), "v": [0.0, 0.0], "w": 0.0})
+		else:
+			bodies.append({"xf": _xf(b.global_transform), "v": _v2(b.linear_velocity), "w": b.angular_velocity})
 	var pieces: Array = []
 	for id in w.order:
 		var p = w.pieces[id]
@@ -72,7 +83,7 @@ static func save(g) -> void:
 			"cond": p.cond, "intact": p.intact, "art": p.art, "axf": _xf(p.art_xf), "asz": _v2(p.art_size),
 			"frag": p.fragile, "contam": p.contam, "cs": p.cut_speed, "room": p.room, "bar": p.barrier,
 			"door": p.door, "open": p.door_open, "odir": _v2(p.open_dir), "haz": p.hazard, "temp": p.temp,
-			"must": p.mandatory, "dest": p.dest, "hid": p.hidden_by,
+			"must": p.mandatory, "dest": p.dest, "hid": p.hidden_by, "seen": p.seen,
 		})
 	var joints: Array = []
 	for j in w.joints:
@@ -81,11 +92,11 @@ static func save(g) -> void:
 	var lines: Array = []
 	for id in w.lines:
 		var l = w.lines[id]
-		lines.append({"id": l.id, "k": l.kind, "net": l.net, "a": l.a, "b": l.b, "pa": _v2(l.pa), "pb": _v2(l.pb), "path": _poly(l.path), "alive": l.alive, "cut": _v2(l.cut_at) if l.cut_at != Vector2.INF else null})
+		lines.append({"id": l.id, "k": l.kind, "net": l.net, "a": l.a, "b": l.b, "pa": _v2(l.pa), "pb": _v2(l.pb), "path": _poly(l.path), "alive": l.alive, "cut": _v2(l.cut_at) if l.cut_at != Vector2.INF else null, "label": l.label})
 	var ctrls: Array = []
 	for id in w.ctrls:
 		var c = w.ctrls[id]
-		ctrls.append({"id": c.id, "k": c.kind, "piece": c.piece, "p": _v2(c.pos), "st": c.state, "m": c.medium, "tg": c.target, "hr": c.hidden_room})
+		ctrls.append({"id": c.id, "k": c.kind, "piece": c.piece, "p": _v2(c.pos), "st": c.state, "m": c.medium, "tg": c.target, "hr": c.hidden_room, "label": c.label})
 	var rooms := {}
 	for n in w.rooms:
 		rooms[n] = w.rooms[n].revealed
@@ -96,6 +107,17 @@ static func save(g) -> void:
 	for k in s.readings:
 		var r: Dictionary = s.readings[k]
 		readings.append({"key": r.key, "kind": r.kind, "at": r.at, "inst": r.inst, "t": r.t, "val": r.val, "text": r.text, "ver": r.ver, "vol": r.get("vol", "")})
+	var leaks: Array = []
+	for lk in s.leaks:
+		var lp = lk.piece
+		leaks.append({"pos": _v2(lk.pos), "dir": _v2(lk.dir), "fluid": lk.fluid, "rate": lk.rate, "src": lk.src, "t": lk.t,
+			"piece": lp.id if lp != null and not lp.gone else -1, "local": _v2(lk.local)})
+	var clouds: Array = []
+	for cl in s.clouds:
+		clouds.append({"pos": _v2(cl.pos), "r": cl.r, "amount": cl.amount, "t": cl.t})
+	var debris: Array = []
+	for db in g.dock.debris:
+		debris.append({"p": _v2(db[0]), "v": _v2(db[1]), "t": db[2], "poly": _poly(db[3]), "rot": db[4], "spin": db[5], "val": db[6]})
 	var d := {
 		"version": VERSION,
 		"world": {"pieces": pieces, "joints": joints, "lines": lines, "ctrls": ctrls, "rooms": rooms, "bodies": bodies,
@@ -104,28 +126,83 @@ static func save(g) -> void:
 			"bat": s.bat, "cap": s.cap, "aux": s.aux, "dis": s.discharge, "grem": s.g_remote, "fuel": s.fuel, "fline": s.fuel_line,
 			"cool": s.cool, "coolb": s.cool_broken, "T": s.loop_T, "frec": s.fuel_recovered, "crec": s.cool_recovered,
 			"grec": s.gas_recovered, "glost": s.gas_lost, "flost": s.fluid_lost, "time": s.time, "hoses": s.hoses, "readings": readings,
-			"vol_ver": s.vol_ver},
+			"vol_ver": s.vol_ver, "nav_bat": s.nav_bat, "elec_ver": s.elec_ver, "elec_sig": s._elec_sig, "leaks": leaks,
+			"clouds": clouds, "blown": s.blown},
 		"game": {"ie": g.income_equip, "im": g.income_metal, "ih": g.income_hazard, "loss": g.losses, "lines": g.loss_lines,
 			"bb": g.bb_ok, "gen": g.gen_ok, "time": g.playtime, "hints": g.hints_seen, "ledger": g.ledger,
 			"drone": {"p": _v2(g.drone.global_position), "v": _v2(g.drone.linear_velocity), "hp": g.drone.integrity, "alive": g.drone.alive},
-			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode},
+			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode, "reveals": g.reveal_count, "respawn": g.drone_respawn,
+			"debris": debris},
 	}
-	if FileAccess.file_exists(path):
-		DirAccess.copy_absolute(ProjectSettings.globalize_path(path), ProjectSettings.globalize_path(path + ".bak"))
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f != null:
-		f.store_string(JSON.stringify(d))
+	write_file(path, d)
+
+
+# tmp first, then swap: whatever happens mid-write, either the old save or the
+# new one is complete on disk
+static func write_file(file: String, d: Dictionary) -> bool:
+	var body := JSON.stringify(d)
+	var full := ProjectSettings.globalize_path(file)
+	var f := FileAccess.open(file + ".tmp", FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string("%s %d %s\n" % [MAGIC, VERSION, body.md5_text()])
+	f.store_string(body)
+	f.close()
+	if FileAccess.file_exists(file):
+		if FileAccess.file_exists(file + ".bak"):
+			DirAccess.remove_absolute(full + ".bak")
+		DirAccess.rename_absolute(full, full + ".bak")
+	return DirAccess.rename_absolute(full + ".tmp", full) == OK
 
 
 static func read() -> Dictionary:
-	if not FileAccess.file_exists(path):
+	recovered = false
+	var d := read_file(path)
+	if d.is_empty() and FileAccess.file_exists(path + ".bak"):
+		d = read_file(path + ".bak")
+		recovered = not d.is_empty()
+		if recovered:
+			push_warning("save damaged, loaded the backup")
+	return d
+
+
+# A checked, migrated save, or {} when the file is missing or damaged.
+static func read_file(file: String) -> Dictionary:
+	if not FileAccess.file_exists(file):
 		return {}
-	var f := FileAccess.open(path, FileAccess.READ)
+	var f := FileAccess.open(file, FileAccess.READ)
 	if f == null:
 		return {}
-	var d = JSON.parse_string(f.get_as_text())
-	if typeof(d) != TYPE_DICTIONARY or int(d.get("version", 0)) != VERSION:
+	var text := f.get_as_text()
+	var body := text
+	if text.begins_with(MAGIC):
+		var nl := text.find("\n")
+		if nl < 0:
+			return {}
+		var head := text.substr(0, nl).split(" ")
+		body = text.substr(nl + 1)
+		if head.size() != 3 or body.md5_text() != head[2]:
+			return {}
+	var d = JSON.parse_string(body)
+	if typeof(d) != TYPE_DICTIONARY:
 		return {}
+	return migrate(d)
+
+
+# Bring an older save up to VERSION one step at a time; {} if it comes from the
+# future or is not a save at all.
+static func migrate(d: Dictionary) -> Dictionary:
+	var v := int(d.get("version", 0))
+	if v < 1 or v > VERSION or not d.has("world") or not d.has("sys") or not d.has("game"):
+		return {}
+	while v < VERSION:
+		match v:
+			1:
+				# v2 added accidents in progress, electric state and debris in flight
+				d.sys.merge({"nav_bat": 1.0, "elec_ver": 0, "elec_sig": "", "leaks": [], "clouds": [], "blown": {}})
+				d.game.merge({"reveals": 0, "respawn": -1.0, "debris": []})
+		v += 1
+	d.version = VERSION
 	return d
 
 
@@ -163,6 +240,7 @@ static func apply(g, d: Dictionary) -> bool:
 		p.mandatory = pd.must
 		p.dest = pd.dest
 		p.hidden_by = int(pd.hid)
+		p.seen = pd.get("seen", false)
 		p.set_meta("body", int(pd.body))
 		w.pieces[p.id] = p
 		w.order.append(p.id)
@@ -188,6 +266,7 @@ static func apply(g, d: Dictionary) -> bool:
 		l.path = _unpoly(ld.path)
 		l.alive = ld.alive and w.pieces.has(l.a) and w.pieces.has(l.b)
 		l.cut_at = _p2(ld.cut) if ld.cut != null else Vector2.INF
+		l.label = ld.get("label", "")
 		w.lines[l.id] = l
 	for cd in wd.ctrls:
 		var c := Model.Ctrl.new()
@@ -199,6 +278,7 @@ static func apply(g, d: Dictionary) -> bool:
 		c.medium = cd.m
 		c.target = cd.tg
 		c.hidden_room = cd.hr
+		c.label = cd.get("label", "")
 		w.ctrls[c.id] = c
 	w.next_id = int(wd.next_id)
 	w.next_joint = int(wd.next_joint)
@@ -276,6 +356,18 @@ static func apply_late(g, d: Dictionary) -> void:
 	s.time = sd.time
 	for k in sd.vol_ver:
 		s.vol_ver[k] = int(sd.vol_ver[k])
+	s.nav_bat = sd.nav_bat
+	s.elec_ver = int(sd.elec_ver)
+	s._elec_sig = sd.elec_sig
+	for k in sd.blown:
+		s.blown[k] = sd.blown[k]
+	for ld in sd.leaks:
+		var lp = w.pieces.get(int(ld.piece))
+		if lp != null and lp.gone:
+			lp = null
+		s.leaks.append({"pos": _p2(ld.pos), "dir": _p2(ld.dir), "fluid": ld.fluid, "rate": ld.rate, "src": ld.src, "t": ld.t, "piece": lp, "local": _p2(ld.local)})
+	for cl in sd.clouds:
+		s.clouds.append({"pos": _p2(cl.pos), "r": cl.r, "amount": cl.amount, "t": cl.t})
 	s.topology_dirty = true
 	for port in sd.hoses:
 		if w.ctrls.has(port) and w.ctrl_alive(w.ctrls[port]):
@@ -296,19 +388,29 @@ static func apply_late(g, d: Dictionary) -> void:
 	g.ledger = gd.ledger
 	g.tools.tool = int(gd.tool)
 	g.tools.hose_mode = gd.hose_mode
+	g.reveal_count = int(gd.reveals)
+	g.drone_respawn = gd.respawn
+	for db in gd.debris:
+		g.dock.debris.append([_p2(db.p), _p2(db.v), db.t, _unpoly(db.poly), db.rot, db.spin, db.val, []])
 	var dr: Dictionary = gd.drone
 	g.drone.global_position = _p2(dr.p)
 	g.drone.linear_velocity = _p2(dr.v)
 	g.drone.integrity = dr.hp
+	g.drone.alive = dr.alive
 	g.drone.reset_physics_interpolation()
 	w.redraw_all()
 	w.back_layer.queue_redraw()
 	w.cover_layer.queue_redraw()
 
 
+# the contract is over: keep the files for reference, but never offer them as "continue"
 static func clear() -> void:
-	if FileAccess.file_exists(PATH):
-		DirAccess.rename_absolute(ProjectSettings.globalize_path(PATH), ProjectSettings.globalize_path(PATH + ".done"))
+	for ext in ["", ".bak"]:
+		if FileAccess.file_exists(path + ext):
+			var full := ProjectSettings.globalize_path(path + ext)
+			if FileAccess.file_exists(path + ext + ".done"):
+				DirAccess.remove_absolute(full + ".done")
+			DirAccess.rename_absolute(full, full + ".done")
 
 
 static func best() -> Dictionary:

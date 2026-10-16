@@ -150,6 +150,8 @@ func _ready() -> void:
 	state_t = 0.0
 	if not data.is_empty():
 		SaveGame.apply_late(self, data)
+		if SaveGame.recovered:
+			hud.show_hint(txt("save_recovered"))
 		world.position.x = 0.0
 		state = "play"
 		drone.alive = true
