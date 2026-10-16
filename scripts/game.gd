@@ -46,7 +46,7 @@ const OP_CAT := {
 	"unfix": "manual", "unplug": "manual", "door": "manual", "haul_scrap": "manual", "remeasure": "manual", "repair": "manual",
 	"measure": "decision", "isolate": "decision", "hose": "decision", "cut": "decision", "deliver_equip": "decision",
 	"deliver_hazard": "decision", "ring": "decision", "pick_contract": "decision", "buy": "decision",
-	"arm_haul": "machine",
+	"arm_haul": "machine",     # the recovery arm, or a mouth pulling in what drifted close
 }
 var ops := {}                # kind -> count
 var _measured := {}
@@ -888,7 +888,8 @@ func on_swallowed(b, zone: String) -> void:
 			sys.drain_source(p.tag)
 	var label := ", ".join(names) if not names.is_empty() else txt("scrap_metal")
 	ledger.append([label, zone, v])
-	if b.get_meta("arm_drop", -1.0) >= 0.0:
+	if b.get_meta("arm_drop", -1.0) >= 0.0 or not b.get_meta("hauled", false):
+		# the arm brought it, or it drifted in on the mouth's own pull: nobody's hands
 		log_op("arm_haul")
 	elif zone == "hazard":
 		log_op("deliver_hazard")

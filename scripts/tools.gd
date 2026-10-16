@@ -608,6 +608,7 @@ func release_grab(thrown: bool) -> void:
 		game.sfx.play("release")
 	if held_body != null and is_instance_valid(held_body):
 		held_body.tethered = false
+		held_body.set_meta("hauled", true)
 	held_body = null
 	held_piece = null
 	latched = false
