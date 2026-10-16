@@ -33,6 +33,8 @@ var end_rows: Array = []
 var must_k := [0.0, 0.0]
 var tag_birth := {}
 var tool_names_k := 0.0
+var closing := -1.0
+var after_close: Callable
 # motion on site: the HUD slides in from the edges once the drone is out,
 # the tool marker springs between slots, bars leave a trail when they move
 var in_t := 0.0
@@ -108,6 +110,15 @@ func contract_changed() -> void:
 	card_k.target = 1.0 if game.contract_open else 0.0
 	if game.contract_open:
 		card_t = 0.0
+
+
+func close_then(f: Callable) -> void:
+	if closing >= 0.0:
+		return
+	closing = 0.0
+	after_close = f
+	if game != null and game.testing:
+		closing = 1.0
 
 
 func show_hint(text: String) -> void:
@@ -217,6 +228,12 @@ func _input(ev: InputEvent) -> void:
 func _process(dt: float) -> void:
 	if game == null:
 		return
+	if closing >= 0.0:
+		closing += dt
+		if closing > 0.5 and after_close.is_valid():
+			var f := after_close
+			after_close = Callable()
+			f.call()
 	t += dt
 	hint_t += dt
 	flash = maxf(0.0, flash - dt * 2.5)
@@ -337,8 +354,7 @@ func _tw(s: String, size_px: int, f: Font = null) -> float:
 
 
 func _panel(r: Rect2, a: float = 0.82) -> void:
-	c.draw_rect(r, Color(0.03, 0.032, 0.037, a))
-	c.draw_rect(r, Pal.ink(0.16 * a / 0.82), false, 1.0)
+	UI.panel(c, r, a / 0.95)
 
 
 # ---------------------------------------------------------------- main draw
@@ -356,10 +372,12 @@ func _draw_hud() -> void:
 		_messages()
 		_cursor_label()
 		if not g.training and g.exam == null:
-			c.draw_set_transform(Vector2(-(1.0 - _in(0)) * 420.0, 0.0))
+			var bpk: float = g.blueprint.k if g.blueprint != null else 0.0
+			c.draw_set_transform(Vector2(-(1.0 - _in(0) * (1.0 - Pal.ease_io(bpk))) * 420.0, 0.0))
 			_contract_panel()
 			c.draw_set_transform(Vector2.ZERO)
 		_overweight()
+		_haul_guide(s)
 		if g.warp:
 			_warp(s)
 		c.draw_set_transform(Vector2((1.0 - _in(1)) * 380.0, 0.0))
@@ -371,7 +389,9 @@ func _draw_hud() -> void:
 		c.draw_set_transform(Vector2.ZERO)
 		_hint(s)
 		_radio_box(s)
-		_text(g.txt("keys"), Vector2(s.x * 0.5, s.y - 10.0), 12, Pal.ink(0.22), font, 0)
+		var ka := clampf((40.0 - g.playtime) / 3.0, 0.0, 1.0)
+		if ka > 0.01:
+			_text(g.txt("keys"), Vector2(s.x * 0.5, s.y - 6.0), 13, Pal.ink(0.55 * ka), font, 0)
 	# hurt vignette
 	if hurt > 0.0:
 		var e := hurt * hurt
@@ -394,6 +414,26 @@ func _draw_hud() -> void:
 		_radio_box(s)
 	if flash > 0.0:
 		c.draw_rect(Rect2(Vector2.ZERO, s), Color(1, 1, 1, flash * flash * 0.8))
+	_open_wipe(s)
+	if closing >= 0.0:
+		var e := Pal.ease_in(clampf(closing / 0.42, 0.0, 1.0))
+		var h := s.y * 0.5 * e
+		c.draw_rect(Rect2(0, 0, s.x, h), Color(0, 0, 0, 1))
+		c.draw_rect(Rect2(0, s.y - h, s.x, h), Color(0, 0, 0, 1))
+		c.draw_rect(Rect2(0, s.y * 0.5 - 1, s.x, 2), Pal.heat(e, 2.0))
+
+
+# the scene opens out of the heat line the last one closed on: no hard cut
+func _open_wipe(s: Vector2) -> void:
+	if t > 0.6:
+		return
+	var e := Pal.ease_out(clampf((t - 0.05) / 0.5, 0.0, 1.0))
+	var h := s.y * 0.5 * (1.0 - e)
+	c.draw_rect(Rect2(0, 0, s.x, h), Color(0, 0, 0, 1))
+	c.draw_rect(Rect2(0, s.y - h, s.x, h), Color(0, 0, 0, 1))
+	var la := 1.0 - clampf((t - 0.15) / 0.4, 0.0, 1.0)
+	c.draw_rect(Rect2(0, h - 1, s.x, 2), Pal.heat(la, 2.0))
+	c.draw_rect(Rect2(0, s.y - h - 1, s.x, 2), Pal.heat(la, 2.0))
 
 
 # Liang on the radio (name, waveform, words typing in) or the berth terminal
@@ -419,7 +459,7 @@ func _radio_box(s: Vector2) -> void:
 	var r := Rect2(s.x * 0.5 - w * 0.5, s.y - 146.0 - h + (1.0 - Pal.ease_out(clampf(lt / 0.25, 0.0, 1.0))) * 14.0, w, h)
 	c.draw_rect(r, Color(0.02, 0.022, 0.026, 0.86 * a))
 	c.draw_rect(Rect2(r.position, Vector2(3, r.size.y)), (Pal.tint(Pal.AIR, a, 1.0) if term else Pal.heat(a, 1.0)))
-	_text(game.txt("tut_term") if term else game.txt("tut_liang"), r.position + Vector2(18, 22), 12, Pal.ink(0.5 * a), font)
+	_text(game.txt("tut_term") if term else game.txt("tut_liang"), r.position + Vector2(18, 22), 13, Pal.ink(0.5 * a), font)
 	# the voice as a little waveform while the words come in
 	var typing := shown.length() < full.length()
 	for i in 14:
@@ -448,6 +488,57 @@ func _warp(s: Vector2) -> void:
 	_text("×%d" % int(Game.WARP), Vector2(cx, 40), 16, Pal.heat(0.95, 1.3), font_b, 0)
 
 
+# hauling: where this load should go, by what it is (hazard first, whole
+# equipment to the equipment mouth, the rest to the furnace) — a ring on the
+# mouth when it is on screen, an arrow at the screen edge when it is not
+func _haul_guide(s: Vector2) -> void:
+	var tl = game.tools
+	if tl.held_body == null or not is_instance_valid(tl.held_body) or tl.overweight:
+		return
+	var zone := _zone_for(tl.held_body)
+	var wp: Vector2 = Dock.zpos(zone)
+	var sp := to_screen(wp)
+	var dist: float = (tl.held_body.global_transform * tl.held_body.center_of_mass).distance_to(wp) / Geom.M
+	var col := Pal.tint(Pal.FLUID, 0.95, 1.2) if zone == "hazard" else (Pal.ink(0.95, 1.2) if zone == "equip" else Pal.heat(0.95, 1.3))
+	var lbl := "%s  %.0f m" % [game.txt("zone_" + zone), dist]
+	var inner := Rect2(Vector2(70, 70), s - Vector2(140, 140))
+	if inner.has_point(sp):
+		var pr := 26.0 + 4.0 * sin(t * 6.0)
+		c.draw_arc(sp, pr, 0.0, TAU, 40, col, 2.0, true)
+		_text(lbl, sp + Vector2(pr + 10, 6), 15, col, font_b)
+		return
+	# off screen: an arrow on the edge, pointing at it
+	var cpos := s * 0.5
+	var dir := (sp - cpos).normalized()
+	var tt := INF
+	if absf(dir.x) > 0.001:
+		tt = minf(tt, ((inner.end.x if dir.x > 0.0 else inner.position.x) - cpos.x) / dir.x)
+	if absf(dir.y) > 0.001:
+		tt = minf(tt, ((inner.end.y if dir.y > 0.0 else inner.position.y) - cpos.y) / dir.y)
+	var at := cpos + dir * tt
+	var n := dir.orthogonal()
+	var bob := dir * 5.0 * sin(t * 6.0)
+	c.draw_colored_polygon(PackedVector2Array([at + bob + dir * 18.0, at + bob - dir * 6.0 + n * 12.0, at + bob - dir * 6.0 - n * 12.0]), col)
+	var lw := _tw(lbl, 15, font_b)
+	var lp := at - dir * 34.0 - Vector2(lw * 0.5, -6)
+	c.draw_rect(Rect2(lp - Vector2(8, 20), Vector2(lw + 16, 28)), Color(0.02, 0.022, 0.026, 0.85))
+	_text(lbl, lp, 15, col, font_b)
+
+
+func _zone_for(b) -> String:
+	var equip := false
+	var metal_m := 0.0
+	var all_m := 0.0
+	for p in b.pieces:
+		all_m += p.mass
+		if game.sys.dest_of(p) == "hazard":
+			return "hazard"
+		if p.cls == "equip" and p.intact:
+			equip = true
+		else:
+			metal_m += p.mass
+	return "equip" if equip and metal_m <= all_m * 0.2 else "metal"
+
 # the grapple refuses a load over its rating, and says so in numbers
 func _overweight() -> void:
 	var tl = game.tools
@@ -469,7 +560,7 @@ func _intro_overlay(s: Vector2) -> void:
 	var ttl: Array = g.ship.get("title", [])
 	_text(head, Vector2(70, s.y - 120), 16, Pal.ink(0.5 * k), font)
 	_text((ttl[0] if Txt.zh else ttl[1]) if ttl.size() == 2 else g.ship.get("name", ""), Vector2(70, s.y - 86), 30, Pal.ink(0.9 * k), font_l)
-	_text("ESC / SPACE", Vector2(s.x - 70, s.y - 60), 12, Pal.ink(0.3 * k), font, 1)
+	_text("ESC / SPACE", Vector2(s.x - 70, s.y - 60), 13, Pal.ink(0.5 * k), font, 1)
 	# letterbox bars slide away as the drone launches
 	var bar := 70.0 * clampf((5.2 - game.state_t) / 0.6, 0.0, 1.0)
 	c.draw_rect(Rect2(0, 0, s.x, bar), Color(0, 0, 0, 1))
@@ -480,7 +571,7 @@ func _contract_panel() -> void:
 	var g = game
 	var x := 40.0
 	var y := 46.0
-	_text(g.txt("contract") + " " + g.ship.get("contract", ""), Vector2(x, y), 13, Pal.ink(0.45), font)
+	_text(g.txt("contract") + " " + g.ship.get("contract", ""), Vector2(x, y), 13, Pal.ink(0.5), font)
 	if g.scope() != "full":
 		_text(g.txt("sc_" + g.scope()), Vector2(x + 300, y), 13, Pal.heat(0.95, 1.2), font_b, 1)
 	_text(g.ship.get("name", ""), Vector2(x, y + 24), 20, Pal.ink(0.92), font_b)
@@ -507,7 +598,7 @@ func _contract_panel() -> void:
 		_text(items[i][1] + "  " + items[i][0], Vector2(x + 22, yy), 14, Pal.ink(0.55 + 0.4 * k), font)
 	# recovery bar (below however many items the contract asks for)
 	var by := maxf(y + 120, y + 56 + items.size() * 24 + 18)
-	_text(g.txt("rate"), Vector2(x, by), 13, Pal.ink(0.45), font)
+	_text(g.txt("rate"), Vector2(x, by), 13, Pal.ink(0.5), font)
 	var pct: float = rate_roll.shown
 	_text("%.1f%%" % pct, Vector2(x + 300, by + 2), 22, Pal.ink(0.95), font_l, 1)
 	var bw := 300.0
@@ -533,9 +624,9 @@ func _contract_panel() -> void:
 		c.draw_line(Vector2(mx, by + 9 - grow), Vector2(mx, by + 19 + grow), Pal.ink(0.5 if pct < mark else 0.9) if pe >= 1.0 else Pal.heat(1.0, 1.4), 1.0 + grow * 0.3)
 		if pe < 1.0:
 			c.draw_arc(Vector2(mx, by + 14), 4.0 + 18.0 * Pal.ease_out(pe), 0.0, TAU, 24, Pal.heat(0.8 * (1.0 - pe), 1.3), 1.4, true)
-	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 12, Pal.ink(0.3), font)
+	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 13, Pal.ink(0.5), font)
 	if g.story != null and not g.story.items.is_empty():
-		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 12, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
+		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 13, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
 	elif g.time_limit() > 0.0:
 		# a hard stop: the clock runs down, and burns in the last minute
 		var left := maxf(0.0, g.time_limit() - g.playtime)
@@ -544,12 +635,12 @@ func _contract_panel() -> void:
 	elif g.standard_time() > 0.0:
 		# the clock against the standard time: past it, the time bonus starts to shrink
 		var late: bool = g.playtime > g.standard_time()
-		_text(_clock(g.playtime) + " / " + _clock(g.standard_time()), Vector2(x + 300, by + 36), 12, Pal.heat(0.8, 1.0) if late else Pal.ink(0.45), font, 1)
+		_text(_clock(g.playtime) + " / " + _clock(g.standard_time()), Vector2(x + 300, by + 36), 13, Pal.heat(0.8, 1.0) if late else Pal.ink(0.5), font, 1)
 	var ry := by + 70
 	if g.scope() != "full":
 		c.draw_rect(Rect2(x - 8, by + 48, 316, 42), Color(0.03, 0.032, 0.037, 0.8))
 		c.draw_rect(Rect2(x - 8, by + 48, 2, 42), Pal.heat(0.9, 1.1))
-		c.draw_multiline_string(font, Vector2(x, by + 64), Market.scope_text(g.job), HORIZONTAL_ALIGNMENT_LEFT, 300, 12, 2, Pal.ink(0.75))
+		c.draw_multiline_string(font, Vector2(x, by + 64), Market.scope_text(g.job), HORIZONTAL_ALIGNMENT_LEFT, 300, 13, 2, Pal.ink(0.75))
 		ry += 36
 	_recall(x, ry)
 
@@ -566,21 +657,21 @@ func _recall(x: float, y: float) -> void:
 		var r := Rect2(x - (1.0 - k) * 40.0, yy, 300, 46)
 		c.draw_rect(r, Color(0.03, 0.032, 0.037, 0.9 * k))
 		c.draw_rect(Rect2(r.position, Vector2(3, r.size.y)), Pal.tint(Pal.AIR, k, 1.0))
-		_text(game.txt("rc_title") + " · " + game.txt("rc_l") % cd[0], r.position + Vector2(14, 18), 12, Pal.tint(Pal.AIR, 0.9 * k, 1.1), font)
+		_text(game.txt("rc_title") + " · " + game.txt("rc_l") % cd[0], r.position + Vector2(14, 18), 13, Pal.tint(Pal.AIR, 0.9 * k, 1.1), font)
 		_text(game.txt(cd[1]), r.position + Vector2(14, 37), 15, Pal.ink(0.92 * k), font_b)
 		yy += 54
 	if asst.notes.is_empty():
 		return
-	_text(game.txt("notes"), Vector2(x, yy + 10), 12, Pal.ink(0.35), font)
+	_text(game.txt("notes"), Vector2(x, yy + 10), 13, Pal.ink(0.5), font)
 	for i in asst.notes.size():
 		var n: Array = asst.notes[i]
-		_text("%s  ·  %s" % [game.txt(n[1]), game.txt("rc_l") % n[0]], Vector2(x, yy + 30 + i * 18), 12, Pal.ink(0.5), font)
+		_text("%s  ·  %s" % [game.txt(n[1]), game.txt("rc_l") % n[0]], Vector2(x, yy + 30 + i * 18), 13, Pal.ink(0.5), font)
 
 
 func _credits(s: Vector2) -> void:
 	var g = game
 	var x := s.x - 40.0
-	_text(g.txt("income"), Vector2(x, 46), 13, Pal.ink(0.45), font, 1)
+	_text(g.txt("income"), Vector2(x, 46), 13, Pal.ink(0.5), font, 1)
 	var v: float = credit_roll.shown
 	var sc := 1.0 + 0.18 * credit_pop * credit_pop
 	var txt := Pal.money(v)
@@ -595,7 +686,7 @@ func _credits(s: Vector2) -> void:
 		var col := Pal.ink(0.75 * a) if f[1] >= 0 else Pal.heat(0.9 * a, 1.2)
 		var amt: String = ("+" if f[1] >= 0 else "") + Pal.money(f[1])
 		_text(amt, Vector2(x + slide * 120.0, y + i * 22), 15, col, font_b, 1)
-		_text(str(f[0]), Vector2(x - 120 + slide * 120.0, y + i * 22), 13, Pal.ink(0.4 * a), font, 1)
+		_text(str(f[0]), Vector2(x - 120 + slide * 120.0, y + i * 22), 13, Pal.ink(0.5 * a), font, 1)
 
 
 func _toolbar(s: Vector2) -> void:
@@ -611,7 +702,7 @@ func _toolbar(s: Vector2) -> void:
 		if on > 0.5 and tool_pulse < 0.45:
 			var e := Pal.ease_out(tool_pulse / 0.45)
 			c.draw_rect(rect.grow(2.0 + 9.0 * e), Pal.heat(0.7 * (1.0 - e), 1.3), false, 1.5)
-		_text(str(i + 1), rect.position + Vector2(10, 22), 14, Pal.ink(0.35 + 0.5 * on), font_b)
+		_text(str(i + 1), rect.position + Vector2(10, 22), 14, Pal.ink(0.5 + 0.5 * on), font_b)
 		var pop := 1.0
 		if on > 0.5 and tool_pulse < 0.35:
 			pop = 1.0 + 0.35 * sin(clampf(tool_pulse / 0.35, 0.0, 1.0) * PI)
@@ -621,7 +712,7 @@ func _toolbar(s: Vector2) -> void:
 		_text(g.txt("tool_%d" % (i + 1)), rect.position + Vector2(10, 56), 15, Pal.ink(0.5 + 0.45 * on), font)
 		if i == 4:
 			var mode: String = g.txt("mode_" + g.tools.hose_mode)
-			_text(mode, rect.position + Vector2(rect.size.x - 10, 56), 11, Pal.ink(0.4 + 0.3 * on) if g.tools.hose_mode == "recover" else Pal.heat(0.8, 1.0), font, 1)
+			_text(mode, rect.position + Vector2(rect.size.x - 10, 56), 13, Pal.ink(0.5 + 0.3 * on) if g.tools.hose_mode == "recover" else Pal.heat(0.8, 1.0), font, 1)
 	# one marker for the tool in hand: it springs from slot to slot and stretches as it goes
 	var sel := clampi(int(round(sel_x.x)), 0, 4)
 	var mw := 132.0 + minf(90.0, absf(sel_x.v) * 14.0)
@@ -672,14 +763,14 @@ func _drone_status(s: Vector2) -> void:
 	c.draw_rect(Rect2(bx, byy, bw * integ / 100.0, 6), col)
 	if low:
 		c.draw_rect(Rect2(bx - 3, byy - 3, bw + 6, 12), Pal.heat(0.35 + 0.3 * sin(t * 7.0), 1.2), false, 1.0)
-	_text(g.txt("integrity") + "  %d%%" % int(round(integ_roll.shown)), Vector2(x + 60, y + 16), 12, Pal.ink(0.4), font)
+	_text(g.txt("integrity") + "  %d%%" % int(round(integ_roll.shown)), Vector2(x + 60, y + 16), 13, Pal.ink(0.5), font)
 	d.assist_k = Pal.damp(d.assist_k, 1.0 if d.assist else 0.0, 14.0, get_process_delta_time())
 	var sw := Rect2(x + 60 + bw + 26, y - 14, 34, 14)
 	c.draw_rect(sw, Pal.ink(0.08 + 0.1 * d.assist_k))
 	c.draw_rect(sw, Pal.ink(0.35 + 0.4 * d.assist_k), false, 1.0)
 	c.draw_rect(Rect2(sw.position + Vector2(2 + 18 * d.assist_k, 2), Vector2(12, 10)), Pal.ink(0.5 + 0.45 * d.assist_k) if d.assist else Pal.ink(0.35))
-	_text("F " + game.txt("assist"), Vector2(sw.end.x + 8, y - 2), 12, Pal.ink(0.4 + 0.4 * d.assist_k), font)
-	_text("%.1f m/s" % spd_roll.shown, Vector2(x + 60 + bw, y + 16), 12, Pal.ink(0.55), font, 1)
+	_text("F " + game.txt("assist"), Vector2(sw.end.x + 8, y - 2), 13, Pal.ink(0.5 + 0.4 * d.assist_k), font)
+	_text("%.1f m/s" % spd_roll.shown, Vector2(x + 60 + bw, y + 16), 13, Pal.ink(0.55), font, 1)
 	if not d.alive:
 		_text("R-02 …", Vector2(x, y - 30), 14, Pal.heat(0.9, 1.2), font)
 	# consumables in hand for this contract
@@ -691,7 +782,7 @@ func _drone_status(s: Vector2) -> void:
 				parts.append(("%s %s ×%d" % [it[1], g.txt("it_" + it[0]), n]).strip_edges())
 		if not parts.is_empty():
 			var sp := clampf(stock_pop / 0.6, 0.0, 1.0)
-			_text("   ·   ".join(parts), Vector2(x, y - 34 - 4.0 * sin(sp * PI)), 12, Pal.ink(0.5) if sp >= 1.0 else Pal.heat(0.6 + 0.4 * (1.0 - sp), 1.2), font)
+			_text("   ·   ".join(parts), Vector2(x, y - 34 - 4.0 * sin(sp * PI)), 13, Pal.ink(0.5) if sp >= 1.0 else Pal.heat(0.6 + 0.4 * (1.0 - sp), 1.2), font)
 
 
 func _hint(s: Vector2) -> void:
@@ -702,11 +793,8 @@ func _hint(s: Vector2) -> void:
 	var lines := 1
 	if _tw(hint_text, 16) > 920.0:
 		lines = 2
-	# above Liang's radio box while he is talking
-	var lift := 0.0
-	if not game.radio.now.is_empty():
-		lift = 104.0 if _tw(game.radio.text(game.radio.now.line), 18) > RADIO_W else 76.0
-	var r := Rect2(s.x * 0.5 - w * 0.5, s.y - 160.0 - lift - lines * 22.0 - (1.0 - Pal.ease_out(a)) * 10.0, w, 18.0 + lines * 22.0)
+	# top centre: the bottom of the screen belongs to the radio and the toolbar
+	var r := Rect2(s.x * 0.5 - w * 0.5, 64.0 - (1.0 - Pal.ease_out(a)) * 10.0, w, 18.0 + lines * 22.0)
 	var ow := w * (Pal.ease_out(clampf(hint_t / 0.24, 0.0, 1.0)) if hint_t < 1.0 else 1.0)
 	var ta := a * clampf((hint_t - 0.1) / 0.2, 0.0, 1.0)
 	var ro := Rect2(s.x * 0.5 - ow * 0.5, r.position.y, ow, r.size.y)
@@ -764,10 +852,16 @@ func _world_tags() -> void:
 		if key.ends_with("/T") or key.ends_with("/V"):
 			off = Vector2(16, -6)
 		var pos := sp + off
-		for prev in rects:
-			if prev.intersects(Rect2(pos - Vector2(0, 16), Vector2(160, 22))):
-				pos.y = prev.position.y - 10.0
-		var tw := _tw(label, 12) + _tw(val, 15, font_b) + 30.0
+		var tw := _tw(label, 13) + _tw(val, 15, font_b) + 30.0
+		# clear of every tag already placed: step up above whichever it hits, a few times over
+		for tries in 8:
+			var hit := false
+			for prev in rects:
+				if prev.grow(3.0).intersects(Rect2(pos - Vector2(0, 16), Vector2(tw, 22))):
+					pos.y = prev.position.y - 9.0
+					hit = true
+			if not hit:
+				break
 		var rect := Rect2(pos - Vector2(0, 16), Vector2(tw, 22))
 		rects.append(rect)
 		var pop := Pal.back(clampf(age / 0.25, 0.0, 1.0), 2.0)
@@ -778,7 +872,7 @@ func _world_tags() -> void:
 		c.draw_rect(rr, Color(0.03, 0.032, 0.037, 0.88))
 		c.draw_rect(Rect2(rr.position, Vector2(2, rr.size.y)), _kind_col(r.kind, a))
 		if pop > 0.6:
-			_text(label, pos + Vector2(8, 0), 12, Pal.ink(0.45 * a), font)
+			_text(label, pos + Vector2(8, 0), 13, Pal.ink(0.5 * a), font)
 			var vcol := Pal.ink(0.95 * a) if not stale else Pal.ink(0.4)
 			var vx := pos.x + 16 + _tw(label, 12)
 			_text(val, Vector2(vx, pos.y + 1), 15, vcol, font_b)
@@ -816,9 +910,9 @@ func _story_card(sp: Vector2, it: Dictionary, info: String, age: float) -> Rect2
 	c.draw_rect(rr, Color(0.03, 0.032, 0.037, 0.92))
 	c.draw_rect(Rect2(rr.position, Vector2(2, rr.size.y)), Pal.tint(Pal.AIR, 0.9, 1.1))
 	if pop > 0.6:
-		_text(st.pair(it.title), pos + Vector2(14, 18), 12, Pal.tint(Pal.AIR, 0.75, 1.0), font)
+		_text(st.pair(it.title), pos + Vector2(14, 18), 13, Pal.tint(Pal.AIR, 0.75, 1.0), font)
 		c.draw_multiline_string(font_b, pos + Vector2(14, 40), body, HORIZONTAL_ALIGNMENT_LEFT, w - 28, 15, -1, Pal.ink(0.95))
-		_text(info, pos + Vector2(14, r.size.y - 8), 11, Pal.ink(0.35), font)
+		_text(info, pos + Vector2(14, r.size.y - 8), 13, Pal.ink(0.5), font)
 	return r
 
 
@@ -955,7 +1049,7 @@ func _contract_card(s: Vector2) -> void:
 		var dx := (1.0 - Pal.ease_out(rk)) * 24.0
 		match row[0]:
 			"h":
-				_text(row[1], Vector2(x + dx, y), row[2], Pal.ink(0.45 * ra), font)
+				_text(row[1], Vector2(x + dx, y), row[2], Pal.ink(0.5 * ra), font)
 				y += 26
 			"t":
 				_text(row[1], Vector2(x + dx, y + 8), row[2], Pal.ink(0.95 * ra), font_l)
@@ -976,7 +1070,7 @@ func _contract_card(s: Vector2) -> void:
 		i += 1
 	# the hint tier: chosen here, the same ship in all three
 	var ty := r.end.y - 104.0
-	_text(g.txt("tier_label") + "  ·  1 / 2 / 3", Vector2(x, ty), 13, Pal.ink(0.45 * a), font)
+	_text(g.txt("tier_label") + "  ·  1 / 2 / 3", Vector2(x, ty), 13, Pal.ink(0.5 * a), font)
 	var m := c.get_local_mouse_position()
 	for ti in 3:
 		var tid: String = Txt.TIERS[ti]
@@ -987,8 +1081,8 @@ func _contract_card(s: Vector2) -> void:
 		if on:
 			c.draw_rect(Rect2(br.position.x, br.end.y - 2, br.size.x, 2), Pal.heat(a, 1.0))
 		_text(str(ti + 1) + "  " + g.txt("tier_" + tid), br.position + Vector2(14, 22), 15, Pal.ink((0.95 if on else 0.6) * a), font_b if on else font)
-		_text(g.txt("tier_desc_" + tid), br.position + Vector2(14, 42), 11, Pal.ink(0.4 * a), font)
-	_text(g.txt("tier_rule"), Vector2(x, r.end.y - 22), 12, Pal.ink(0.3 * a), font)
+		_text(g.txt("tier_desc_" + tid), br.position + Vector2(14, 42), 13, Pal.ink(0.5 * a), font)
+	_text(g.txt("tier_rule"), Vector2(x, r.end.y - 22), 13, Pal.ink(0.5 * a), font)
 	var pulse := 0.6 + 0.4 * sin(t * 3.0)
 	_text(g.txt("c_start"), Vector2(r.end.x - 48, r.end.y - 22), 16, Pal.ink(pulse * a), font_b, 1)
 
@@ -1004,9 +1098,15 @@ func _offer_rows() -> Array:
 	rows.append(["gap", "", 12])
 	rows.append(["h", g.txt("c_req"), 13])
 	rows.append(["li", g.txt("c_req1"), 16])
-	rows.append(["li", g.txt("c_req2"), 16])
+	# what this contract asks for by name (a part-ship job has its own list, or none)
+	var must: Array = []
+	for it in g.mandatory_items():
+		must.append("%s %s" % [it[1], it[0]])
+	if not must.is_empty():
+		rows.append(["li", g.txt("c_req2_n") % "、".join(must), 16])
 	rows.append(["li", g.txt("c_req3_n") % Pal.money(float(o.get("value", 0.0))), 16])
-	rows.append(["li", g.txt("c_req4"), 16])
+	if o.get("scope", "full") == "full":
+		rows.append(["li", g.txt("c_req4"), 16])
 	rows.append(["gap", "", 10])
 	rows.append(["h", g.txt("tm_reason"), 13])
 	rows.append(["p", Copy.slot(o.get("reason", "")), 15])
@@ -1128,7 +1228,7 @@ func _settlement(s: Vector2) -> void:
 	if e < 0.0:
 		return
 	var a := clampf(e / 0.5, 0.0, 1.0)
-	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.62 * a))
+	UI.sheet(c, s, a)
 	var cx := s.x * 0.5
 	var y := s.y * 0.5 - 300.0
 	# the sheet the books are written on: it rises into place
@@ -1138,7 +1238,7 @@ func _settlement(s: Vector2) -> void:
 	c.draw_rect(sheet, Pal.ink(0.1 * pk), false, 1.0)
 	c.draw_rect(Rect2(sheet.position, Vector2(sheet.size.x * pk, 2)), Pal.heat(pk, 1.2))
 	_text(g.txt("e_done") if not end_early else g.txt("e_early"), Vector2(cx, y), 20, Pal.ink(0.7 * a), font, 0)
-	_text(g.txt("e_contract") + " " + g.ship.get("contract", "") + " · " + (g.txt("e_must_ok") if g.all_mandatory_ok() else g.txt("e_must_no")), Vector2(cx, y + 30), 14, Pal.ink(0.45 * a), font, 0)
+	_text(g.txt("e_contract") + " " + g.ship.get("contract", "") + " · " + (g.txt("e_must_ok") if g.all_mandatory_ok() else g.txt("e_must_no")), Vector2(cx, y + 30), 14, Pal.ink(0.5 * a), font, 0)
 	# the big number rolls up
 	var rk := clampf((e - 0.3) / 1.1, 0.0, 1.0)
 	var pct: float = g.recovery_rate() * 100.0 * Pal.ease_out(rk)
@@ -1167,7 +1267,7 @@ func _settlement(s: Vector2) -> void:
 		var tl: String = g.txt("e_time") + "  " + _clock(g.playtime)
 		if g.standard_time() > 0.0:
 			tl += "  /  " + g.txt("e_standard") + "  " + _clock(g.standard_time())
-		_text(tl, Vector2(cx - 260, ny + 46), 14, Pal.ink(0.4), font)
+		_text(tl, Vector2(cx - 260, ny + 46), 14, Pal.ink(0.5), font)
 		var crows := career_rows()
 		for i in crows.size():
 			var ce := ne - 0.6 - i * 0.18

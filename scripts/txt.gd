@@ -379,6 +379,7 @@ const S := {
 	"c_start": ["开工  ·  空格 / 点击", "BEGIN  ·  SPACE / CLICK"],
 	"c_fee": ["合同费用 $9,000 · 无时限", "CONTRACT FEE $9,000 · NO TIME LIMIT"],
 	"c_title_n": ["SALVAGE CONTRACT %s · 未开工", "SALVAGE CONTRACT %s · NOT STARTED"],
+	"c_req2_n": ["强制回收：%s（完整送设备回收）", "MUST RECOVER: %s (WHOLE, TO EQUIPMENT BAY)"],
 	"c_req3_n": ["回收至少 70%% 可回收价值（预估 %s）", "RECOVER AT LEAST 70%% OF AN ESTIMATED %s"],
 	"c_log_n": ["船载记录 · 未验证", "ONBOARD LOGS · UNVERIFIED"],
 	"c_fee_n": ["合同费 %s（已预付）· 标准用时 %d 分钟", "CONTRACT FEE %s (PAID) · STANDARD TIME %d MIN"],
@@ -471,6 +472,56 @@ const S := {
 	"t_company_ph": ["输入公司名，回车开始", "TYPE A NAME, ENTER TO BEGIN"],
 	"t_company_default": ["第 %d 泊位拆解", "BERTH %d SALVAGE"],
 	"tm_training": ["重玩训练", "REPLAY TRAINING"],
+	"tm_training_btn": ["进入训练", "ENTER TRAINING"],
+	"tm_upgrades": ["升级（买一次，永久生效）", "UPGRADES (BOUGHT ONCE, KEPT)"],
+	"tm_items": ["消耗品（用完即止，可以囤）", "CONSUMABLES (USED UP, CAN BE STOCKED)"],
+	"tm_kind_up": ["升级 · 永久生效", "UPGRADE · PERMANENT"],
+	"tm_kind_fa": ["船坞设施 · 永久生效", "BERTH FACILITY · PERMANENT"],
+	"tm_kind_it": ["消耗品 · 用完即止，可以囤", "CONSUMABLE · USED UP, CAN BE STOCKED"],
+	"tm_strategy": ["改变的打法", "HOW IT CHANGES THE JOB"],
+	"st_scan_kit": ["先判断值不值得完整拆，再决定切还是拆", "JUDGE WHETHER A PIECE IS WORTH TAKING WHOLE BEFORE YOU CUT"],
+	"st_grapple5": ["中央推进组件不拆护罩也能整个拖走", "THE CENTRAL ENGINE BLOCK COMES AWAY WHOLE, COWLING AND ALL"],
+	"st_pump2": ["更容易拿到时效奖金", "THE TIME BONUS GETS EASIER TO MAKE"],
+	"st_arm": ["专心处理设备，废料交给机器", "KEEP YOUR HANDS ON THE EQUIPMENT; THE MACHINE TAKES THE SCRAP"],
+	"sh_cond": ["设备完好度读数", "EQUIPMENT CONDITION READING"],
+	"sh_hidden": ["结构暗伤", "HIDDEN STRUCTURAL DAMAGE"],
+	"sh_none": ["无", "NONE"],
+	"sh_shown": ["显示", "SHOWN"],
+	"sh_unseen": ["看不到", "UNSEEN"],
+	"sh_found": ["能发现", "FOUND"],
+	"sh_grab": ["抓钩上限", "GRAPPLE LIMIT"],
+	"sh_gas": ["抽气速度", "GAS DRAW"],
+	"sh_fluid": ["抽液速度", "FLUID DRAW"],
+	"sh_auto": ["自动送熔炉", "SCRAP TO THE FURNACE BY ITSELF"],
+	"tm_installed": ["已安装", "FITTED"],
+	"tm_buy_n": ["购买  %s", "BUY  %s"],
+	"tm_short_n": ["还差 %s", "%s SHORT"],
+	"tm_stock_n": ["库存 %d", "%d IN STOCK"],
+	"tm_use": ["现场按 %s 使用", "PRESS %s ON SITE"],
+	"tm_use_auto": ["无人机损毁时自动启用", "USED BY ITSELF WHEN THE DRONE IS LOST"],
+	"tm_use_intel_at": ["在合同市场按 I 对一份报价使用", "PRESS I ON AN OFFER IN THE MARKET"],
+	"tm_qty": ["数量  ↑ ↓", "QUANTITY  ↑ ↓"],
+	"tm_price": ["价格", "PRICE"],
+	"tm_after": ["买后余额", "FUNDS AFTER"],
+	"tm_next_fee": ["下一单合同费最低 %s：买后余额不够付，差额 %s 会记入贷款，按每单 2% 计息", "THE NEXT CONTRACT FEE IS AT LEAST %s: %s OF IT WOULD GO ON THE LOAN, AT 2% A CONTRACT"],
+	"tm_next_ok": ["买后仍够付下一单合同费（最低 %s）", "STILL ENOUGH FOR THE NEXT CONTRACT FEE (AT LEAST %s)"],
+	"tm_fin": ["贷款与还款", "LOAN AND REPAYMENT"],
+	"tm_fin_loan": ["贷款余额", "LOAN"],
+	"tm_fin_inst": ["每单分期", "INSTALLMENT PER CONTRACT"],
+	"tm_fin_int": ["每单利息（2%）", "INTEREST PER CONTRACT (2%)"],
+	"tm_fin_due": ["每单应付合计", "DUE PER CONTRACT"],
+	"tm_fin_funds": ["资金", "FUNDS"],
+	"tm_fin_amt": ["本次还款  ← → 或拖动", "PAY NOW  ← → OR DRAG"],
+	"tm_fin_after": ["现在  →  还款后", "NOW  →  AFTER"],
+	"tm_repay_n": ["还款  %s", "PAY  %s"],
+	"tm_repay_none": ["资金或贷款为零，没有可还的", "NOTHING TO PAY (NO FUNDS OR NO LOAN)"],
+	"tm_later_h": ["后续开放", "LATER"],
+	"tm_net": ["预计净赚", "EXPECTED NET"],
+	"tm_net_d": ["预估价值 − 合同费 − 本单分期与利息", "VALUE − FEE − THIS CONTRACT'S INSTALLMENT AND INTEREST"],
+	"tm_due_c": ["本单分期与利息", "INSTALLMENT AND INTEREST"],
+	"cargo_metal": ["工业金属", "INDUSTRIAL METAL"],
+	"cargo_precision": ["精密仪器", "PRECISION INSTRUMENTS"],
+	"cargo_electronic": ["电子设备", "ELECTRONICS"],
 	"tm_training_d": ["回训练舱 TS-1 再上一遍六课，随时可以退出回到泊位", "BACK TO TS-1 FOR THE SIX LESSONS; LEAVE ANY TIME"],
 	"tm_training_go": ["进入", "ENTER"],
 	"t_note": ["拆解合同 GR-001 · GR-7 灰鹭号", "CONTRACT GR-001 · GR-7 GREY HERON"],
@@ -541,7 +592,7 @@ const S := {
 	"tm_short": ["资金不足，还差 %s", "NOT ENOUGH FUNDS: %s SHORT"],
 	"tm_bought": ["已购买：%s", "BOUGHT: %s"],
 	"tm_stock": ["库存", "IN STOCK"],
-	"tm_keys": ["1 2 3 切换标签 · ←→ 选择 · Enter 确认 · O 设置 · Esc 返回标题", "1 2 3 TABS · ←→ SELECT · ENTER CONFIRM · O SETTINGS · ESC TITLE"],
+	"tm_keys": ["1 2 3 切换标签 · ← → 选择 · ↑ ↓ 数量 / 金额 · Enter 确认 · O 设置 · Esc 返回标题", "1 2 3 TABS · ← → SELECT · ↑ ↓ QUANTITY / AMOUNT · ENTER CONFIRM · O SETTINGS · ESC TITLE"],
 	"rep_trainee": ["见习", "TRAINEE"],
 	"rep_certified": ["认证", "CERTIFIED"],
 	"rep_senior": ["资深", "SENIOR"],
@@ -612,11 +663,21 @@ static func has(key: String) -> bool:
 	return S.has(key)
 
 
+# a declared cargo label ("IND. METAL") by its name in the player's language
+static func cargo(label: String) -> String:
+	for k in Variant.CARGO:
+		if Variant.CARGO[k][0] == label:
+			return t("cargo_" + k)
+	return label
+
+
 static func piece_name(p) -> String:
 	if p == null:
 		return ""
 	if p.name_key != "":
 		var n := t(p.name_key)
+		if p.get("label") != null and p.label != "" and cargo(p.label) != p.label:
+			n += " · " + cargo(p.label)
 		return n + ("  " + p.tag if p.tag != "" else "")
 	var k: String = "k_" + p.kind
 	if p.tag != "":

@@ -37,18 +37,30 @@ static func make(seed: int, career: Dictionary) -> Array:
 	var top := max_stars(int(career.get("rep", 0)))
 	var out: Array = []
 	var used := {}
+	# three cards that differ: a plain full strip, a short job, and a third
+	# that is neither of those again (more stars, or the other kind of job)
+	var shorts := ["aft", "rescue", "hold"]
+	var short1: String = shorts[rng.randi_range(0, 2)]
+	shorts.erase(short1)
 	for i in 3:
 		var stars := 1 if i == 0 else rng.randi_range(1, top)
-		var o := valid_offer(rng, career, stars, used)
+		var scope := "full"
+		if i == 1:
+			scope = short1
+		elif i == 2:
+			scope = "full" if top > 1 and rng.randf() < 0.5 else shorts[rng.randi_range(0, 1)]
+			if scope == "full":
+				stars = maxi(2, stars)
+		var o := valid_offer(rng, career, stars, used, scope)
 		if not o.is_empty():
 			out.append(o)
 	return out
 
 
 # an offer that passed the contract validator (failures are counted and drawn again)
-static func valid_offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, used: Dictionary = {}) -> Dictionary:
+static func valid_offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, used: Dictionary = {}, scope: String = "") -> Dictionary:
 	for k in TRIES:
-		var o := offer(rng, career, stars, used)
+		var o := offer(rng, career, stars, used, scope)
 		stats.made += 1
 		var v := ContractValidator.check(o._ship)
 		o.erase("_ship")
@@ -71,7 +83,7 @@ static func scope_text(o: Dictionary) -> String:
 
 
 # one offer at a given risk; `used` keeps registrations apart on one market
-static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, used: Dictionary = {}) -> Dictionary:
+static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, used: Dictionary = {}, want_scope: String = "") -> Dictionary:
 	var ship := "gr7"
 	var t: Dictionary = TYPES[ship]
 	var reg := ""
@@ -80,7 +92,7 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 	used[reg] = true
 	var traps := pick_traps(rng, stars, int(career.get("rep", 0)))
 	# how much of the ship is bought: the whole of it, or a short job on part of it
-	var scope: String = ["full", "full", "aft", "rescue", "hold"][rng.randi_range(0, 4)]
+	var scope: String = want_scope if want_scope != "" else ["full", "full", "aft", "rescue", "hold"][rng.randi_range(0, 4)]
 	var o := {
 		"id": "%03d-%s" % [int(career.get("done", 0)) + 2, reg],
 		"ship": ship, "reg": reg, "stars": stars, "traps": traps,

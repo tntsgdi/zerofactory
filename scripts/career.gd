@@ -257,6 +257,21 @@ static func _paid_off() -> bool:
 	return true
 
 
+# A short job on part of a ship carries the installment and interest in
+# proportion to its standard time against a full contract's (never under 30%).
+static func due_share(job: Dictionary) -> float:
+	if job.get("scope", "full") == "full":
+		return 1.0
+	return clampf(float(job.get("time", Market.BASE_TIME)) / Market.BASE_TIME, 0.3, 1.0)
+
+
+# what a contract would take for the loan at settlement, at today's loan
+static func due_for(job: Dictionary) -> float:
+	var loan := float(data.get("loan", 0.0))
+	var k := due_share(job)
+	return minf(INSTALLMENT * k, loan) + snappedf(loan * INTEREST * k, 1.0)
+
+
 # A contract is over. r: {earned, losses, rate, grade, time, fee, bonus}. Returns
 # what the settlement shows.
 static func settle(r: Dictionary) -> Dictionary:
@@ -266,11 +281,13 @@ static func settle(r: Dictionary) -> Dictionary:
 	var bonus: float = float(r.get("bonus", 0.0))
 	var gross: float = float(r.get("earned", 0.0)) - float(r.get("losses", 0.0)) + bonus
 	var money_in := gross - (0.0 if prepaid else fee)
+	data.roll_from = {"money": float(data.money), "loan": float(data.loan)}
 	var cash: float = float(data.money) + money_in
-	# the loan: a fixed installment and interest on what is still owed
+	# the loan: a fixed installment and interest on what is still owed (a short job's share of them)
 	var loan: float = float(data.loan)
-	var interest := snappedf(loan * INTEREST, 1.0) if loan > 0.0 else 0.0
-	var inst := minf(INSTALLMENT, loan)
+	var share := due_share(a)
+	var interest := snappedf(loan * INTEREST * share, 1.0) if loan > 0.0 else 0.0
+	var inst := minf(INSTALLMENT * share, loan)
 	var due := inst + interest
 	var paid := minf(due, maxf(cash, 0.0))
 	var short := due - paid

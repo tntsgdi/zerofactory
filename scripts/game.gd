@@ -766,8 +766,10 @@ func leave() -> void:
 		to_title()
 		return
 	Engine.time_scale = 1.0
-	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/terminal.tscn")
+	# the screen closes on a heat line and the terminal opens out of it
+	hud.close_then(func():
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/terminal.tscn"))
 
 
 # the career's contract in hand (the first one after training), or the terminal when there is none
