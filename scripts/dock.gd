@@ -45,6 +45,7 @@ var clamp_t: Array = []
 var field_glow: Array = []  # [point on the field edge, strength]
 var bounds_body: StaticBody2D
 var font: Font
+var font_b: Font
 var add_node: Node2D
 var static_node: Node2D
 var clamp_node: Node2D
@@ -58,6 +59,7 @@ func _init() -> void:
 	z_index = -1
 	z_as_relative = false
 	font = Fonts.get_font("Regular")
+	font_b = Fonts.get_font("Medium")
 	for k in ZONES:
 		zone_state[k] = {"glow": 0.0, "busy": 0.0, "reject": 0.0, "eat": 0.0}
 	bounds_body = StaticBody2D.new()
@@ -208,8 +210,8 @@ func _process(dt: float) -> void:
 	if clamp_t != _clamp_drawn:
 		_clamp_drawn = clamp_t.duplicate()
 		clamp_node.queue_redraw()
-	if busy or _was_busy:
-		queue_redraw()
+	# the mouths' lamps and the trough's belt keep moving
+	queue_redraw()
 	_was_busy = busy
 	add_node.queue_redraw()
 
@@ -415,6 +417,7 @@ func _step_hoses(dt: float) -> void:
 # ---------------------------------------------------------------- drawing
 
 func _draw() -> void:
+	_trough_live()
 	# recovery mouths
 	for id in ZONES:
 		_mouth(id)
@@ -459,39 +462,77 @@ func _draw_static() -> void:
 	# the scrap trough along the floor, into the furnace
 	var tl := Vector2(TROUGH_X0, TROUGH_Y) * M
 	var tr := Vector2(TROUGH_X1, TROUGH_Y) * M
-	ci.draw_rect(Rect2(tl, Vector2(tr.x - tl.x, (FLOOR_Y - TROUGH_Y) * M)), Color(0.05, 0.053, 0.06))
-	ci.draw_line(tl, tr, Pal.ink(0.45), 1.6)
-	ci.draw_line(tl, tl + Vector2(0, (FLOOR_Y - TROUGH_Y) * M), Pal.ink(0.45), 1.6)
-	ci.draw_line(tr, tr + Vector2(0, (FLOOR_Y - TROUGH_Y) * M), Pal.ink(0.45), 1.6)
-	ci.draw_string(font, tl + Vector2(12, -8), game.txt("trough"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.ink(0.5))
+	var th := (FLOOR_Y - TROUGH_Y) * M
+	ci.draw_rect(Rect2(tl, Vector2(tr.x - tl.x, th)), Color(0.03, 0.032, 0.036))
+	ci.draw_rect(Rect2(tl + Vector2(0, th - 5), Vector2(tr.x - tl.x, 5)), Color(0.06, 0.063, 0.07))
+	ci.draw_line(tl - Vector2(0, 2), tr - Vector2(0, 2), Pal.ink(0.55), 2.0)
+	ci.draw_line(tl + Vector2(0, 3), tr + Vector2(0, 3), Pal.ink(0.14), 1.0)
+	for e in [tl, tr]:
+		ci.draw_line(e - Vector2(0, 6), e + Vector2(0, th), Pal.ink(0.55), 2.0)
+	# its sign at the left end
+	var sr := Rect2(tl + Vector2(0.9 * M, -44), Vector2(206, 30))
+	ci.draw_rect(sr, Color(0.035, 0.037, 0.042, 0.94))
+	ci.draw_rect(Rect2(sr.position, Vector2(4, sr.size.y)), Pal.heat(0.9, 1.1))
+	ci.draw_string(font_b, sr.position + Vector2(14, 21), game.txt("trough"), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.ink(0.9))
 	# dock floor markings under the ship
 	for x in range(0, 44, 3):
 		ci.draw_line(Vector2(x * M, 8.85 * M), Vector2((x + 1.4) * M, 8.85 * M), Pal.ink(0.1), 2.0)
 	# debris net
 	var nc := NET * M
 	var net_pts := PackedVector2Array()
-	for i in 13:
-		var a := lerpf(PI * 1.1, PI * 1.9, i / 12.0)
-		net_pts.append(nc + Vector2(cos(a) * 70.0, -sin(a) * 26.0 + 30.0))
-	ci.draw_polyline(net_pts, Pal.ink(0.5), 1.4, true)
-	for i in range(0, 13, 2):
-		ci.draw_line(net_pts[i], nc + Vector2(0, 34), Pal.ink(0.14), 1.0)
-	ci.draw_string(font, nc + Vector2(-48, 62), game.txt("net"), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.35))
+	for i in 17:
+		var a := lerpf(PI * 1.05, PI * 1.95, i / 16.0)
+		net_pts.append(nc + Vector2(cos(a) * 78.0, -sin(a) * 30.0 + 30.0))
+	ci.draw_colored_polygon(net_pts, Color(0.04, 0.042, 0.048))
+	for i in range(1, 16):
+		ci.draw_line(net_pts[i], nc + Vector2((i - 8) * 3.0, 58), Pal.ink(0.12), 1.0)
+	for ring in [0.4, 0.7]:
+		var rp := PackedVector2Array()
+		for q in net_pts:
+			rp.append(nc + Vector2(0, 30) + (q - nc - Vector2(0, 30)) * ring)
+		ci.draw_polyline(rp, Pal.ink(0.12), 1.0, true)
+	ci.draw_polyline(net_pts, Pal.ink(0.7), 2.4, true)
+	for e in [net_pts[0], net_pts[16]]:
+		ci.draw_circle(e, 4.0, Pal.ink(0.7))
+	var cap := 0.5 if game != null and game.has_upgrade("net05") else 0.1
+	var nr := Rect2(nc + Vector2(-98, -42), Vector2(196, 30))
+	ci.draw_rect(nr, Color(0.035, 0.037, 0.042, 0.94))
+	ci.draw_rect(Rect2(nr.position, Vector2(4, nr.size.y)), Pal.ink(0.8))
+	ci.draw_string(font_b, nr.position + Vector2(14, 21), game.txt("net") + "  ≤ %.1f t" % cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.ink(0.9))
 	# drone bay
 	var bc := BAY * M
-	ci.draw_rect(Rect2(bc + Vector2(-90, -40), Vector2(90, 80)), Color(0.06, 0.063, 0.072))
-	ci.draw_polyline(PackedVector2Array([bc + Vector2(0, -40), bc + Vector2(-90, -40), bc + Vector2(-90, 40), bc + Vector2(0, 40)]), Pal.ink(0.6), 1.6, true)
-	for i in 3:
-		ci.draw_line(bc + Vector2(-80 + i * 26, -40), bc + Vector2(-80 + i * 26, 40), Pal.ink(0.1), 1.0)
-	ci.draw_string(font, bc + Vector2(-86, -50), "R-02  BAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.4))
+	var hr := Rect2(bc + Vector2(-100, -48), Vector2(100, 96))
+	ci.draw_rect(hr, Color(0.05, 0.053, 0.06))
+	ci.draw_polyline(PackedVector2Array([bc + Vector2(0, -48), bc + Vector2(-100, -48), bc + Vector2(-100, 48), bc + Vector2(0, 48)]), Pal.ink(0.7), 2.0, true)
+	# the launch pad: an octagon outline with landing marks
+	var pc := bc + Vector2(-46, 0)
+	var oct := PackedVector2Array()
+	for i in 9:
+		oct.append(pc + Vector2.from_angle(TAU * i / 8.0 + PI / 8.0) * 30.0)
+	ci.draw_polyline(oct, Pal.ink(0.3), 1.4, true)
+	for i in 4:
+		var d := Vector2.from_angle(TAU * i / 4.0)
+		ci.draw_line(pc + d * 34.0, pc + d * 42.0, Pal.ink(0.4), 2.0)
+	# the door rails at the open side
+	ci.draw_line(bc + Vector2(0, -48), bc + Vector2(0, -36), Pal.ink(0.7), 3.0)
+	ci.draw_line(bc + Vector2(0, 48), bc + Vector2(0, 36), Pal.ink(0.7), 3.0)
+	var br := Rect2(bc + Vector2(-100, -86), Vector2(160, 30))
+	ci.draw_rect(br, Color(0.035, 0.037, 0.042, 0.94))
+	ci.draw_rect(Rect2(br.position, Vector2(4, br.size.y)), Pal.tint(Pal.AIR, 0.9, 1.1))
+	ci.draw_string(font_b, br.position + Vector2(14, 21), game.txt("dk_bay"), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.ink(0.9))
 	# hose masts (two on the arm, one on a pylon from the floor)
 	var pyl: Vector2 = MASTS[2] * M
 	_truss_v(Rect2(pyl.x - 0.25 * M, pyl.y, 0.5 * M, FLOOR_Y * M - pyl.y))
 	var pump2: bool = game != null and game.has_upgrade("pump2")
 	for m in MASTS:
 		var mp: Vector2 = m * M
-		ci.draw_rect(Rect2(mp + Vector2(-10, -14), Vector2(20, 18)), Color(0.07, 0.073, 0.082))
-		ci.draw_rect(Rect2(mp + Vector2(-10, -14), Vector2(20, 18)), Pal.ink(0.5), false, 1.2)
+		ci.draw_rect(Rect2(mp + Vector2(-14, -16), Vector2(28, 22)), Color(0.06, 0.063, 0.07))
+		ci.draw_rect(Rect2(mp + Vector2(-14, -16), Vector2(28, 22)), Pal.ink(0.6), false, 1.4)
+		# the hose reel
+		ci.draw_arc(mp + Vector2(0, -5), 7.0, 0.0, TAU, 16, Pal.ink(0.55), 1.4, true)
+		for sp in 3:
+			ci.draw_line(mp + Vector2(0, -5), mp + Vector2(0, -5) + Vector2.from_angle(TAU * sp / 3.0) * 7.0, Pal.ink(0.35), 1.0)
+		ci.draw_string(font, mp + Vector2(18, 0), game.txt("dk_mast"), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.45))
 		if pump2:
 			# the high-flow pump: a second, bigger housing with an impeller ring
 			ci.draw_rect(Rect2(mp + Vector2(12, -18), Vector2(22, 22)), Color(0.07, 0.073, 0.082))
@@ -513,7 +554,7 @@ func _draw_clamps() -> void:
 			clamp_node.draw_line(Vector2(x - 7, yy), Vector2(x + 7, yy + 9), Pal.ink(0.12), 1.0)
 		var open := k * 9.0
 		clamp_node.draw_polyline(PackedVector2Array([Vector2(x - 16 - open, top + 2), Vector2(x - 16 - open, top + 12), Vector2(x + 16 + open, top + 12), Vector2(x + 16 + open, top + 2)]), Pal.ink(0.75), 2.0, true)
-		clamp_node.draw_string(font, Vector2(x + 12, 8.6 * M), "CL-0%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Pal.ink(0.3))
+		clamp_node.draw_string(font, Vector2(x + 12, top + 34), "CL-0%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.4))
 
 
 func tug_pos() -> Vector2:
@@ -538,40 +579,184 @@ func _tug(p: Vector2) -> void:
 	draw_string(font, p + Vector2(2.1 * M, -0.6 * M), "TUG-04", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.5))
 
 
+# ---------------------------------------------------------------- the recovery mouths
+# Three mouths, three looks, one way of reading them: the colour says what it
+# takes (white: whole equipment, heat: scrap, green: hazards), the sign beside
+# it says it in words with an icon, the lamp on the sign says whether it is
+# ready, taking something in, or has just refused something, and while the
+# drone carries something a mouth wants, that mouth's catch zone lights up.
+
+static func zone_col(id: String, a: float = 1.0, k: float = 1.0) -> Color:
+	match id:
+		"metal": return Pal.heat(a, k)
+		"hazard": return Pal.tint(Pal.FLUID, a, k)
+	return Pal.ink(a, k)
+
+
+# what the drone is carrying belongs in this mouth
+func _wanted(id: String) -> bool:
+	var b = game.tools.held_body
+	if b == null or not is_instance_valid(b) or game.hud == null:
+		return false
+	return game.hud._zone_for(b) == id
+
+
 func _mouth(id: String) -> void:
 	var M := Geom.M
 	var z: Dictionary = ZONES[id]
 	var st: Dictionary = zone_state[id]
-	var c: Vector2 = z.pos * M
-	var f: Vector2 = z.face
+	var c: Vector2 = zpos(id)
+	var f: Vector2 = z.face                 # from the mouth out into the berth
 	var side := Vector2(-f.y, f.x)
 	var hw: float = z.w * 0.5 * M
-	var depth := 1.6 * M
-	var bite: float = st.eat * 10.0
-	var body_poly := PackedVector2Array([c + side * (hw + 18), c + side * (hw + 18) - f * depth, c - side * (hw + 18) - f * depth, c - side * (hw + 18)])
-	draw_colored_polygon(body_poly, Color(0.06, 0.063, 0.072))
-	var col := Pal.ink(0.75)
+	var depth := 1.7 * M
+	var col := zone_col(id, 0.85)
 	if st.reject > 0.0:
-		col = col.lerp(Pal.heat(1.0, 1.4), st.reject)
-	# jaws
-	var jaw_l := PackedVector2Array([c + side * (hw + 18), c + side * (hw - bite) + f * 10.0, c + side * (hw - 14 - bite) + f * 4.0])
-	var jaw_r := PackedVector2Array([c - side * (hw + 18), c - side * (hw - bite) + f * 10.0, c - side * (hw - 14 - bite) + f * 4.0])
-	draw_polyline(jaw_l, col, 2.4, true)
-	draw_polyline(jaw_r, col, 2.4, true)
-	draw_line(c + side * (hw + 18), c + side * (hw + 18) - f * depth, Pal.ink(0.4), 1.2)
-	draw_line(c - side * (hw + 18), c - side * (hw + 18) - f * depth, Pal.ink(0.4), 1.2)
-	draw_line(c + side * (hw + 18) - f * depth, c - side * (hw + 18) - f * depth, Pal.ink(0.4), 1.2)
-	# throat
-	for i in 4:
-		var y := -f * (14.0 + i * 16.0)
-		draw_line(c + side * (hw - 6 - i * 10) + y, c - side * (hw - 6 - i * 10) + y, Pal.ink(0.1 + 0.05 * st.glow), 1.0)
-	var label: String = game.txt("zone_" + id)
-	var lp := c - f * (depth * 0.5) + Vector2(hw + 34.0, 6.0)
-	draw_string(font, lp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Pal.ink(0.62))
-	draw_line(lp + Vector2(-8, -16), lp + Vector2(-8, 4), Pal.heat(0.8, 1.0) if id == "metal" else Pal.ink(0.4), 2.0)
-	# the catch field, faintly, while something is near
-	if st.glow > 0.01:
-		draw_arc(c, FIELD * M, 0.0, TAU, 64, Pal.ink(0.06 * st.glow), 1.0, true)
+		col = col.lerp(Pal.heat(1.0, 1.5), st.reject)
+	var want := _wanted(id)
+	# the catch zone, while the drone carries something for this mouth
+	if want:
+		var reach: float = (SCRAP_FIELD if id == "metal" else FIELD) * M
+		var pulse := 0.5 + 0.5 * sin(t * 4.0)
+		draw_circle(c, reach, zone_col(id, 0.035 + 0.025 * pulse))
+		var n := 48
+		for i in n:
+			if i % 2 == 0:
+				draw_arc(c, reach, TAU * i / n + t * 0.2, TAU * (i + 1) / n + t * 0.2, 4, zone_col(id, 0.55), 2.0, true)
+	# the housing: a funnel from a wide lip down to a narrow throat
+	var lip := hw + 26.0
+	var throat_w := hw * 0.55
+	var hous := PackedVector2Array([c + side * lip, c - side * lip, c - side * throat_w - f * depth, c + side * throat_w - f * depth])
+	draw_colored_polygon(hous, Color(0.05, 0.053, 0.06))
+	# depth: bands that get darker toward the throat
+	for i in 5:
+		var e := (i + 1) / 6.0
+		var wl := lerpf(lip, throat_w, e)
+		draw_line(c + side * wl - f * depth * e, c - side * wl - f * depth * e, zone_col(id, 0.05 + 0.1 * st.glow + 0.25 * st.eat * (1.0 - e)), 1.0)
+	var outline := hous.duplicate()
+	outline.append(hous[0])
+	draw_polyline(outline, col, 2.0, true)
+	# the lip: a heavy rim with lamps that chase inward while it takes something in
+	draw_line(c + side * (lip + 8), c - side * (lip + 8), col, 4.0)
+	var lamps := 7
+	for i in lamps:
+		var u := (i + 0.5) / lamps * 2.0 - 1.0
+		var p := c + side * u * lip + f * 4.0
+		var on := 0.25
+		if st.eat > 0.0 or st.glow > 0.0:
+			on = 0.35 + 0.65 * maxf(0.0, sin(t * 10.0 - absf(u) * 4.0))
+		elif want:
+			on = 0.4 + 0.4 * sin(t * 4.0)
+		draw_circle(p, 2.6, zone_col(id, on, 1.3))
+	match id:
+		"equip":
+			# padded cradle arms either side, guide rails down the throat
+			for s in [-1.0, 1.0]:
+				var a0: Vector2 = c + side * s * (lip + 4.0)
+				var a1: Vector2 = a0 + f * 26.0 - side * s * 10.0
+				draw_line(a0, a1, col, 3.0, true)
+				draw_circle(a1, 5.0, Color(0.05, 0.053, 0.06))
+				draw_arc(a1, 5.0, 0.0, TAU, 14, col, 1.6, true)
+				draw_line(c + side * s * hw * 0.5, c + side * s * throat_w * 0.6 - f * depth * 0.9, Pal.ink(0.25), 1.2)
+		"metal":
+			# a grate across the throat, glowing with what melts below
+			var gy := c - f * depth * 0.62
+			var gw := lerpf(lip, throat_w, 0.62)
+			for i in 7:
+				var u2 := (i + 0.5) / 7.0 * 2.0 - 1.0
+				draw_line(gy + side * u2 * gw - f * 6.0, gy + side * u2 * gw + f * 6.0, Pal.heat(0.6 + 0.3 * sin(t * 3.0 + i), 1.3), 2.0)
+			draw_line(gy + side * gw, gy - side * gw, Pal.heat(0.5, 1.2), 1.4)
+		"hazard":
+			# hazard stripes along the lip, and two doors that slide apart when it opens
+			var open: float = clampf(maxf(st.glow, st.eat) + (0.6 if want else 0.0), 0.0, 1.0)
+			for i in 10:
+				var u3 := float(i) / 10.0 * 2.0 - 1.0
+				var p0 := c + side * u3 * lip - f * 6.0
+				draw_line(p0, p0 + side * 10.0 - f * 8.0, Pal.tint(Pal.FLUID, 0.5, 1.0), 3.0)
+			for s in [-1.0, 1.0]:
+				var dw: float = lip * (1.0 - open) * 0.95
+				var d0: Vector2 = c - f * 16.0 + side * s * lip
+				draw_line(d0, d0 - side * s * dw, Pal.tint(Pal.FLUID, 0.75, 1.0), 4.0)
+	_sign(id, c, f, side, lip, st)
+
+
+# the sign beside a mouth: an icon, the name, what goes in, and a status lamp
+func _sign(id: String, c: Vector2, f: Vector2, side: Vector2, lip: float, st: Dictionary) -> void:
+	var sz := Vector2(262, 66)
+	# beside the mouth, on the side with room (the hazard bay is at the berth's end)
+	# the hazard bay sits at the berth's end: its sign goes straight above it
+	var above := id == "hazard"
+	var at: Vector2 = (c + Vector2(-sz.x * 0.5, -2.3 * Geom.M - sz.y)) if above else (c + Vector2(lip + 40.0, -sz.y * 0.5) + f * 1.2 * Geom.M)
+	var r := Rect2(at, sz)
+	draw_rect(r, Color(0.035, 0.037, 0.042, 0.94))
+	draw_rect(Rect2(r.position, Vector2(4, r.size.y)), zone_col(id, 0.95, 1.1))
+	draw_rect(r, zone_col(id, 0.35), false, 1.0)
+	if above:
+		draw_line(Vector2(r.get_center().x, r.end.y), c - Vector2(0, 26), zone_col(id, 0.35), 1.0)
+	else:
+		draw_line(Vector2(r.position.x, r.get_center().y), c + Vector2(lip + 8.0, 0), zone_col(id, 0.35), 1.0)
+	_icon(id, r.position + Vector2(30, 33))
+	draw_string(font_b, r.position + Vector2(58, 28), game.txt("zone_" + id), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Pal.ink(0.95))
+	draw_string(font, r.position + Vector2(58, 50), game.txt("zone_" + id + "_d"), HORIZONTAL_ALIGNMENT_LEFT, sz.x - 66, 13, Pal.ink(0.6))
+	# status
+	var key := "dk_ready"
+	var lc := Pal.tint(Pal.FLUID, 0.9, 1.3)
+	if st.reject > 0.0:
+		key = "dk_refused"
+		lc = Pal.heat(0.6 + 0.4 * sin(t * 18.0), 1.5)
+	elif st.eat > 0.0 or st.busy > 0.0:
+		key = "dk_taking"
+		lc = Pal.ink(0.6 + 0.4 * sin(t * 12.0), 1.4)
+	var sw := font.get_string_size(game.txt(key), HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+	draw_circle(Vector2(r.end.x - 14, r.position.y + 14), 4.0, lc)
+	draw_string(font, Vector2(r.end.x - 24 - sw, r.position.y + 18), game.txt(key), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.6))
+
+
+func _icon(id: String, p: Vector2) -> void:
+	var col := zone_col(id, 0.95, 1.2)
+	match id:
+		"equip":
+			# a crate with a check
+			draw_rect(Rect2(p - Vector2(13, 11), Vector2(26, 22)), col, false, 1.8)
+			draw_polyline(PackedVector2Array([p + Vector2(-6, 0), p + Vector2(-1, 5), p + Vector2(7, -5)]), col, 2.0, true)
+		"metal":
+			# a flame over a hopper
+			draw_polyline(PackedVector2Array([p + Vector2(-12, 4), p + Vector2(-6, 13), p + Vector2(6, 13), p + Vector2(12, 4)]), col, 1.8, true)
+			draw_colored_polygon(PackedVector2Array([p + Vector2(0, -14), p + Vector2(7, -2), p + Vector2(3, 4), p + Vector2(-3, 4), p + Vector2(-7, -2)]), col)
+		"hazard":
+			# a warning diamond
+			draw_polyline(PackedVector2Array([p + Vector2(0, -14), p + Vector2(14, 0), p + Vector2(0, 14), p + Vector2(-14, 0), p + Vector2(0, -14)]), col, 1.8, true)
+			draw_line(p + Vector2(0, -6), p + Vector2(0, 3), col, 2.4)
+			draw_circle(p + Vector2(0, 8), 1.8, col)
+
+
+# the scrap trough: a recessed channel along the floor, a belt of slats running
+# toward the furnace, arrows on the rail; lit along its length while scrap is carried
+func _trough_live() -> void:
+	var M := Geom.M
+	var mx: float = zpos("metal").x
+	var y0 := TROUGH_Y * M
+	var y1 := FLOOR_Y * M
+	var x0 := TROUGH_X0 * M
+	var x1 := TROUGH_X1 * M
+	var want := _wanted("metal")
+	if want:
+		draw_rect(Rect2(x0, y0 - 6, x1 - x0, 6), Pal.heat(0.12 + 0.08 * sin(t * 4.0), 1.2))
+	var ph := fposmod(t * CONVEY * M, 24.0)
+	var x := x0 + 6.0
+	while x < x1 - 6.0:
+		var px := x + (ph if x < mx else -ph)
+		if px > x0 + 2.0 and px < x1 - 2.0 and absf(px - mx) > 1.4 * M:
+			draw_line(Vector2(px, y0 + 8), Vector2(px, y1 - 6), Pal.ink(0.16), 2.0)
+		x += 24.0
+	# arrows on the rail, every few metres, pointing to the furnace
+	var ax := x0 + 1.5 * M
+	while ax < x1 - 1.0 * M:
+		if absf(ax - mx) > 2.6 * M:
+			var d := 1.0 if ax < mx else -1.0
+			var ay := y0 + 4.0
+			draw_polyline(PackedVector2Array([Vector2(ax - 5.0 * d, ay - 5), Vector2(ax + 3.0 * d, ay), Vector2(ax - 5.0 * d, ay + 5)]), Pal.heat(0.55 if want else 0.3, 1.2), 1.6, true)
+		ax += 3.0 * M
 
 
 func _truss(r: Rect2) -> void:
@@ -622,7 +807,6 @@ func _draw_trough(ci: CanvasItem) -> void:
 
 
 func _draw_add() -> void:
-	_draw_trough(add_node)
 	var tex: Texture2D = game.fx.glow_tex
 	var M := Geom.M
 	# beacons on the open ends of the arm and the platform, and the field corners
