@@ -415,7 +415,8 @@ func _strip_paced() -> void:
 			zone = zone_for(b)
 		sent[b] = zone
 		var mouth: Vector2 = Dock.zpos(zone)
-		var d: float = (b.global_transform * b.center_of_mass).distance_to(mouth) / M
+		# a body that drifted off is fetched from the berth's edge, not from wherever it went
+		var d: float = minf((b.global_transform * b.center_of_mass).distance_to(mouth) / M, 50.0)
 		var mk := m / k
 		_work(k * (d / (6.0 / (1.0 + mk)) + d / 6.0 + 2.0) + (k - 1) * 2.5)
 		hauls += k
