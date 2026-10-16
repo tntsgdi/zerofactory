@@ -1031,7 +1031,9 @@ func on_cut_into(p, pos: Vector2) -> void:
 	var was_value: float = p.value * p.cond
 	var volts: float = sys.piece_volts(p)
 	var fv: String = sys.fluid_in_piece(p)
-	if sys.bursts(p):
+	if p.hazard == "explosive" and p.intact:
+		_blast(p, pos)
+	elif sys.bursts(p):
 		_burst(p, pos)
 	elif fv != "" and sys.fluid(fv) > 0.02:
 		_leak(sys.fvol[fv].fluid, fv, pos, p)
@@ -1095,6 +1097,54 @@ func _burst(p, pos: Vector2) -> void:
 	hitstop(0.07)
 	sfx.play("burst")
 	hint("burst")
+
+
+# dangerous goods under the beam
+func _blast(p, pos: Vector2) -> void:
+	incident("blast", p.tag)
+	var c := world.frame(p) * Geom.centroid(p.poly)
+	fx.flash(c, 360.0, 0.7, Pal.heat(1.0, 3.0))
+	fx.ring(c, 20.0, 340.0, 0.6, Pal.heat(0.9, 2.2), 3.0)
+	fx.burst_shards(c, 26, 620.0, Pal.heat(0.9, 1.6), 12.0)
+	fx.sparks(c, Vector2.UP, 50, Pal.heat(1.0, 2.4), 560.0, 0.6, PI)
+	for b in world.bodies:
+		var d2: Vector2 = b.global_position - c
+		if d2.length() < 5.0 * 48.0:
+			b.apply_central_impulse(d2.normalized() * b.mass * 320.0)
+	if drone.alive and drone.global_position.distance_to(c) < 3.5 * 48.0:
+		hurt_drone(40.0, c, "fire_hit", "blast", 1.0)
+	for q in _equip_near(c, 3.0 * 48.0):
+		if q != p:
+			q.cond = maxf(0.0, q.cond - 0.4 * q.fragile)
+	shake(0.8)
+	hud.white_flash(0.35)
+	hitstop(0.08)
+	sfx.play("boom")
+	lose("loss_blast", 2500.0, c + Vector2(0, -60))
+
+
+# a cracked piece of structure gives way under the grapple
+func on_snap(j) -> void:
+	var at: Vector2 = world.joint_world(j)
+	var pa = world.pieces.get(j.a)
+	incident("snap", pa.get_meta("origin", pa.tag) if pa != null else "")
+	world.kill_joint(j)
+	fx.flash(at, 120.0, 0.35, Pal.ink(0.9, 1.8))
+	fx.burst_shards(at, 12, 360.0, Pal.ink(0.8), 7.0)
+	fx.sparks(at, Vector2.from_angle(randf() * TAU), 18, Pal.ink(0.9, 1.4), 320.0, 0.35, PI)
+	var lost := 0.0
+	for q in _equip_near(at, 3.0 * 48.0):
+		var before: float = q.cond
+		q.cond = maxf(0.0, q.cond - 0.25 * q.fragile)
+		lost += (before - q.cond) * q.value
+	if lost > 50.0:
+		fx.number(at + Vector2(0, -30), "−" + Pal.money(lost).trim_prefix("$"), Pal.heat(0.9, 1.3), 18)
+	if drone.alive and drone.global_position.distance_to(at) < 2.0 * 48.0:
+		hurt_drone(10.0, at, "hit_hard", "snap", 1.0)
+	shake(0.4)
+	hitstop(0.05)
+	sfx.play("snap")
+	say("snapped", at)
 
 
 func _equip_near(c: Vector2, r: float) -> Array:
@@ -1218,7 +1268,7 @@ func on_grab(p) -> void:
 	if p.body == null:
 		var fixed := 0
 		for j in world.joints_of(p):
-			if j.type in ["bolt", "weld", "clamp"]:
+			if j.type in ["bolt", "weld", "clamp", "seam", "crack"]:
 				fixed += 1
 		if fixed > 0:
 			say("still_fixed", aim, str(fixed))
@@ -1367,14 +1417,49 @@ func _inspect_text(p) -> String:
 		counts[j.type] = counts.get(j.type, 0) + 1
 	var nl := world.lines_of(p).size()
 	var parts: Array = ["%.2f t" % world.group_mass(p)]
-	for k in ["bolt", "weld", "lock", "clamp"]:
+	for k in ["bolt", "weld", "lock", "clamp", "seam"]:
 		if counts.has(k):
 			parts.append("%d %s" % [counts[k], txt("j_" + k)])
+	# a crack in the structure only shows to the precision kit
+	if counts.has("crack") and has_upgrade("scan_kit"):
+		parts.append("%d %s" % [counts.crack, txt("j_crack")])
 	if nl > 0:
 		parts.append("%d %s" % [nl, txt("j_line")])
+	var behind := lines_behind(p)
+	if behind > 0:
+		parts.append("%d %s" % [behind, txt("j_behind")])
+	if p.hazard == "explosive" and p.intact:
+		parts.append(txt("j_explosive"))
+	if p.cls == "equip" and p.intact and has_upgrade("scan_kit"):
+		parts.append(txt("j_cond") % int(round(p.cond * 100.0)))
 	if parts.size() == 1 and p.body == null:
 		parts.append(txt("j_none"))
 	return " · ".join(parts)
+
+
+# cables and pipes that run behind an attached plate of the hull or a deck
+func lines_behind(p) -> int:
+	if p.body != null or not p.kind in ["hull", "deck", "bulkhead"]:
+		return 0
+	var n := 0
+	# a probe senses what runs within a hand's breadth of the plate
+	var grown: Array = Geometry2D.offset_polygon(p.poly, 0.25 * Geom.M)
+	var near: PackedVector2Array = grown[0] if not grown.is_empty() else p.poly
+	for id in world.lines:
+		var l = world.lines[id]
+		if not l.alive or l.a == p.id or l.b == p.id:
+			continue
+		var path: PackedVector2Array = world.line_path_world(l)
+		for i in path.size() - 1:
+			if Geometry2D.is_point_in_polygon(path[i], near) or not Geometry2D.intersect_polyline_with_polygon(PackedVector2Array([path[i], path[i + 1]]), near).is_empty():
+				n += 1
+				break
+	return n
+
+
+# the berth's upgrades this contract was taken with
+func has_upgrade(id: String) -> bool:
+	return job.get("kit", {}).has(id) or (bot != null and bot.get("kit", {}).has(id))
 
 
 func do_wrench(tg: Dictionary) -> void:
@@ -1500,6 +1585,21 @@ func _operate(c, at: Vector2) -> void:
 				say("no_power", at)
 				sfx.play("deny")
 				hint("no_power")
+				return
+			# a seam welded shut: the drive strains against it and burns out
+			var sealed := false
+			for t in hc.get("doors", []):
+				var hp = world.tag(t)
+				if hp != null and world.joints_of(hp).any(func(j): return j.type == "seam"):
+					sealed = true
+			if sealed:
+				say("hatch_welded", at)
+				sfx.play("deny")
+				if not c.get_meta("burnt", false):
+					c.set_meta("burnt", true)
+					incident("motor", c.id)
+					fx.sparks(at, Vector2.UP, 20, Pal.heat(1.0, 2.0), 260.0, 0.4, PI)
+					lose("loss_motor", 2500.0, at + Vector2(0, -40))
 				return
 			for t in hc.get("doors", []):
 				var hp = world.tag(t)

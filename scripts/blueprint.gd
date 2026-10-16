@@ -54,9 +54,16 @@ func snapshot() -> void:
 	x0 = bb.position.x - 2.0 * 48.0
 	x1 = bb.end.x + 2.0 * 48.0
 	y_top = bb.position.y
+	var drawn_lines: Dictionary = bp.get("lines", {})
 	for id in w.lines:
 		var l = w.lines[id]
-		runs.append([l.path, l.id.to_upper(), l.kind])
+		var path: PackedVector2Array = l.path
+		# a run that was changed after the drawing: the drawing shows where it was meant to go
+		if drawn_lines.has(id):
+			path = PackedVector2Array()
+			for q in drawn_lines[id]:
+				path.append(Geom.m(q[0], q[1]))
+		runs.append([path, l.id.to_upper(), l.kind])
 	for id in w.ctrls:
 		var c = w.ctrls[id]
 		points.append([w.ctrl_world(c), c.id, c.kind])

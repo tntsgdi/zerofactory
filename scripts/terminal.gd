@@ -65,6 +65,16 @@ func _ready() -> void:
 		Copy.say(radio, "T_market_open", "term")
 		for k in ["L_market_open_1", "L_market_open_2", "L_market_open_3"]:
 			Copy.say(radio, k)
+	# a new reputation level since the terminal last opened
+	var lv := Career.level()
+	var seen_lv: Dictionary = Career.data.get("seen", {})
+	if seen_lv.get("level", "trainee") != lv:
+		seen_lv["level"] = lv
+		Career.data.seen = seen_lv
+		Career.save()
+		var names := [Txt.S["rep_" + lv][0], Txt.S["rep_" + lv][1]]
+		Copy.say(radio, "T_rep_up", "term", names)
+		Copy.say(radio, "L_rep_" + lv)
 
 
 func _is_test() -> bool:
@@ -328,6 +338,13 @@ func _market(s: Vector2, a: float) -> void:
 			_text("›", Vector2(x, ly), 14, Pal.tint(Pal.AIR, 0.6 * k, 1.0), font)
 			_wrap(Copy.slot(lid), Vector2(x + 16, ly), r.size.x - 72, 14, Pal.tint(Pal.AIR, 0.8 * k, 1.0))
 			ly += 46.0
+		# the manifest: what the paperwork says is in the hold
+		var cy := r.end.y - 96.0
+		_text(Txt.t("tm_cargo"), Vector2(x, cy), 12, Pal.ink(0.4 * k), font)
+		var parts: Array = []
+		for cg in o.get("cargo", []):
+			parts.append("%s %s" % [cg[0], cg[1]])
+		_wrap("  ·  ".join(parts) if not parts.is_empty() else Txt.t("tm_no_cargo"), Vector2(x, cy + 24), r.size.x - 56, 14, Pal.ink(0.75 * k))
 		_text(Txt.t("tm_logs_note"), Vector2(x, r.end.y - 24), 11, Pal.ink(0.3 * k), font)
 
 

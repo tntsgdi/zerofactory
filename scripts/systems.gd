@@ -47,7 +47,7 @@ var switch := {}
 # electric
 var src := {}                     # source piece tag -> its ship-file entry + live "charge" / "running"
 var src_order: Array = []
-var iso := {}                     # isolated source tag -> {volts, charge}
+var iso := {}                     # isolated source tag -> {volts, charge, switch}: a supply of its own (a reefer unit, a nav battery)
 var bus_tag := ""
 var bus_live := false
 var powered := {}                 # piece id -> true: reached from the bus through live cables
@@ -125,7 +125,7 @@ func setup(g, w, ship: Dictionary) -> void:
 		src[s.piece] = e
 		src_order.append(s.piece)
 	for s in pw.get("isolated", []):
-		iso[s.piece] = {"volts": float(s.volts), "charge": float(s.get("charge", 1.0))}
+		iso[s.piece] = {"volts": float(s.volts), "charge": float(s.get("charge", 1.0)), "switch": s.get("switch", "")}
 	var fl: Dictionary = cfg.get("fluids", {})
 	for k in fl.get("volumes", {}):
 		var e: Dictionary = fl.volumes[k].duplicate()
@@ -469,7 +469,7 @@ func _step_elec(dt: float) -> void:
 	iso_powered = {}
 	for t in iso:
 		var p = world.tag(t)
-		if p == null or p.gone or iso[t].charge <= 0.0:
+		if p == null or p.gone or not iso_live(t):
 			continue
 		var seen := {}
 		_flood(p.id, seen, {})
@@ -499,6 +499,8 @@ func _step_elec(dt: float) -> void:
 		sig += "%s%d" % [src[t].running, int(src[t].charge * (20 if src[t].kind == "cap" else 50))]
 	for t in src_order:
 		sig += "%s%s" % [_alive(src[t].cable), on(src[t].get("switch", ""))]
+	for t in iso:
+		sig += "i%s" % iso_live(t)
 	if sig != _elec_sig:
 		_elec_sig = sig
 		elec_ver += 1
@@ -585,7 +587,7 @@ func piece_volts(p) -> float:
 	if src.has(p.tag):
 		return _local_volts(src[p.tag])
 	if iso.has(p.tag):
-		return iso[p.tag].volts if iso[p.tag].charge > 0.0 else 0.0
+		return iso[p.tag].volts if iso_live(p.tag) else 0.0
 	if iso_powered.has(p.id):
 		return iso_powered[p.id]
 	if p.tag == bus_tag or powered.has(p.id):
@@ -603,6 +605,12 @@ func electric_piece(p) -> bool:
 		if l.kind == "cable":
 			return true
 	return false
+
+
+# an isolated supply holds charge and its own switch (if it has one) is closed
+func iso_live(tag: String) -> bool:
+	var s: Dictionary = iso.get(tag, {})
+	return not s.is_empty() and s.charge > 0.0 and (s.get("switch", "") == "" or on(s.switch))
 
 
 func running(tag: String) -> bool:
@@ -851,6 +859,8 @@ func dest_of(p) -> String:
 		return "metal"
 	if not p.intact:
 		return "metal"
+	if p.hazard == "explosive":
+		return "hazard"
 	var fv := fluid_in_piece(p)
 	if fv != "" and fvol[fv].amount > float(fvol[fv].get("hazard", 0.02)):
 		return "hazard"

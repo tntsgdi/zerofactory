@@ -18,9 +18,15 @@ static var stats := {"made": 0, "discarded": 0, "reasons": {}}   # what the cont
 
 # the highest risk the market will offer at this reputation
 static func max_stars(rep: int) -> int:
-	if rep >= 16:
-		return 3
-	return 2
+	return 3 if level_index(rep) >= 2 else 2
+
+
+static func level_index(rep: int) -> int:
+	var lv := 0
+	for i in Career.LEVELS.size():
+		if rep >= int(Career.LEVELS[i][1]):
+			lv = i
+	return lv
 
 
 static func make(seed: int, career: Dictionary) -> Array:
@@ -85,16 +91,28 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 	return o
 
 
-# the traps a contract carries: one at one star; more, and harder ones, higher up
+# The traps a contract carries. One star: one plain trap. Two: two, and the
+# subtle ones once the berth is certified. Three (senior and up): two or three,
+# at least one of them subtle; a chief gets three.
 static func pick_traps(rng: RandomNumberGenerator, stars: int, rep: int) -> Array:
-	var pool: Array = []
+	var lv := level_index(rep)
+	var plain: Array = []
+	var subtle: Array = []
 	for t in Traps.ALL:
-		if Traps.TIER[t] == 0 or (rep >= 6 and stars >= 2):
-			pool.append(t)
-	var n := 1 if stars == 1 else (rng.randi_range(1, 2) if stars == 2 else rng.randi_range(2, 3))
+		(plain if Traps.TIER[t] == 0 else subtle).append(t)
 	var out: Array = []
-	for i in mini(n, pool.size()):
-		out.append(pool.pop_at(rng.randi_range(0, pool.size() - 1)))
+	match stars:
+		1:
+			out.append(plain[rng.randi_range(0, plain.size() - 1)])
+		2:
+			var pool: Array = plain + (subtle if lv >= 1 else [])
+			for i in 2:
+				out.append(pool.pop_at(rng.randi_range(0, pool.size() - 1)))
+		_:
+			out.append(subtle.pop_at(rng.randi_range(0, subtle.size() - 1)))
+			var pool2: Array = plain + subtle
+			for i in (2 if lv >= 3 else rng.randi_range(1, 2)):
+				out.append(pool2.pop_at(rng.randi_range(0, pool2.size() - 1)))
 	return out
 
 

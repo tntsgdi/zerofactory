@@ -45,10 +45,16 @@ static func slot(id: String) -> String:
 	return p[0] if Txt.zh else p[1]
 
 
-# Liang (or the terminal) says it, if it has been written
-static func say(radio: Radio, id: String, who: String = "liang") -> bool:
+# Liang (or the terminal) says it, if it has been written; a {name} in the
+# line is filled by the game (the new reputation level, say): [zh, en]
+static func say(radio: Radio, id: String, who: String = "liang", fill: Array = []) -> bool:
 	var p := pair(id)
 	if p.is_empty():
 		return false
-	radio.say_text("cp:" + id, who, p[0], p[1])
+	var zh: String = p[0]
+	var en: String = p[1]
+	if fill.size() == 2:
+		zh = zh.replace("{name}", fill[0])
+		en = en.replace("{name}", fill[1])
+	radio.say_text("cp:" + id, who, zh, en)
 	return true

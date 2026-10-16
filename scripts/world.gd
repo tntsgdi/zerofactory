@@ -986,6 +986,8 @@ func draw_joints_of(ci: CanvasItem, list: Array) -> void:
 	var dots := PackedVector2Array()
 	var rects: Array = []
 	var welds := PackedVector2Array()
+	var seams := PackedVector2Array()
+	var cracks := PackedVector2Array()
 	for j in joints:
 		if not j.alive or not ids.has(j.a):
 			continue
@@ -1003,8 +1005,23 @@ func draw_joints_of(ci: CanvasItem, list: Array) -> void:
 			"weld":
 				welds.append(pos - Vector2(1.6, 0))
 				welds.append(pos + Vector2(1.6, 0))
+			"seam":
+				# a bead laid across a door gap
+				for k in 3:
+					seams.append(pos + Vector2(-2.5, -4.0 + k * 4.0))
+					seams.append(pos + Vector2(2.5, -2.0 + k * 4.0))
+			"crack":
+				# a hairline, only there for whoever looks closely
+				var zz := [Vector2(-5, 0), Vector2(-2, 1.2), Vector2(0, -1.0), Vector2(2.5, 1.0), Vector2(5, -0.4)]
+				for k in zz.size() - 1:
+					cracks.append(pos + zz[k])
+					cracks.append(pos + zz[k + 1])
 	if not welds.is_empty():
 		ci.draw_multiline(welds, Pal.ink(0.25), 1.0)
+	if not seams.is_empty():
+		ci.draw_multiline(seams, Pal.ink(0.55), 1.4)
+	if not cracks.is_empty():
+		ci.draw_multiline(cracks, Pal.ink(0.2), 0.8)
 	if not dots.is_empty():
 		# bolt heads: an ink disc with a dark centre, all in one triangle array
 		var pts := PackedVector2Array()

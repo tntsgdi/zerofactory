@@ -160,10 +160,10 @@ func _prep() -> void:
 			g.do_wrench(ctrl(src.local))
 			_note("local stop %s" % src.local)
 			return
-	# a room with things inside that need their own hose opens once it is empty
+	# a room with things inside that need a hose or a switch opens once it is empty
 	for id in w.ctrls:
 		var c = w.ctrls[id]
-		if c.kind == "port" and c.hidden_room != "" and w.room_hidden(c.hidden_room) and not s.hoses.has(id):
+		if c.kind in ["port", "switch"] and c.hidden_room != "" and w.room_hidden(c.hidden_room) and not s.hoses.has(id):
 			if s.P(c.hidden_room) < 5.0 and _once("open " + c.hidden_room):
 				_open_room(c.hidden_room, "")
 				return
@@ -218,7 +218,8 @@ func _unsafe() -> Array:
 		var src: Dictionary = s.src[tg]
 		if src.kind == "cap" and src.charge > 0.05:
 			out.append("cap %s" % tg)
-		if src.kind == "gen" and src.running:
+		# a generator with no stop of its own is safe once its switch is open
+		if src.kind == "gen" and src.running and (src.has("local") or not src.has("switch") or s.on(src.switch)):
 			out.append("gen %s" % tg)
 	for tg in s.iso:
 		if s.iso[tg].get("switch", "") != "" and s.on(s.iso[tg].switch) and s.iso[tg].charge > 0.0:

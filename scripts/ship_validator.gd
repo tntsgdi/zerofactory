@@ -91,7 +91,7 @@ static func _structure(d: Dictionary, w, keys: Dictionary, bad: Array) -> void:
 		var pos := Vector2(jd.at[0], jd.at[1]) * Geom.M
 		if _dist_piece(a, pos) > NEAR:
 			bad.append("%s joint at %s is %.2f m off piece %s" % [jd.type, str(jd.at), _dist_piece(a, pos), jd.a])
-		if not jd.type in ["weld", "bolt", "lock", "clamp"]:
+		if not jd.type in ["weld", "bolt", "lock", "clamp", "seam", "crack"]:
 			bad.append("joint at %s has unknown type %s" % [str(jd.at), jd.type])
 
 

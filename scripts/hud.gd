@@ -976,12 +976,34 @@ func _settlement(s: Vector2) -> void:
 			var vt := Pal.money(v) if row[2] != "note" else "+" + Pal.money(v)
 			var col := Pal.heat(0.9 * ca, 1.1) if (row[2] == "money" and v < -0.5) or row[2] == "note" else Pal.ink(0.85 * ca)
 			_text(vt, Vector2(cx + 260, cy), 17, col, font_b, 1)
+	var te := e - 1.8
+	var traps: Array = g.job.get("traps", [])
+	if te > 0.0 and not traps.is_empty():
+		_trap_rows(traps, Vector2(cx - 900, ry), te)
 	var ge := ne - 0.9
 	if ge > 0.0:
 		_stamp(Vector2(cx + 330, y + 100), ge)
 		var pulse := 0.5 + 0.4 * sin(t * 3.0)
 		var go: String = g.txt("st_go_on") if g.story != null and g.story.wants_epilogue() else g.txt("e_to_terminal" if g.career() else "e_again")
 		_text(go, Vector2(cx, s.y - 80), 16, Pal.ink(pulse), font_b, 0)
+
+
+# the contract's signature traps: avoided or not, and the review note where one bit
+func _trap_rows(traps: Array, at: Vector2, e: float) -> void:
+	var a := clampf(e / 0.3, 0.0, 1.0)
+	_text(game.txt("e_traps"), at, 15, Pal.ink(0.5 * a), font)
+	var yy := at.y + 34.0
+	for i in traps.size():
+		var ra := clampf((e - 0.2 - i * 0.2) / 0.2, 0.0, 1.0)
+		var t: String = traps[i]
+		var hit := Traps.bit(t, game.incidents)
+		_text(Copy.slot("N_" + t), Vector2(at.x, yy), 17, Pal.ink(0.9 * ra), font_b)
+		_text(game.txt("e_trap_hit" if hit else "e_trap_ok"), Vector2(at.x + 560, yy), 15, Pal.heat(0.9 * ra, 1.1) if hit else Pal.ink(0.6 * ra), font, 1)
+		yy += 26.0
+		if hit:
+			c.draw_multiline_string(font, Vector2(at.x, yy), Copy.slot("V_" + t), HORIZONTAL_ALIGNMENT_LEFT, 560, 13, 2, Pal.ink(0.6 * ra))
+			yy += 40.0
+		yy += 8.0
 
 
 func grade() -> int:

@@ -152,7 +152,7 @@ func _fit_all() -> void:
 	_fit("terminal top label", _keys(["tm_money", "tm_loan", "tm_due", "tm_rep"]), 13, 230)
 	_fit("terminal reputation", _prefixed("rep_"), 26, 230, "Light")
 	_fit("terminal rep next", _keys(["tm_rep_next"]), 11, 300)
-	_fit("offer card label", _keys(["tm_reason", "tm_logs", "tm_risk"]), 12, 500)
+	_fit("offer card label", _keys(["tm_reason", "tm_logs", "tm_risk", "tm_cargo"]), 12, 500)
 	_fit("offer card row", _keys(["tm_value", "tm_fee", "tm_time"]), 14, 360)
 	_fit("offer card note", _keys(["tm_logs_note"]), 11, 520)
 	_fit("shop item", _prefixed("up_") + _prefixed("it_") + _prefixed("fa_"), 17, 1000, "Medium")

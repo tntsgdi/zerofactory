@@ -34,13 +34,14 @@ static func make(base: Dictionary, job: Dictionary) -> Dictionary:
 	var traps: Array = job.get("traps", [])
 	var notes: Array = []
 	_hazards(d, rng, traps)
-	_cargo(d, rng, notes)
+	_cargo(d, rng, notes, int(job.get("stars", 1)))
 	_damage(d, rng, notes)
 	_drawing(d, rng)
 	for t in traps:
 		Traps.apply(d, t, rng, notes)
 	revalue(d)
-	d.variant = {"seed": int(job.get("variant", 0)), "traps": traps.duplicate(), "notes": notes}
+	d.variant = {"seed": int(job.get("variant", 0)), "traps": traps.duplicate(), "notes": notes, "targets": d.get("variant_targets", {})}
+	d.erase("variant_targets")
 	return d
 
 
@@ -107,7 +108,8 @@ static func _hazards(d: Dictionary, rng: RandomNumberGenerator, traps: Array) ->
 
 # ---------------------------------------------------------------- cargo
 
-static func _cargo(d: Dictionary, rng: RandomNumberGenerator, notes: Array) -> void:
+# riskier contracts come with richer holds: +15% cargo value a star
+static func _cargo(d: Dictionary, rng: RandomNumberGenerator, notes: Array, stars: int) -> void:
 	var keep: Array = []
 	for c in CONTAINERS:
 		if rng.randf() < 0.85:
@@ -130,7 +132,7 @@ static func _cargo(d: Dictionary, rng: RandomNumberGenerator, notes: Array) -> v
 			value *= 1.4
 			notes.append("heavy " + c)
 		pd.mass = snappedf(mass, 0.01)
-		pd.value = snappedf(value, 100.0)
+		pd.value = snappedf(value * (1.0 + 0.15 * (stars - 1)), 100.0)
 		pd.fragile = cg[3]
 		d.labels[c] = cg[0]
 

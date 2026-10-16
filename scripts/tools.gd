@@ -41,6 +41,7 @@ var strain := 0.0
 var overweight := false
 var tether_target := Vector2.ZERO
 var tether_force := 0.0
+var crack_t := 0.0
 
 # wrench / measure / hose actions in progress
 var job := {}              # {"kind", "t", "dur", "target", "pos"}
@@ -640,6 +641,15 @@ func physics_step(dt: float) -> void:
 			tether_force = 1.0
 			return
 		strain = maxf(0.0, strain - dt * 2.0)
+		# hauling on a cracked piece of structure: the crack gives way
+		if tether_force > 0.25:
+			crack_t += dt
+			if crack_t > 0.5:
+				crack_t = 0.0
+				for j in world.joints:
+					if j.alive and j.type == "crack" and held_body.pieces.any(func(q): return q.id == j.a or q.id == j.b):
+						game.on_snap(j)
+						break
 		var r: Vector2 = g - held_body.global_transform * held_body.center_of_mass
 		var vg: Vector2 = held_body.linear_velocity + Vector2(-r.y, r.x) * held_body.angular_velocity
 		var c := 2.0 * 0.85 * sqrt(K_TETHER * m)
@@ -657,7 +667,7 @@ func physics_step(dt: float) -> void:
 		var fixed := 0
 		var weak: Array = []
 		for j in world.joints_of(held_piece):
-			if j.type in ["bolt", "weld", "clamp"]:
+			if j.type in ["bolt", "weld", "clamp", "seam", "crack"]:
 				fixed += 1
 			else:
 				weak.append(j)
