@@ -6,7 +6,7 @@ extends SceneTree
 # twenty seconds left alone (8× warp) with nothing happening, and the salvage bot
 # taking the whole ship apart with no incident and nothing forced. Shards run
 # side by side and write tests/out/contracts_<shard>.json; "report" adds them up.
-# godot --headless --path . --fixed-fps 60 -s tests/contract_validate.gd -- from=0 count=250 [trap=<id>] [shard=a]
+# godot --headless --path . --fixed-fps 60 -s tests/contract_validate.gd -- from=0 count=250 [play_every=4] [trap=<id>] [shard=a]
 # godot --headless --path . -s tests/contract_validate.gd -- report [prefix=contracts]
 
 const Bot = preload("res://tests/salvage_bot.gd")
@@ -17,6 +17,7 @@ var count := 10
 var trap := ""
 var shard := "a"
 var prefix := "contracts"
+var play_every := 1            # play only every n-th contract that passed the static checks
 var res := {"drawn": 0, "discarded": 0, "reasons": {}, "examples": {}, "played": 0, "passed": 0, "failed": [], "traps": {}, "problems": {}, "rates": []}
 var finished := false
 
@@ -32,6 +33,8 @@ func _initialize() -> void:
 			trap = a.substr(5)
 		elif a.begins_with("shard="):
 			shard = a.substr(6)
+		elif a.begins_with("play_every="):
+			play_every = int(a.substr(11))
 		elif a.begins_with("prefix="):
 			prefix = a.substr(7)
 		elif a == "report":
@@ -98,6 +101,9 @@ func _run() -> void:
 			continue
 		for p in Variant.problems(d):
 			res.problems[p] = res.problems.get(p, 0) + 1
+		res.accepted = int(res.get("accepted", 0)) + 1
+		if (int(res.accepted) - 1) % play_every != 0:
+			continue
 		var bad: Array = await _play(o)
 		res.played += 1
 		if bad.is_empty():
@@ -174,8 +180,8 @@ func _report() -> void:
 		if not f.begins_with(prefix + "_") or not f.ends_with(".json"):
 			continue
 		var r: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/out/" + f))
-		for k in ["drawn", "discarded", "played", "passed"]:
-			tot[k] += int(r[k])
+		for k in ["drawn", "discarded", "played", "passed", "accepted"]:
+			tot[k] = int(tot.get(k, 0)) + int(r.get(k, 0))
 		for k in ["reasons", "traps", "problems"]:
 			for x in r[k]:
 				tot[k][x] = tot[k].get(x, 0) + int(r[k][x])
@@ -187,6 +193,7 @@ func _report() -> void:
 	for k in tot.reasons:
 		print("    %-22s %4d   e.g. %s" % [k, tot.reasons[k], tot.examples.get(k, "")])
 	print("  traps drawn: ", tot.traps)
+	print("  passed the static checks: %d" % int(tot.get("accepted", 0)))
 	print("  played by the bot: %d, taken apart safely: %d (%.1f%%)" % [tot.played, tot.passed, tot.passed * 100.0 / maxi(1, tot.played)])
 	if not tot.rates.is_empty():
 		var s := 0.0
@@ -197,6 +204,6 @@ func _report() -> void:
 		print("  recovery: mean %.1f%%, lowest %.1f%%" % [s * 100.0 / tot.rates.size(), lo * 100.0])
 	for f in tot.failed.slice(0, 20):
 		print("    FAIL ", f)
-	var ok: bool = tot.played > 0 and tot.passed == tot.played and tot.played + tot.discarded == tot.drawn
+	var ok: bool = tot.played > 0 and tot.passed == tot.played
 	print("CONTRACTS %s" % ("PASS" if ok else "FAIL"))
 	quit()

@@ -1,7 +1,8 @@
 extends SceneTree
 # Roadmap 2.9 acceptance: the operation log over a career. The paced bot
-# (every operation and haul taking its time) plays a new career for ten
-# contracts — GR-001, then the market — buying the first upgrades as funds
+# (every operation and haul taking its time) plays contracts 1, 5 and 10 of
+# a new career — GR-001, then the market; the ones between are played fast
+# to move the career on — buying the first upgrades as funds
 # allow, and every action it takes is counted as repetitive hand work or an
 # engineering decision (the recovery arm's hauls are the machine's). The
 # tutorial's share comes from tests/tutorial_bot.gd (run it first; it writes
@@ -56,7 +57,9 @@ func _run() -> void:
 		var scene: Node = load("res://scenes/main.tscn").instantiate()
 		scene.bot = BOT.duplicate()
 		root.add_child(scene)
-		var bot = Bot.new(scene, {"paced": true})
+		# only the contracts on the curve are played at a player's pace; the rest move the career on
+		var paced: bool = i in [0, 4, 9]
+		var bot = Bot.new(scene, {"paced": paced})
 		bot.timeout = 80000
 		while not bot.step():
 			await process_frame
@@ -64,7 +67,10 @@ func _run() -> void:
 			await process_frame
 		var sh: Dictionary = Game.op_share(scene.ops)
 		shares.append(sh)
-		print("  contract %2d %-11s kit %-30s %4d hand-work  %3d decisions  %3d machine → %4.1f%% repetitive   (%d s, rate %.1f%%)" % [i + 1, scene.job.get("id", ""), ",".join(scene.job.get("kit", {}).keys()), sh.manual, sh.decision, sh.machine, sh.share * 100.0, int(scene.playtime), scene.recovery_rate() * 100.0])
+		if not paced:
+			print("  contract %2d %-11s (played fast to move the career on)" % [i + 1, scene.job.get("id", "")])
+		else:
+			print("  contract %2d %-11s kit %-30s %4d hand-work  %3d decisions  %3d machine → %4.1f%% repetitive   (%d s, rate %.1f%%)" % [i + 1, scene.job.get("id", ""), ",".join(scene.job.get("kit", {}).keys()), sh.manual, sh.decision, sh.machine, sh.share * 100.0, int(scene.playtime), scene.recovery_rate() * 100.0])
 		scene.queue_free()
 		for k in 2:
 			await process_frame

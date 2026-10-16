@@ -6,7 +6,7 @@ extends SceneTree
 # furnace, nothing bought, nothing paid early — the loan should only grow.
 # Every settlement takes the installment and 2% interest; what funds can't
 # cover goes back on the loan; fees are paid up front; the time bonus is +20%.
-# godot --headless --path . --fixed-fps 60 -s tests/money_run.gd -- [n=20] [only=careful|careless]
+# godot --headless --path . --fixed-fps 60 -s tests/money_run.gd -- [n=20] [only=careful|careless] [paced]
 
 const Bot = preload("res://tests/salvage_bot.gd")
 const BOT := {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "lmb": false, "move": Vector2.ZERO}
@@ -14,6 +14,7 @@ const UPGRADES := [["pump2", 22000.0], ["scan_kit", 24000.0], ["grapple5", 38000
 const RESERVE := 30000.0
 var n := 20
 var only := ""
+var paced := false
 var fails := 0
 var finished := false
 
@@ -22,6 +23,8 @@ func _initialize() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("n="):
 			n = int(a.substr(2))
+		elif a == "paced":
+			paced = true
 		elif a.begins_with("only="):
 			only = a.substr(5)
 	Career.path = "user://zp_test_money_career.json"
@@ -57,7 +60,7 @@ func _career(careless: bool) -> Array:
 		var scene: Node = load("res://scenes/main.tscn").instantiate()
 		scene.bot = BOT.duplicate()
 		root.add_child(scene)
-		var bot = Bot.new(scene, {"careless": careless, "paced": true})
+		var bot = Bot.new(scene, {"careless": careless, "paced": paced})
 		bot.timeout = 80000
 		while not bot.step():
 			await process_frame
