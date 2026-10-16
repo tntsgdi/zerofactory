@@ -6,7 +6,7 @@ extends CanvasLayer
 
 signal closed
 
-const ROWS := ["vol_master", "vol_music", "vol_sfx", "quality", "lang", "context", "keys_row", "back"]
+const ROWS := ["vol_master", "vol_music", "vol_sfx", "quality", "window", "calm", "lang", "context", "keys_row", "back"]
 
 var testing := false
 var is_open := false
@@ -51,7 +51,7 @@ func close() -> void:
 
 func _row_rect(i: int) -> Rect2:
 	var s := c.size
-	return Rect2(s.x * 0.5 - 300, s.y * 0.5 - 230 + i * 56, 600, 48)
+	return Rect2(s.x * 0.5 - 300, s.y * 0.5 - 300 + i * 56, 600, 48)
 
 
 func _key_rect(i: int) -> Rect2:
@@ -158,6 +158,10 @@ func change(row: String, dir: int) -> void:
 			Txt.zh = not Txt.zh
 		"context":
 			Txt.context = not Txt.context
+		"window":
+			Txt.fullscreen = not Txt.fullscreen
+		"calm":
+			Txt.calm = not Txt.calm
 		"keys_row":
 			keys_open = true
 			return
@@ -179,6 +183,10 @@ func value(row: String) -> String:
 			return "中文" if Txt.zh else "ENGLISH"
 		"context":
 			return Txt.t("s_on") if Txt.context else Txt.t("s_off")
+		"window":
+			return Txt.t("s_win_full") if Txt.fullscreen else Txt.t("s_win_window")
+		"calm":
+			return Txt.t("s_off") if Txt.calm else Txt.t("s_on")
 	return ""
 
 

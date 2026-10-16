@@ -98,6 +98,7 @@ func _physics_process(dt: float) -> void:
 				body.collision_mask = 1 | 2 | 4
 				body.set_deferred("freeze", false)
 				body.linear_velocity = Vector2(0, 80)
+				# (the drop point follows a furnace mouth moved along its rail)
 				body.set_meta("arm", false)
 				body.set_meta("arm_drop", t)
 				carried += 1
@@ -122,14 +123,15 @@ func _route(from: Vector2) -> Array:
 		var pb := Geom.bbox(p.poly)
 		bb = pb if first else bb.merge(pb)
 		first = false
+	var drop := Dock.zpos("metal") + Vector2(0, -0.8 * Geom.M)
 	if first:
-		return [DROP]
+		return [drop]
 	bb = bb.grow(40.0)
-	if not bb.has_point(from) and not _crosses(from, DROP, bb):
-		return [DROP]
+	if not bb.has_point(from) and not _crosses(from, drop, bb):
+		return [drop]
 	var x: float = bb.end.x + 30.0 if absf(from.x - bb.end.x) < absf(from.x - bb.position.x) else bb.position.x - 30.0
 	var y: float = from.y if not bb.has_point(from) else bb.position.y - 30.0
-	return [Vector2(from.x, y), Vector2(x, y), Vector2(x, DROP.y), DROP]
+	return [Vector2(from.x, y), Vector2(x, y), Vector2(x, drop.y), drop]
 
 
 func _crosses(a: Vector2, b: Vector2, r: Rect2) -> bool:

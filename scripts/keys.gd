@@ -5,13 +5,13 @@ class_name Keys
 # HUD shows. A gamepad comes later.
 
 const ORDER := ["up", "down", "left", "right", "dash", "brake", "hold", "overview",
-	"tool1", "tool2", "tool3", "tool4", "tool5", "blueprint", "contract", "repair", "ring", "assist", "hints", "warp"]
+	"tool1", "tool2", "tool3", "tool4", "tool5", "blueprint", "contract", "repair", "ring", "assist", "hints", "warp", "mouth", "mark", "log"]
 const DEFAULTS := {
 	"up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT],
 	"dash": [KEY_SHIFT], "brake": [KEY_SPACE], "hold": [KEY_V], "overview": [KEY_Z],
 	"tool1": [KEY_1], "tool2": [KEY_2], "tool3": [KEY_3], "tool4": [KEY_4], "tool5": [KEY_5],
 	"blueprint": [KEY_TAB], "contract": [KEY_C], "repair": [KEY_6], "ring": [KEY_7],
-	"assist": [KEY_F], "hints": [KEY_H], "warp": [KEY_EQUAL],
+	"assist": [KEY_F], "hints": [KEY_H], "warp": [KEY_EQUAL], "mouth": [KEY_M], "mark": [KEY_G], "log": [KEY_L],
 }
 
 static var map := {}

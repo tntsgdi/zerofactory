@@ -18,6 +18,8 @@ static var test_zh := true            # the language a test runs in
 static var chapter_done := false      # chapter one seen to the end
 static var dev := false               # developer mode (F12)
 static var context := true            # the tool follows what the cursor is on (not the laser)
+static var fullscreen := false
+static var calm := false              # no screen shake, flashes or hit-stops
 const TIERS := ["guided", "standard", "hardcore"]
 const CFG := "user://zeropower_settings.cfg"
 
@@ -450,6 +452,46 @@ const S := {
 	"t_continue": ["继续拆解", "CONTINUE"],
 	"t_quit": ["退出", "QUIT"],
 	"t_start": ["开始游戏", "START"],
+	"key_mouth": ["移动炉口到无人机下方", "MOVE THE FURNACE MOUTH HERE"], "key_mark": ["给搬运无人机标记零件", "MARK FOR THE HAULER"],
+	"fa_rail": ["可移动炉口", "MOVABLE FURNACE MOUTH"],
+	"fa_rail_d": ["熔炉口装上导轨：现场按 M，把它沿长槽挪到无人机正下方", "THE FURNACE MOUTH ON A RAIL: PRESS M ON SITE TO RUN IT UNDER THE DRONE"],
+	"fa_net": ["碎屑网升级", "DEBRIS NET UPGRADE"],
+	"fa_net_d": ["自动收进碎屑网的碎片上限 0.1 t → 0.5 t", "WHAT GOES STRAIGHT TO THE NET: 0.1 t → 0.5 t"],
+	"fa_hauler": ["初级搬运无人机", "BASIC HAULING DRONE"],
+	"fa_hauler_d": ["现场按 G 给漂浮零件打标记，它自己送到该去的回收口（1.5 t 以内）", "PRESS G ON A FLOATING PIECE: IT TAKES IT TO THE RIGHT MOUTH (UP TO 1.5 t)"],
+	"tm_facilities": ["船坞设施（买一次，永久生效）", "BERTH FACILITIES (BOUGHT ONCE, KEPT)"],
+	"mouth_moving": ["炉口沿导轨移动中", "FURNACE MOUTH MOVING"],
+	"mouth_fixed": ["炉口是固定的（船坞管理里可买导轨）", "THE MOUTH IS FIXED (A RAIL IS SOLD AT THE BERTH)"],
+	"hauler_marked": ["已标记，搬运无人机会来取", "MARKED FOR THE HAULER"],
+	"hauler_unmarked": ["取消标记", "MARK REMOVED"],
+	"hauler_heavy": ["超过 1.5 t，搬运无人机搬不动", "OVER 1.5 t: TOO HEAVY FOR THE HAULER"],
+	"tear_warn": ["还有 %s 个锁扣 / 线缆连着 · 硬扯会扯断", "%s LOCKS / LINES STILL ATTACHED · PULLING TEARS THEM"],
+	"tear_warn_live": ["连着锁扣 / 线缆（%s）· 硬扯会扯断并打火", "LOCKS / LINES ATTACHED (%s) · PULLING TEARS THEM, LIVE"],
+	"tearing": ["扯断中…松开抓钩停下", "TEARING… LET GO TO STOP"],
+	"contaminated": ["冷却液污染：%s 折价 25%%", "COOLANT FOULED %s: −25%%"],
+	"mg_cut": ["被激光切坏", "CUT BY THE LASER"],
+	"mg_torn": ["被硬扯损坏", "TORN OUT"],
+	"mg_wrong_mouth": ["送错了回收口", "SENT TO THE WRONG MOUTH"],
+	"mg_alert": ["强制回收件 %s %s — 本单评级只能是「未达标」", "REQUIRED PIECE %s %s — THIS CONTRACT CANNOT PASS"],
+	"left_n": ["船上还剩 %d 件", "%d PIECES LEFT"],
+	"rv_title": ["这一单的钱亏在哪", "WHERE THE MONEY WENT"],
+	"rv_none": ["没有折价，也没有事故损失", "NOTHING LOST"],
+	"rv_mandatory": ["强制件 %s %s", "REQUIRED %s %s"],
+	"rv_total": ["合计少赚", "IN ALL"],
+	"dv_cut": ["切坏设备", "EQUIPMENT CUT"],
+	"dv_impact": ["撞击", "IMPACTS"],
+	"dv_burst": ["气瓶爆裂波及", "BURST VESSEL"],
+	"dv_blast": ["危险品爆燃波及", "DANGEROUS GOODS BLAST"],
+	"dv_snap": ["结构断裂", "STRUCTURE GAVE WAY"],
+	"dv_fall": ["掉落砸坏", "FALLING PIECES"],
+	"dv_fire": ["起火烧坏", "FIRE"],
+	"dv_tear": ["硬扯扯坏", "TORN FREE"],
+	"dv_blowout": ["失压冲击", "BLOWOUT"],
+	"dv_contam": ["冷却液污染", "COOLANT FOULING"],
+	"dv_other": ["其他损坏", "OTHER DAMAGE"],
+	"e_rest": ["剩余结构按废料（六折）", "LEFT AS SCRAP (60%)"],
+	"radio_log": ["无线电记录 · L 关闭", "RADIO LOG · L TO CLOSE"],
+	"key_log": ["无线电记录", "RADIO LOG"],
 	"tm_legend": ["实线 = 已安装 · 虚线 = 还没买 · 点部件或按 ← → 看详情", "SOLID = FITTED · DASHED = NOT BOUGHT · CLICK A PART OR ← → FOR DETAIL"],
 	"c_numbers": ["这一单的数字", "THE NUMBERS"],
 	"c_start_btn": ["开工   Space", "START   SPACE"],
@@ -464,6 +506,11 @@ const S := {
 	"tm_best_rate": ["每分钟最划算", "BEST PER MINUTE"],
 	"tm_task_full": ["拆完整艘船：指定设备完整送设备口，其余分类送对回收口", "THE WHOLE SHIP: NAMED EQUIPMENT WHOLE TO THE EQUIPMENT MOUTH, THE REST SORTED"],
 	"s_context": ["情境工具", "CONTEXT TOOL"],
+	"s_window": ["显示模式", "DISPLAY"],
+	"s_win_full": ["全屏", "FULLSCREEN"],
+	"s_win_window": ["窗口", "WINDOW"],
+	"s_calm": ["震屏 / 闪白 / 顿帧", "SHAKE / FLASH / HIT-STOP"],
+	"autosaved": ["已自动保存", "AUTOSAVED"],
 	"s_keys_row": ["按键设置", "KEY BINDINGS"],
 	"s_on": ["开", "ON"],
 	"s_off": ["关", "OFF"],
@@ -740,6 +787,8 @@ static func load_settings(testing: bool) -> void:
 		chapter_done = cf.get_value("career", "chapter_done", false)
 		dev = cf.get_value("ui", "dev", false)
 		context = cf.get_value("ui", "context", true)
+		fullscreen = cf.get_value("video", "fullscreen", false)
+		calm = cf.get_value("video", "calm", false)
 		Keys.load_from(cf)
 		vol_master = cf.get_value("audio", "master", 1.0)
 		vol_music = cf.get_value("audio", "music", 0.8)
@@ -762,6 +811,8 @@ static func save_settings(testing: bool) -> void:
 	cf.set_value("career", "chapter_done", chapter_done)
 	cf.set_value("ui", "dev", dev)
 	cf.set_value("ui", "context", context)
+	cf.set_value("video", "fullscreen", fullscreen)
+	cf.set_value("video", "calm", calm)
 	Keys.store(cf)
 	cf.set_value("audio", "master", vol_master)
 	cf.set_value("audio", "music", vol_music)

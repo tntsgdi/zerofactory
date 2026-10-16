@@ -62,10 +62,12 @@ var story: Story
 var exam: Exam
 var settings_panel: SettingsPanel
 var arm: RecoveryArm
+var hauler: Hauler
 var radio := Radio.new()      # Liang and the berth terminal
 var player_moved := false
 var warp := false            # time runs x4 while the player holds =
 const WARP := 4.0
+const REST_SCRAP := 0.6       # an early end: what is left fetches this share of its scrap value
 var testing := false
 
 var state := "intro"         # intro play ending
@@ -95,6 +97,9 @@ var income_metal := 0.0
 var income_hazard := 0.0
 var losses := 0.0
 var loss_lines: Array = []   # [text_key, amount]
+var devalued: Array = []     # [reason key, tag, amount]: value knocked off what could have been sold
+var mandatory_lost := {}     # tag -> reason key: a named piece that can no longer be delivered whole
+var income_rest := 0.0       # an early end: what was left, taken as scrap at a discount
 var mandatory_ok := {}     # tag -> recovered intact into the equipment bay
 var incidents: Array = []  # [playtime, kind, detail]: what went wrong and when (the accident review reads it)
 var _mand: Array = []
@@ -141,6 +146,8 @@ func _ready() -> void:
 		ship_id = Exam.pick()
 	job = contract
 	contract = {}
+	if not job.is_empty() and int(Career.data.get("done", 1)) == 0 and job.has("opening"):
+		Txt.hint_tier = "guided"
 	var data := {}
 	if SaveGame.load_requested and (not testing or SaveGame.allow_test):
 		data = SaveGame.read(SaveGame.file_for_ship(Ship.load_data(ship_id)))
@@ -222,6 +229,11 @@ func _ready() -> void:
 	hud.game = self
 	add_child(hud)
 	# the industrial recovery arm on the boom, once the berth has bought it
+	if has_upgrade("hauler"):
+		hauler = Hauler.new()
+		hauler.game = self
+		hauler.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(hauler)
 	if has_upgrade("arm"):
 		arm = RecoveryArm.new()
 		arm.game = self
@@ -387,6 +399,7 @@ func _process(dt: float) -> void:
 		if autosave_t > 25.0:
 			autosave_t = 0.0
 			SaveGame.save(self)
+			hud.toast_saved()
 	_read_input()
 	var dev_warp: bool = Txt.dev and DevPanel.warp and bot == null
 	var want_warp: bool = state == "play" and not menu_open and (Keys.down("warp") or dev_warp or (bot != null and bot.get("warp", false)))
@@ -521,11 +534,24 @@ func _unhandled_input(ev: InputEvent) -> void:
 				say("assist_on" if drone.assist else "assist_off", drone.global_position + Vector2(0, -44))
 				sfx.play("switch")
 			"contract": open_contract()
+			"log": hud.show_log = not hud.show_log
+			"mouth":
+				if has_upgrade("mouth_rail"):
+					dock.move_mouth(drone.global_position.x / Geom.M)
+					say("mouth_moving", drone.global_position + Vector2(0, -44))
+				else:
+					say("mouth_fixed", drone.global_position + Vector2(0, -44))
+			"mark":
+				if hauler != null:
+					var under: Array = world.pieces_at(aim)
+					var key: String = hauler.toggle(under[0].body if not under.is_empty() else null)
+					if key != "":
+						say(key, aim + Vector2(0, -30))
 			"hints":
 				if training:
 					toggle_hints()
 				else:
-					cycle_tier()
+					say("tier_now", drone.global_position + Vector2(0, -44), txt("tier_" + Txt.hint_tier))
 	elif ev is InputEventMouseButton and ev.pressed:
 		if state == "intro":
 			_end_intro()
@@ -640,12 +666,14 @@ func _pan(dt: float) -> void:
 
 # a few frames of near-freeze that sell an impact
 func hitstop(sec: float) -> void:
-	if state != "play" or bot != null:
+	if state != "play" or bot != null or Txt.calm:
 		return
 	hitstop_t = maxf(hitstop_t, sec)
 
 
 func shake(amount: float, dir: Vector2 = Vector2.ZERO) -> void:
+	if Txt.calm:
+		return
 	trauma = minf(1.0, trauma + amount)
 	punch += dir * 12.0 * amount
 
@@ -712,6 +740,11 @@ func finish_contract(early: bool) -> void:
 	if ended:
 		return
 	ended = true
+	if early and not training and exam == null:
+		var rest := 0.0
+		for p in pieces_left():
+			rest += p.mass * world.metal_price
+		income_rest = snappedf(rest * REST_SCRAP, 1.0)
 	state = "ending"
 	state_t = 0.0
 	tools.release_grab(false)
@@ -800,7 +833,7 @@ func skip_training() -> void:
 		Txt.certified = true
 		Txt.cert_kind = "skipped"
 		Txt.save_settings(testing)
-	Career.certify()
+	Career.certify("skipped")
 	after_training("contract")
 
 
@@ -849,8 +882,18 @@ static func play_career(tree: SceneTree) -> void:
 func earned() -> float:
 	# a part-ship contract buys pieces, not the ship's gas and fluids
 	if scope() != "full":
-		return income_equip + income_metal + income_hazard
-	return income_equip + income_metal + income_hazard + sys.gas_value() + sys.fluid_value()
+		return income_equip + income_metal + income_hazard + income_rest
+	return income_equip + income_metal + income_hazard + income_rest + sys.gas_value() + sys.fluid_value()
+
+
+# pieces of the contract still to come off (in scope, not yet delivered)
+func pieces_left() -> Array:
+	var out: Array = []
+	for id in world.order:
+		var p = world.pieces[id]
+		if not p.gone and p.scope:
+			out.append(p)
+	return out
 
 
 # "full" | "section" | "rescue" (Variant._scope)
@@ -895,6 +938,29 @@ func incident(kind: String, detail: String = "") -> void:
 	incidents.append([snappedf(playtime, 0.1), kind, detail])
 	if assist != null:
 		assist.on_incident(kind)
+
+
+# value knocked off a piece (it still sells, for less): kept for the settlement's review
+func note_loss(reason: String, tag: String, amount: float) -> void:
+	if amount >= 1.0:
+		devalued.append([reason, tag, snappedf(amount, 1.0)])
+
+
+func _dent(p, new_cond: float, reason: String) -> void:
+	if p.cls == "equip" and p.intact and new_cond < p.cond:
+		note_loss(reason, p.tag, (p.cond - new_cond) * p.value)
+	p.cond = new_cond
+
+
+# a named piece of the contract is past saving: say so now, not at the settlement
+func mandatory_gone(p, reason: String) -> void:
+	if not p.mandatory or mandatory_lost.has(p.tag) or mandatory_ok.get(p.tag, false):
+		return
+	mandatory_lost[p.tag] = reason
+	incident("mandatory_lost", p.tag)
+	hud.mandatory_alert(p.tag, reason)
+	sfx.play("warn")
+	shake(0.2)
 
 
 func lose(key: String, amount: float, at: Vector2) -> void:
@@ -998,6 +1064,8 @@ func on_swallowed(b, zone: String) -> void:
 			verify("pieces", p.tag, {"to": zone})
 		if zone == "equip" and p.intact and p.cls == "equip" and p.mandatory:
 			mandatory_ok[p.tag] = true
+		elif p.mandatory and p.cls == "equip":
+			mandatory_gone(p, "mg_wrong_mouth")
 		if story != null and p.intact:
 			story.on_delivered(p, zone)
 		if zone == "metal" and sys.dest_of(p) == "hazard":
@@ -1100,9 +1168,9 @@ func on_body_freed(b) -> void:
 			p.remove_meta("snap_kick")
 	var all_metal := true
 	for p in b.pieces:
-		if p.cls == "equip":
+		if p.cls == "equip" and p.intact:
 			all_metal = false
-	if all_metal and m < 0.1:
+	if all_metal and m < debris_max():
 		# tiny cut-offs go straight to the debris net
 		var vel: Vector2 = (b.global_position - SHIP_CENTER).normalized() * randf_range(60, 140)
 		for p in b.pieces:
@@ -1160,7 +1228,7 @@ func _impact(b, dv: float) -> void:
 	for p in b.pieces:
 		if p.cls == "equip" and p.intact:
 			var before: float = p.cond
-			p.cond = maxf(0.0, p.cond - p.fragile * k * 0.5)
+			_dent(p, maxf(0.0, p.cond - p.fragile * k * 0.5), "dv_impact")
 			lost += (before - p.cond) * p.value
 	if lost > 150.0:
 		incident("impact", "%d" % int(lost))
@@ -1209,7 +1277,12 @@ func hurt_drone(amount: float, from: Vector2, key: String, cd_key: String = "", 
 
 func on_drone_impact(pos: Vector2, dv: float) -> void:
 	if dv > 175.0:
-		hurt_drone(10.0, pos, "hit_hard", "impact", 0.7)
+		var dmg := clampf((dv - 175.0) / 18.0, 1.0, 14.0)
+		if dmg >= 8.0:
+			hurt_drone(dmg, pos, "hit_hard", "impact", 0.7)
+		elif drone.alive and not DevPanel.god:
+			drone.integrity = maxf(1.0, drone.integrity - dmg)
+			hud.hurt_flash(dmg)
 	fx.sparks(pos, (drone.global_position - pos).normalized(), 6, Pal.ink(0.8, 1.3), 220.0, 0.3, 1.0)
 
 
@@ -1263,6 +1336,9 @@ func on_cut_into(p, pos: Vector2) -> void:
 	elif volts > 0.0:
 		fx.sparks(pos, Vector2.UP, 8, Pal.tint(Pal.VOLT, 1.0, 2.0), 160.0, 0.3, PI)
 		sfx.play("zap_small")
+	if p.intact:
+		note_loss("dv_cut", p.tag, was_value - p.mass * world.metal_price)
+		mandatory_gone(p, "mg_cut")
 	if was_value > 200.0:
 		incident("equip_cut", p.tag)
 		fx.number(pos + Vector2(0, -30), "−" + Pal.money(was_value).trim_prefix("$"), Pal.heat(0.9, 1.3), 18)
@@ -1310,7 +1386,7 @@ func _burst(p, pos: Vector2) -> void:
 		hurt_drone(25.0, c, "burst_hit", "burst", 0.5)
 	for q in _equip_near(c, 1.6 * 48.0):
 		if q != p:
-			q.cond = maxf(0.0, q.cond - 0.2 * q.fragile)
+			_dent(q, maxf(0.0, q.cond - 0.2 * q.fragile), "dv_burst")
 	shake(0.6)
 	hud.white_flash(0.25)
 	hitstop(0.07)
@@ -1334,7 +1410,7 @@ func _blast(p, pos: Vector2) -> void:
 		hurt_drone(40.0, c, "fire_hit", "blast", 1.0)
 	for q in _equip_near(c, 3.0 * 48.0):
 		if q != p:
-			q.cond = maxf(0.0, q.cond - 0.4 * q.fragile)
+			_dent(q, maxf(0.0, q.cond - 0.4 * q.fragile), "dv_blast")
 	shake(0.8)
 	hud.white_flash(0.35)
 	hitstop(0.08)
@@ -1362,7 +1438,7 @@ func on_snap(j) -> void:
 	var lost := 0.0
 	for q in _equip_near(at, 3.0 * 48.0):
 		var before: float = q.cond
-		q.cond = maxf(0.0, q.cond - 0.25 * q.fragile)
+		_dent(q, maxf(0.0, q.cond - 0.25 * q.fragile), "dv_snap")
 		lost += (before - q.cond) * q.value
 	if lost > 50.0:
 		fx.number(at + Vector2(0, -30), "−" + Pal.money(lost).trim_prefix("$"), Pal.heat(0.9, 1.3), 18)
@@ -1390,7 +1466,7 @@ func _falls_in(p) -> void:
 			continue
 		var before: float = q.cond
 		# a tonne of plate dropping the height of the hold: what is fragile is finished
-		q.cond = maxf(0.0, q.cond - q.fragile)
+		_dent(q, maxf(0.0, q.cond - q.fragile), "dv_fall")
 		lost += (before - q.cond) * q.value
 		fx.sparks(Vector2(qb.get_center().x, qb.position.y), Vector2.UP, 16, Pal.ink(0.9, 1.4), 280.0, 0.35, PI)
 	if lost > 50.0:
@@ -1451,8 +1527,17 @@ func on_line_cut(l, at: Vector2) -> void:
 				# hot coolant scalds and fouls what it lands on
 				if sys.line_temp(l) > 60.0 and drone.alive and drone.global_position.distance_to(at) < 2.5 * 48.0:
 					hurt_drone(25.0, at, "scald", "scald", 1.0)
+				var fouled := 0.0
+				var names: Array = []
 				for q in _equip_near(at, 2.0 * 48.0):
+					if not q.contam and q.intact:
+						fouled += q.value * clampf(q.cond, 0.0, 1.0) * 0.25
+						note_loss("dv_contam", q.tag, q.value * clampf(q.cond, 0.0, 1.0) * 0.25)
+						names.append(q.tag)
 					q.contam = true
+				if fouled > 50.0:
+					fx.number(at + Vector2(0, -40), "−" + Pal.money(fouled).trim_prefix("$"), Pal.heat(0.9, 1.3), 20)
+					say("contaminated", at + Vector2(0, -60), ", ".join(names))
 				world.redraw_all()
 	elif l.net == "gas":
 		for i in 10:
@@ -1482,7 +1567,7 @@ func on_ignite(cl: Dictionary, pos: Vector2) -> void:
 	if drone.alive and drone.global_position.distance_to(c) < cl.r + 1.5 * 48.0:
 		hurt_drone(25.0, c, "fire_hit", "fire", 1.0)
 	for q in _equip_near(c, cl.r + 48.0):
-		q.cond = maxf(0.0, q.cond - 0.3)
+		_dent(q, maxf(0.0, q.cond - 0.3), "dv_fire")
 	for b in world.bodies:
 		var d2: Vector2 = b.global_position - c
 		if d2.length() < cl.r * 2.0:
@@ -1523,9 +1608,21 @@ func on_grab(p) -> void:
 		for j in world.joints_of(p):
 			if j.type in ["bolt", "weld", "clamp", "seam", "crack"]:
 				fixed += 1
+		var locks := 0
+		for j in world.joints_of(p):
+			if j.type == "lock":
+				locks += 1
+		var lines_n: int = world.lines_of(p).size()
+		var live := 0.0
+		for l in world.lines_of(p):
+			if l.kind == "cable":
+				live = maxf(live, _cut_cable_volts(l))
 		if fixed > 0:
 			say("still_fixed", aim, str(fixed))
 			hint("fixings")
+		elif locks > 0 or lines_n > 0:
+			# these give way if you pull: say it before they do
+			say("tear_warn_live" if live > 30.0 else "tear_warn", aim, "%d" % (locks + lines_n) if live <= 30.0 else "%d · %d V" % [locks + lines_n, int(live)])
 		elif world.group_mass(p) > grab_max():
 			say("too_heavy", aim, "%.1f" % world.group_mass(p))
 	elif p.body.total_mass() > grab_max():
@@ -1545,6 +1642,8 @@ func on_tear(p, weak: Array, lines_held: Array, at: Vector2) -> void:
 	for j in weak:
 		world.kill_joint(j)
 		dmg += 0.12
+	if p.cls == "equip" and p.intact and p.mandatory and dmg >= 0.5:
+		mandatory_gone(p, "mg_torn")
 	for l in lines_held:
 		var volts := _cut_cable_volts(l) if l.kind == "cable" else 0.0
 		world.kill_line(l, world.line_end_world(l, 0 if l.a == p.id else 1))
@@ -1555,7 +1654,7 @@ func on_tear(p, weak: Array, lines_held: Array, at: Vector2) -> void:
 			on_line_cut(l, at)
 	if p.cls == "equip" and p.intact:
 		var before: float = p.cond
-		p.cond = maxf(0.0, p.cond - dmg * (0.5 + p.fragile))
+		_dent(p, maxf(0.0, p.cond - dmg * (0.5 + p.fragile)), "dv_tear")
 		var lost: float = (before - p.cond) * p.value
 		if lost > 50.0:
 			fx.number(at + Vector2(0, -24), "−" + Pal.money(lost).trim_prefix("$"), Pal.heat(0.9, 1.3), 18)
@@ -1823,6 +1922,11 @@ func grab_max() -> float:
 
 
 # the berth's upgrades this contract was taken with
+# what goes straight to the debris net (t): 0.1, or 0.5 with the net upgrade
+func debris_max() -> float:
+	return 0.5 if has_upgrade("net05") else 0.1
+
+
 func has_upgrade(id: String) -> bool:
 	return job.get("kit", {}).has(id) or (bot != null and bot.get("kit", {}).has(id))
 
@@ -2030,7 +2134,7 @@ func on_blowout(room: String, pos: Vector2, dir: Vector2, p0: float) -> void:
 		if q.gone or q.room != room or q.cls != "equip" or not q.intact:
 			continue
 		var before: float = q.cond
-		q.cond = maxf(0.0, q.cond - q.fragile * 0.45 * k)
+		_dent(q, maxf(0.0, q.cond - q.fragile * 0.45 * k), "dv_blowout")
 		lost += (before - q.cond) * q.value
 	if lost > 100.0:
 		fx.number(pos + Vector2(0, -40), "−" + Pal.money(lost).trim_prefix("$"), Pal.heat(0.9, 1.3), 20)
@@ -2104,7 +2208,7 @@ func _age_messages(dt: float) -> void:
 
 
 # how the controls work: these stay on in the standard tier
-const UI_HINTS := ["field", "hose", "measured", "drone_lost", "free_body"]
+const UI_HINTS := ["field", "hose", "measured", "drone_lost", "free_body", "equip_cut"]
 var hint_log: Array = []
 
 

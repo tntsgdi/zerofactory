@@ -32,6 +32,9 @@ const TROUGH_Y := 8.2               # m: the trough's lip; below it a body is in
 const TROUGH_X0 := 5.5
 const TROUGH_X1 := 40.5             # stops short of the hazard mouth
 const CONVEY := 7.0                 # m/s along the trough
+const RAIL_SPEED := 4.0             # m/s: the movable furnace mouth along its rail
+static var metal_x := 21.0          # where the furnace mouth sits (it moves only with the rail upgrade)
+var mouth_target := 21.0
 
 var game: Game
 var world: World
@@ -56,6 +59,8 @@ var t := 0.0
 
 
 func _init() -> void:
+	metal_x = 21.0
+	mouth_target = 21.0
 	z_index = -1
 	z_as_relative = false
 	font = Fonts.get_font("Regular")
@@ -121,11 +126,18 @@ func set_ship(ship: Dictionary) -> void:
 
 
 static func zpos(id: String) -> Vector2:
+	if id == "metal":
+		return Vector2(metal_x, ZONES.metal.pos.y) * Geom.M
 	return ZONES[id].pos * Geom.M
 
 
 static func inside(id: String) -> Vector2:
-	return (ZONES[id].pos - ZONES[id].face * 1.1) * Geom.M
+	return zpos(id) - ZONES[id].face * 1.1 * Geom.M
+
+
+# the rail upgrade: the furnace mouth runs along the trough to under x (m)
+func move_mouth(x: float) -> void:
+	mouth_target = clampf(x, TROUGH_X0 + 2.5, TROUGH_X1 - 2.5)
 
 
 # ---------------------------------------------------------------- per frame
@@ -163,9 +175,12 @@ func _physics_process(dt: float) -> void:
 				continue
 			zone_state[id].glow = 1.0
 			var k := 1.0 - dist / (reach * Geom.M)
-			b.apply_central_force(d.normalized() * b.mass * (220.0 * k + 40.0))
-			b.linear_velocity *= exp(-1.6 * k * dt)
-			if dist < CATCH * Geom.M:
+			# scrap let go near the furnace is drawn in hard: a throw in its general direction is enough
+			var pullk := 2.6 if id == "metal" and scrap and not held else 1.0
+			b.apply_central_force(d.normalized() * b.mass * (220.0 * k + 40.0) * pullk)
+			b.linear_velocity *= exp(-1.6 * k * dt * pullk)
+			var catch_r: float = (CATCH * 1.5 if id == "metal" and scrap else CATCH)
+			if dist < catch_r * Geom.M:
 				var verdict: Dictionary = game.judge(b, id)
 				if verdict.ok:
 					_start_swallow(b, id)
@@ -179,6 +194,9 @@ func _physics_process(dt: float) -> void:
 
 func _process(dt: float) -> void:
 	t += dt
+	if absf(metal_x - mouth_target) > 0.001:
+		metal_x = move_toward(metal_x, mouth_target, RAIL_SPEED * dt)
+		zone_state["metal"].glow = 1.0
 	for id in zone_state:
 		var z: Dictionary = zone_state[id]
 		z.glow = maxf(0.0, z.glow - dt * 2.0)

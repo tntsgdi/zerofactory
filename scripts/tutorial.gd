@@ -331,7 +331,7 @@ func _finish() -> void:
 	if Txt.cert_kind != "full":
 		Txt.cert_kind = "full"
 	Txt.save_settings(game.testing)
-	Career.certify()
+	Career.certify("full")
 
 
 # the training rig goes away once there is nothing left to learn on it

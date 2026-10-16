@@ -109,6 +109,9 @@ static func fresh() -> Dictionary:
 		"company": "",
 		"time": 0.0,               # seconds played on this slot (training included)
 		"certified": false,        # through the training course, or skipped it
+		"clues": [],               # story clues filed (each save has its own)
+		"chapter_done": false,
+		"exam_grade": "",
 	}
 
 
@@ -123,10 +126,16 @@ static func load_or_new() -> Dictionary:
 		# a career from before slots: whoever had one had passed or skipped training
 		if not d.is_empty() and not d.has("certified"):
 			data.certified = true
+		# and its story so far was kept in the settings, before each save had its own
+		if not d.is_empty() and not d.has("clues"):
+			data.clues = Txt.clues.duplicate()
+			data.chapter_done = Txt.chapter_done
+			data.exam_grade = Txt.exam_grade
 		for k in fresh():
 			if not data.has(k):
 				data[k] = fresh()[k]
 		_normalize()
+		sync_story()
 	return data
 
 
@@ -174,14 +183,35 @@ static func start_new() -> void:
 		if FileAccess.file_exists(path + ".bak"):
 			DirAccess.remove_absolute(full + ".bak")
 	data = fresh()
+	sync_story()
 	save()
 
 
 # through training (or past it): this slot goes straight to the berth from now on
-static func certify() -> void:
+static func certify(kind: String = "") -> void:
 	if data.is_empty() or not usable():
 		return
 	data.certified = true
+	if kind != "" and data.get("cert_kind", "") != "full":
+		data.cert_kind = kind
+	save()
+
+
+# a save's own story progress is what the game reads (never another save's)
+static func sync_story() -> void:
+	if data.is_empty():
+		return
+	Txt.clues = data.get("clues", []).duplicate()
+	Txt.chapter_done = bool(data.get("chapter_done", false))
+	Txt.exam_grade = str(data.get("exam_grade", ""))
+
+
+static func store_story() -> void:
+	if data.is_empty() or not usable():
+		return
+	data.clues = Txt.clues.duplicate()
+	data.chapter_done = Txt.chapter_done
+	data.exam_grade = Txt.exam_grade
 	save()
 
 

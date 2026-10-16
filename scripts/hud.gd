@@ -34,6 +34,10 @@ var must_k := [0.0, 0.0]
 var tag_birth := {}
 var tool_names_k := 0.0
 var closing := -1.0
+var alert_text := ""        # a required piece is lost: said across the top, in heat
+var alert_t := 99.0
+var show_log := false       # the radio log (L)
+var saved_t := 99.0
 var after_close: Callable
 # motion on site: the HUD slides in from the edges once the drone is out,
 # the tool marker springs between slots, bars leave a trail when they move
@@ -112,6 +116,15 @@ func contract_changed() -> void:
 		card_t = 0.0
 
 
+func mandatory_alert(tag: String, reason: String) -> void:
+	alert_text = game.txt("mg_alert") % [tag, game.txt(reason)]
+	alert_t = 0.0
+
+
+func toast_saved() -> void:
+	saved_t = 0.0
+
+
 func close_then(f: Callable) -> void:
 	if closing >= 0.0:
 		return
@@ -127,6 +140,8 @@ func show_hint(text: String) -> void:
 
 
 func white_flash(a: float) -> void:
+	if Txt.calm:
+		return
 	flash = maxf(flash, a)
 
 
@@ -156,6 +171,8 @@ func start_ending(early: bool) -> void:
 		["e_loss", -g.losses],
 		["e_fee_paid" if g.job.get("fee_paid", false) else "e_fee", -g.fee],
 	]
+	if g.income_rest > 0.0:
+		end_rows.append(["e_rest", g.income_rest])
 	if g.standard_time() > 0.0:
 		end_rows.append(["e_bonus", g.bonus()])
 
@@ -238,6 +255,8 @@ func _process(dt: float) -> void:
 			f.call()
 	t += dt
 	hint_t += dt
+	alert_t += dt
+	saved_t += dt
 	flash = maxf(0.0, flash - dt * 2.5)
 	hurt = maxf(0.0, hurt - dt * 1.8)
 	credit_pop = maxf(0.0, credit_pop - dt * 3.0)
@@ -379,6 +398,8 @@ func _draw_hud() -> void:
 			_contract_panel()
 			c.draw_set_transform(Vector2.ZERO)
 		_overweight()
+		_tearing()
+		_left_markers(s)
 		_boundary(s)
 		_haul_guide(s)
 		if g.warp:
@@ -405,6 +426,13 @@ func _draw_hud() -> void:
 			c.draw_rect(Rect2(0, s.y - w, s.x, w), Pal.heat(a))
 			c.draw_rect(Rect2(0, 0, w, s.y), Pal.heat(a))
 			c.draw_rect(Rect2(s.x - w, 0, w, s.y), Pal.heat(a))
+	if alert_t < 7.0 and not ending:
+		_alert(s)
+	if show_log and not ending:
+		_radio_log(s)
+	if saved_t < 1.8 and not ending:
+		var sa := clampf(saved_t / 0.2, 0.0, 1.0) * clampf((1.8 - saved_t) / 0.4, 0.0, 1.0)
+		_text("● " + game.txt("autosaved"), Vector2(40, s.y - 118), 13, Pal.ink(0.7 * sa), font)
 	if g.contract_open or card_k.x > 0.01:
 		_contract_card(s)
 	if menu_k.x > 0.01:
@@ -619,7 +647,11 @@ func _contract_panel() -> void:
 			c.draw_colored_polygon(d2, Pal.ink(0.95 * k))
 		var cl := dia.duplicate()
 		cl.append(dia[0])
-		c.draw_polyline(cl, Pal.ink(0.7), 1.2, true)
+		var lost: bool = g.mandatory_lost.has(items[i][0])
+		c.draw_polyline(cl, Pal.heat(0.95, 1.3) if lost else Pal.ink(0.7), 1.2, true)
+		if lost:
+			c.draw_line(dc + Vector2(-6, -6), dc + Vector2(6, 6), Pal.heat(1.0, 1.4), 2.0)
+			c.draw_line(dc + Vector2(6, -6), dc + Vector2(-6, 6), Pal.heat(1.0, 1.4), 2.0)
 		if must_t.has(i) and t - must_t[i] < 0.7:
 			var e := Pal.ease_out((t - must_t[i]) / 0.7)
 			c.draw_arc(dc, 6.0 + 22.0 * e, 0.0, TAU, 24, Pal.ink(0.8 * (1.0 - e), 1.3), 1.5, true)
@@ -654,6 +686,9 @@ func _contract_panel() -> void:
 		if pe < 1.0:
 			c.draw_arc(Vector2(mx, by + 14), 4.0 + 18.0 * Pal.ease_out(pe), 0.0, TAU, 24, Pal.heat(0.8 * (1.0 - pe), 1.3), 1.4, true)
 	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 13, Pal.ink(0.5), font)
+	if not g.training and g.exam == null:
+		var nl: int = g.pieces_left().size()
+		_text(g.txt("left_n") % nl, Vector2(x + 150, by + 36), 13, Pal.heat(0.9, 1.2) if nl > 0 and nl <= 8 else Pal.ink(0.5), font_b if nl <= 8 else font, 0)
 	if g.story != null and not g.story.items.is_empty():
 		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 13, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
 	elif g.standard_time() > 0.0:
@@ -1336,6 +1371,8 @@ func _settlement(s: Vector2) -> void:
 			var vt := Pal.money(v) if row[2] != "note" else "+" + Pal.money(v)
 			var col := Pal.heat(0.9 * ca, 1.1) if (row[2] == "money" and v < -0.5) or row[2] == "note" else Pal.ink(0.85 * ca)
 			_text(vt, Vector2(cx + 260, cy), 17, col, font_b, 1)
+	if e > 1.6:
+		_review(Vector2(cx - 330 - 30 - 430, ry - 10), e - 1.6)
 	var te := e - 1.8
 	var traps: Array = g.job.get("traps", [])
 	if te > 0.0 and not traps.is_empty():
@@ -1346,6 +1383,114 @@ func _settlement(s: Vector2) -> void:
 		var pulse := 0.5 + 0.4 * sin(t * 3.0)
 		var go: String = g.txt("st_go_on") if g.story != null and g.story.wants_epilogue() else g.txt("e_to_terminal" if g.career() else "e_again")
 		_text(go, Vector2(cx, s.y - 80), 16, Pal.ink(pulse), font_b, 0)
+
+
+# where the money went: value knocked off by reason, money lost by cause, named pieces lost
+func _review(at: Vector2, e: float) -> void:
+	var g = game
+	var groups := {}
+	for d in g.devalued:
+		if not groups.has(d[0]):
+			groups[d[0]] = [0.0, []]
+		groups[d[0]][0] += float(d[2])
+		if d[1] != "" and not d[1] in groups[d[0]][1]:
+			groups[d[0]][1].append(d[1])
+	for l in g.loss_lines:
+		var k: String = l[0]
+		if not groups.has(k):
+			groups[k] = [0.0, []]
+		groups[k][0] += float(l[1])
+	var rows: Array = []
+	for k in groups:
+		rows.append([k, groups[k][0], groups[k][1]])
+	rows.sort_custom(func(a, b): return a[1] > b[1])
+	var h: float = 84.0 + maxf(1, rows.size()) * 44.0 + g.mandatory_lost.size() * 30.0 + (40.0 if not rows.is_empty() else 0.0)
+	var a := clampf(e / 0.4, 0.0, 1.0)
+	var r := Rect2(at, Vector2(430, h))
+	UI.panel(c, r, a, 1.0, Pal.HEAT if not rows.is_empty() or not g.mandatory_lost.is_empty() else Pal.FLUID)
+	_text(g.txt("rv_title"), r.position + Vector2(24, 36), 18, Pal.ink(0.95 * a), font_b)
+	var y := r.position.y + 66.0
+	for tg in g.mandatory_lost:
+		_text(g.txt("rv_mandatory") % [tg, g.txt(g.mandatory_lost[tg])], Vector2(r.position.x + 24, y + 6), 15, Pal.heat(0.95 * a, 1.2), font_b)
+		y += 30.0
+	if rows.is_empty():
+		_text(g.txt("rv_none"), Vector2(r.position.x + 24, y + 14), 15, Pal.tint(Pal.FLUID, 0.9 * a, 1.1), font)
+		return
+	var total := 0.0
+	for i in rows.size():
+		var ra := clampf((e - 0.15 * i) / 0.3, 0.0, 1.0) * a
+		var row: Array = rows[i]
+		total += row[1]
+		_text(g.txt(row[0]), Vector2(r.position.x + 24, y + 14), 15, Pal.ink(0.85 * ra), font)
+		_text("−" + Pal.money(row[1]), Vector2(r.end.x - 24, y + 14), 16, Pal.heat(0.9 * ra, 1.1), font_b, 1)
+		var tags: Array = row[2]
+		if not tags.is_empty():
+			_text(" · ".join(tags.slice(0, 5)), Vector2(r.position.x + 24, y + 34), 13, Pal.ink(0.5 * ra), font)
+		y += 44.0
+	c.draw_line(Vector2(r.position.x + 24, y), Vector2(r.end.x - 24, y), Pal.ink(0.2 * a), 1.0)
+	_text(g.txt("rv_total"), Vector2(r.position.x + 24, y + 28), 15, Pal.ink(0.7 * a), font)
+	_text("−" + Pal.money(total), Vector2(r.end.x - 24, y + 28), 18, Pal.heat(0.95 * a, 1.2), font_b, 1)
+
+
+# a required piece just became impossible: across the top, in heat, for a few seconds
+func _alert(s: Vector2) -> void:
+	var a := clampf(alert_t / 0.2, 0.0, 1.0) * clampf((7.0 - alert_t) / 0.6, 0.0, 1.0)
+	var w := _tw(alert_text, 18, font_b) + 60.0
+	var r := Rect2(s.x * 0.5 - w * 0.5, 120.0 - (1.0 - Pal.ease_out(a)) * 20.0, w, 50)
+	c.draw_rect(r, Color(0.12, 0.03, 0.02, 0.92 * a))
+	c.draw_rect(r, Pal.heat((0.6 + 0.4 * sin(t * 8.0)) * a, 1.4), false, 2.0)
+	_text(alert_text, Vector2(s.x * 0.5, r.position.y + 32), 18, Pal.ink(0.98 * a), font_b, 0)
+
+
+# pulling on something held only by locks and lines: how close it is to tearing
+func _tearing() -> void:
+	var tl = game.tools
+	if tl.held_piece == null or tl.held_body != null or tl.strain < 0.04:
+		return
+	var p := to_screen(tl.grab_point())
+	var k: float = clampf(tl.strain, 0.0, 1.0)
+	c.draw_arc(p, 30.0, -PI / 2, -PI / 2 + TAU * k, 40, Pal.heat(0.95, 1.4), 3.0, true)
+	c.draw_arc(p, 30.0, 0.0, TAU, 40, Pal.ink(0.15), 1.0, true)
+	_text(game.txt("tearing"), p + Vector2(40, 6), 15, Pal.heat(0.95, 1.3), font_b)
+
+
+# the last few pieces: a small mark on each, so nobody hunts for them
+func _left_markers(s: Vector2) -> void:
+	if game.training or game.exam != null:
+		return
+	var left: Array = game.pieces_left()
+	if left.is_empty() or left.size() > 8:
+		return
+	var inner := Rect2(Vector2(40, 40), s - Vector2(80, 80))
+	for p in left:
+		var sp := to_screen(game.world.frame(p) * Geom.centroid(p.poly))
+		if inner.has_point(sp):
+			var k := 7.0 + 2.0 * sin(t * 5.0)
+			c.draw_polyline(PackedVector2Array([sp + Vector2(0, -k - 10), sp + Vector2(k, -10), sp + Vector2(0, k - 10), sp + Vector2(-k, -10), sp + Vector2(0, -k - 10)]), Pal.heat(0.9, 1.3), 1.6, true)
+		else:
+			var cpos := s * 0.5
+			var dir := (sp - cpos).normalized()
+			var tt := INF
+			if absf(dir.x) > 0.001:
+				tt = minf(tt, ((inner.end.x if dir.x > 0.0 else inner.position.x) - cpos.x) / dir.x)
+			if absf(dir.y) > 0.001:
+				tt = minf(tt, ((inner.end.y if dir.y > 0.0 else inner.position.y) - cpos.y) / dir.y)
+			var at := cpos + dir * tt
+			c.draw_circle(at, 5.0, Pal.heat(0.8, 1.3))
+
+
+# the radio log (L): what Liang and the terminal said, newest at the bottom
+func _radio_log(s: Vector2) -> void:
+	var hist: Array = game.radio.history
+	var n := mini(hist.size(), 10)
+	var r := Rect2(s.x - 40 - 560, 130, 560, 64 + n * 30)
+	UI.panel(c, r, 1.0, 1.0, Pal.AIR)
+	_text(game.txt("radio_log"), r.position + Vector2(20, 30), 14, Pal.ink(0.6), font)
+	for i in n:
+		var h: Array = hist[hist.size() - n + i]
+		var who: String = game.txt("tut_term") if h[1] == "term" else game.txt("tut_liang")
+		_text(who, r.position + Vector2(20, 64 + i * 30), 13, Pal.tint(Pal.AIR, 0.7, 1.0) if h[1] == "term" else Pal.heat(0.8, 1.1), font)
+		c.draw_string(font, r.position + Vector2(110, 64 + i * 30), h[0], HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 130, 14, Pal.ink(0.9))
 
 
 # the contract's signature traps: avoided or not, and the review note where one bit

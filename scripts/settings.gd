@@ -32,6 +32,13 @@ static func apply_audio() -> void:
 
 static func apply_video(vp: Viewport) -> void:
 	var high := Txt.quality == "high"
+	# full screen or a window (never touched by a headless test)
+	if DisplayServer.get_name() != "headless":
+		var want := DisplayServer.WINDOW_MODE_FULLSCREEN if Txt.fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
+		var cur := DisplayServer.window_get_mode()
+		var is_full := cur in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
+		if is_full != Txt.fullscreen:
+			DisplayServer.window_set_mode(want)
 	if vp != null:
 		vp.msaa_2d = Viewport.MSAA_2X if high else Viewport.MSAA_DISABLED
 	if env != null:

@@ -65,6 +65,9 @@ func _warn(key: String, guided: String, standard: String) -> void:
 func _recall(lesson: int, subject: String, line: String) -> void:
 	if tier() == "hardcore" or recalled.has(subject):
 		return
+	# who skipped the course has no lesson to be reminded of
+	if str(Career.data.get("cert_kind", Txt.cert_kind)) == "skipped":
+		return
 	recalled[subject] = true
 	cards.append([lesson, subject, 0.0])
 	history.append([t, tier(), "recall", subject])
@@ -143,7 +146,7 @@ func _rules() -> void:
 		if fixed + nl > 0:
 			var nm: String = hp.tag if hp.tag != "" else Txt.piece_name(hp)
 			_warn("tied:" + nm, _f("as_c_g"), _f("as_c_s", [nm]))
-		_recall(5, "rc_s_tied", "rc_pull")
+		_recall(2, "rc_s_tied", "rc_pull")
 	# 5. something dangerous on its way into the furnace
 	if hp != null and hp.body != null and is_instance_valid(hp.body):
 		var near_furnace: bool = (hp.body.global_transform * hp.body.center_of_mass).distance_to(Dock.zpos("metal")) < 6.0 * Geom.M
@@ -166,7 +169,7 @@ func _rules() -> void:
 			game.radio.say_text("as:port", "liang", _f("as_port_g"), _f("as_port_g"))
 	# recall: the bent guard in front of a port
 	if hv.get("reason", "") == "blocked_guard":
-		_recall(2, "rc_s_guard", "rc_guard")
+		_recall(3, "rc_s_guard", "rc_guard")
 	if tl.overweight and hp != null:
 		_recall(6, "rc_s_heavy", "rc_heavy")
 

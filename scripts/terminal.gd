@@ -35,6 +35,9 @@ const USE_KEY := {"repair": "6", "ring": "7", "spare": "", "intel": "I"}
 const BERTH := [
 	["repay", "loan", 20000.0, "tm_repay", "tm_repay_d", true],
 	["training", "training", 0.0, "tm_training", "tm_training_d", true],
+	["mouth_rail", "facility", 30000.0, "fa_rail", "fa_rail_d", true],
+	["net05", "facility", 18000.0, "fa_net", "fa_net_d", true],
+	["hauler", "facility", 45000.0, "fa_hauler", "fa_hauler_d", true],
 ]
 # what berth management will offer later, named in one line
 const LATER := ["fa_drone2", "fa_mast", "fa_scan"]
@@ -501,7 +504,14 @@ func _item_rect(i: int) -> Rect2:
 			var g := _grid_rect()
 			var cw := (g.size.x - 3 * 16.0) / 4.0
 			return Rect2(g.position.x + (i - FITTED) * (cw + 16.0), g.position.y + 36, cw, g.size.y - 36)
+	if i >= 2:
+		return _facility_rect(i - 2)
 	return _finance_rect() if i == 0 else _training_rect()
+
+
+func _facility_rect(j: int) -> Rect2:
+	var tr := _training_rect()
+	return Rect2(tr.position.x, tr.end.y + 52 + j * 106, tr.size.x, 94)
 
 
 # the shop: the drawing on the left (upgrades called out on it), stock below it, detail on the right
@@ -583,6 +593,9 @@ func _go_rect() -> Rect2:
 		1:
 			var r := _detail_rect()
 			return Rect2(r.position.x + 32, r.end.y - 100, r.size.x - 64, 68)
+	if sel >= 2:
+		var fr := _facility_rect(sel - 2)
+		return Rect2(fr.end.x - 250, fr.position.y + 18, 226, 58)
 	var f := _finance_rect() if sel == 0 else _training_rect()
 	return Rect2(f.position.x + 36, f.end.y - 100, f.size.x - 72, 68)
 
@@ -1249,7 +1262,20 @@ func _berth(s: Vector2, a: float) -> void:
 	UI.panel(self, tr, k1, sel_k[1].x)
 	_text(Txt.t("tm_training"), tr.position + Vector2(32, 50), 24, Pal.ink(0.95 * k1), font_l)
 	_wrap(Txt.t("tm_training_d"), tr.position + Vector2(32, 84), tr.size.x - 64, 15, Pal.ink(0.65 * k1))
-	var lr := Rect2(tr.position.x, tr.end.y + 24, tr.size.x, 110)
+	# the facilities: bought once, kept
+	var d2 := Career.data
+	_text(Txt.t("tm_facilities"), Vector2(tr.position.x, tr.end.y + 36), 15, Pal.ink(0.6 * k1), font_b)
+	for j in 3:
+		var it: Array = BERTH[2 + j]
+		var fcr := _facility_rect(j)
+		var fk := Pal.ease_out(clampf((deal_t - 0.14 - j * 0.05) / 0.35, 0.0, 1.0)) * a
+		UI.panel(self, fcr, fk, sel_k[2 + j].x)
+		_text(Txt.t(it[3]), fcr.position + Vector2(24, 34), 17, Pal.ink(0.95 * fk), font_b)
+		_text(Txt.t(it[4]), fcr.position + Vector2(24, 62), 13, Pal.ink(0.6 * fk), font)
+		if sel != 2 + j:
+			var have: bool = d2.upgrades.has(it[0])
+			_text("✓ " + Txt.t("tm_installed") if have else Pal.money(it[2]), Vector2(fcr.end.x - 24, fcr.position.y + 52), 17, Pal.tint(Pal.FLUID, 0.85 * fk, 1.1) if have else Pal.ink((0.9 if float(d2.money) >= float(it[2]) else 0.45) * fk), font_b, 1)
+	var lr := Rect2(tr.position.x, _facility_rect(2).end.y + 20, tr.size.x, 96)
 	var k2 := Pal.ease_out(clampf((deal_t - 0.16) / 0.35, 0.0, 1.0)) * a
 	UI.panel(self, lr, k2 * 0.6)
 	_text(Txt.t("tm_later_h"), lr.position + Vector2(32, 40), 14, Pal.ink(0.5 * k2), font)
@@ -1298,8 +1324,19 @@ func _bottom(s: Vector2, a: float) -> void:
 				label = Txt.t("tm_repay_n") % Pal.money(amt) + ("   Enter" if ok else "")
 				if not ok:
 					note = Txt.t("tm_repay_none")
-			else:
+			elif sel == 1:
 				label = Txt.t("tm_training_btn") + "   Enter"
+			else:
+				var fit: Array = BERTH[sel]
+				if d.upgrades.has(fit[0]):
+					label = "✓ " + Txt.t("tm_installed")
+					ok = false
+				elif float(d.money) < float(fit[2]):
+					label = Pal.money(fit[2])
+					note = Txt.t("tm_short_n") % Pal.money(float(fit[2]) - float(d.money))
+					ok = false
+				else:
+					label = Txt.t("tm_buy_n") % Pal.money(fit[2])
 	var bk := Pal.back(clampf((t - 0.3) / 0.35, 0.0, 1.0), 2.0)
 	r = Rect2(r.position + Vector2(0, (1.0 - bk) * 20.0), r.size)
 	UI.button(self, font_b, r, label, 1.0 if hover_go else 0.0, ok, a, t, shake, note)

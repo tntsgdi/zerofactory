@@ -6,7 +6,9 @@ extends RefCounted
 # Lines come either by id from a table (the training course) or as ready
 # text (the contract assistant).
 
-const MAX_WAIT := 20.0
+const MAX_WAIT := 60.0
+const BUSY_HOLD := 2.5        # a line waits this long at most for the hands to be free
+var history: Array = []       # what was said: [text, who], newest last
 
 var lines: Dictionary = {}     # id -> {who, zh, en}
 var queue: Array = []          # [line dict, queued at]
@@ -62,12 +64,15 @@ func step(dt: float, busy: bool) -> void:
 	queue = queue.filter(func(q): return t - q[1] < MAX_WAIT)
 	if queue.is_empty():
 		return
-	if busy and queue[0][0].get("who", "liang") == "liang":
+	if busy and queue[0][0].get("who", "liang") == "liang" and t - queue[0][1] < BUSY_HOLD:
 		return
 	var q = queue.pop_front()
 	var n := text(q[0]).length()
 	now = {"line": q[0], "t": 0.0, "dur": clampf(1.6 + n * 0.075, 2.5, 12.0)}
 	last = q[0].key
+	history.append([text(q[0]), q[0].get("who", "liang")])
+	if history.size() > 30:
+		history.pop_front()
 	if sfx != null:
 		sfx.play("radio_on" if q[0].get("who", "liang") == "liang" else "term")
 

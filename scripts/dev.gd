@@ -138,7 +138,7 @@ func _terminal_key(n: int) -> void:
 		3:
 			d.rep = int(d.rep) + 5
 		4:
-			for id in ["scan_kit", "grapple5", "pump2", "arm"]:
+			for id in ["scan_kit", "grapple5", "pump2", "arm", "mouth_rail", "net05", "hauler"]:
 				d.upgrades[id] = 1
 		5:
 			for id in ["repair", "ring", "spare", "intel"]:

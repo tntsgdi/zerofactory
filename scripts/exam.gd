@@ -99,6 +99,7 @@ func finish(p, zone: String) -> void:
 	result_t = 0.0
 	if Txt.exam_grade == "" or grade < Txt.exam_grade:
 		Txt.exam_grade = grade
+		Career.store_story()
 		Txt.save_settings(game.testing)
 	game.state = "ending"
 	game.tools.release_grab(false)

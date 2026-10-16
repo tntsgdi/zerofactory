@@ -9,7 +9,7 @@ const ACCEL := 360.0
 const VMAX := 430.0
 const DASH_K := 2.3
 const DASH_VMAX := 780.0
-const BRAKE_K := 1.35
+const BRAKE_K := 2.6          # braking beats letting go (the assist stops at ~2.3 x ACCEL)
 
 var game: Game
 var heading := 0.0

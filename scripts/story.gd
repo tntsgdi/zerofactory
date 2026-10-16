@@ -131,6 +131,7 @@ func _clue() -> void:
 	did.clue = true
 	if not cl.id in Txt.clues:
 		Txt.clues.append(cl.id)
+		Career.store_story()
 		Txt.save_settings(game.testing)
 	card = {"rows": ["ARCHIVED", pair(cl.title)], "t": 0.0, "dur": 3.0}
 
@@ -267,6 +268,7 @@ func _next() -> void:
 	game.sfx.play("term")
 	if not Txt.chapter_done:
 		Txt.chapter_done = true
+		Career.store_story()
 		Txt.save_settings(game.testing)
 
 

@@ -712,7 +712,7 @@ func physics_step(dt: float) -> void:
 		f = f.limit_length(FMAX)
 		tether_force = f.length() / FMAX
 		held_body.apply_force(f, g - held_body.global_position)
-		drone.external -= f
+		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.7)
 	else:
 		# still fixed to the ship: the beam pulls, the fixings decide
 		var m2: float = world.group_mass(held_piece)
