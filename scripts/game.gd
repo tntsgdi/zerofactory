@@ -353,6 +353,14 @@ func room_name(room: String) -> String:
 	return txt(Ship.room_name_key(ship, room))
 
 
+# the ship as the player reads it: registration and type, in their language
+func ship_title() -> String:
+	var ty: Dictionary = Market.TYPES.get(ship_id, {})
+	var tn: String = ((ty.name[0] if Txt.zh else ty.name[1]) if ty.has("name") else "")
+	var reg: String = job.get("reg", ship.get("name", "").split(" ")[0])
+	return ("%s · %s" % [reg, tn]) if tn != "" else ship.get("name", "")
+
+
 func cam_zoom() -> float:
 	return zoom_now
 

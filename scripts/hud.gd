@@ -205,7 +205,9 @@ func _input(ev: InputEvent) -> void:
 					game.set_tier(Txt.TIERS[ti])
 					get_viewport().set_input_as_handled()
 					return
-			game.close_contract()
+			# only the start button starts: a stray click on the card does nothing
+			if _start_rect(cr).has_point(c.get_local_mouse_position()):
+				game.close_contract()
 			get_viewport().set_input_as_handled()
 			return
 		if game.menu_open:
@@ -594,10 +596,14 @@ func _contract_panel() -> void:
 	var g = game
 	var x := 40.0
 	var y := 46.0
+	var items0: Array = g.mandatory_items()
+	var by0 := maxf(y + 120, y + 56 + items0.size() * 24 + 18)
+	var ph := by0 - y + 80.0 + (56.0 if g.scope() != "full" else 0.0)
+	UI.panel(c, Rect2(x - 18, y - 30, 340, ph), 0.82)
 	_text(g.txt("contract") + " " + g.ship.get("contract", ""), Vector2(x, y), 13, Pal.ink(0.5), font)
 	if g.scope() != "full":
 		_text(g.txt("sc_" + g.scope()), Vector2(x + 300, y), 13, Pal.heat(0.95, 1.2), font_b, 1)
-	_text(g.ship.get("name", ""), Vector2(x, y + 24), 20, Pal.ink(0.92), font_b)
+	_text(g.ship_title(), Vector2(x, y + 24), 20, Pal.ink(0.95), font_b)
 	# mandatory items
 	var items: Array = g.mandatory_items()
 	for i in items.size():
@@ -656,9 +662,8 @@ func _contract_panel() -> void:
 		_text(_clock(g.playtime) + " / " + _clock(g.standard_time()), Vector2(x + 300, by + 36), 13, Pal.heat(0.8, 1.0) if late else Pal.ink(0.5), font, 1)
 	var ry := by + 70
 	if g.scope() != "full":
-		c.draw_rect(Rect2(x - 8, by + 48, 316, 42), Color(0.03, 0.032, 0.037, 0.8))
-		c.draw_rect(Rect2(x - 8, by + 48, 2, 42), Pal.heat(0.9, 1.1))
-		c.draw_multiline_string(font, Vector2(x, by + 64), Market.scope_text(g.job), HORIZONTAL_ALIGNMENT_LEFT, 300, 13, 2, Pal.ink(0.75))
+		c.draw_rect(Rect2(x - 8, by + 50, 2, 44), Pal.heat(0.9, 1.1))
+		c.draw_multiline_string(font, Vector2(x, by + 66), Market.scope_text(g.job), HORIZONTAL_ALIGNMENT_LEFT, 300, 13, 2, Pal.ink(0.85))
 		ry += 36
 	_recall(x, ry)
 
@@ -689,6 +694,7 @@ func _recall(x: float, y: float) -> void:
 func _credits(s: Vector2) -> void:
 	var g = game
 	var x := s.x - 40.0
+	UI.panel(c, Rect2(x - 250, 22, 268, 86), 0.82)
 	_text(g.txt("income"), Vector2(x, 46), 13, Pal.ink(0.5), font, 1)
 	var v: float = credit_roll.shown
 	var sc := 1.0 + 0.18 * credit_pop * credit_pop
@@ -731,6 +737,10 @@ func _toolbar(s: Vector2) -> void:
 		if i == 4:
 			var mode: String = g.txt("mode_" + g.tools.hose_mode)
 			_text(mode, rect.position + Vector2(rect.size.x - 10, 56), 13, Pal.ink(0.5 + 0.3 * on) if g.tools.hose_mode == "recover" else Pal.heat(0.8, 1.0), font, 1)
+	# the context tool: the tool in hand follows the pointer (out of the laser and the hose)
+	if g.state == "play" and Txt.context and g.tutorial == null and g.bot == null:
+		var auto: bool = g.tools.tool in [1, 3, 4]
+		_text(g.txt("tb_auto") if auto else g.txt("tb_manual"), Vector2(r.position.x, r.position.y + 6), 13, Pal.tint(Pal.AIR, 0.8, 1.0) if auto else Pal.ink(0.5), font)
 	# one marker for the tool in hand: it springs from slot to slot and stretches as it goes
 	var sel := clampi(int(round(sel_x.x)), 0, 4)
 	var mw := 132.0 + minf(90.0, absf(sel_x.v) * 14.0)
@@ -766,6 +776,7 @@ func _drone_status(s: Vector2) -> void:
 	var d = g.drone
 	var x := 40.0
 	var y := s.y - 70.0
+	UI.panel(c, Rect2(x - 18, y - 36, 420, 70), 0.82)
 	_text("R-02", Vector2(x, y), 18, Pal.ink(0.9), font_b)
 	var integ: float = d.integrity if d.alive else 0.0
 	var bw := 180.0
@@ -1029,20 +1040,47 @@ func _card_rect(s: Vector2) -> Rect2:
 
 
 func _tier_rect(r: Rect2, i: int) -> Rect2:
-	return Rect2(r.position.x + 48 + i * 270.0, r.end.y - 92.0, 256.0, 52.0)
+	return Rect2(r.position.x + 560.0, r.position.y + 330.0 + i * 64.0, 300.0, 56.0)
+
+
+# the card's right column: the numbers that decide how to go about it
+func _card_numbers(r: Rect2, a: float) -> void:
+	var g = game
+	var o: Dictionary = g.job
+	var x := r.position.x + 560.0
+	var y := r.position.y + 58.0
+	c.draw_line(Vector2(x - 24, r.position.y + 40), Vector2(x - 24, r.end.y - 40), Pal.ink(0.1 * a), 1.0)
+	var value: float = float(o.get("value", g.ship.get("value", {}).get("total", 0.0)))
+	var rows := [
+		[g.txt("tm_value"), Pal.money(value)],
+		[g.txt("tm_fee"), Pal.money(g.fee) + ("  ✓" if o.get("fee_paid", false) else "")],
+		[g.txt("tm_time"), (g.txt("tm_minutes_short") % int(g.standard_time() / 60.0)) if g.standard_time() > 0.0 else "—"],
+	]
+	_text(g.txt("c_numbers"), Vector2(x, y), 14, Pal.ink(0.6 * a), font)
+	for i in rows.size():
+		var yy := y + 40 + i * 58
+		_text(rows[i][0], Vector2(x, yy), 13, Pal.ink(0.55 * a), font)
+		_text(rows[i][1], Vector2(x, yy + 28), 24, Pal.ink(0.95 * a), font_l)
+	if int(o.get("stars", 0)) > 0:
+		_text(g.txt("tm_risk_" + str(int(o.stars))), Vector2(x + 300, y + 40), 14, Pal.heat(0.9 * a, 1.1) if int(o.stars) >= 2 else Pal.ink(0.7 * a), font_b, 1)
+
+
+func _start_rect(r: Rect2) -> Rect2:
+	return Rect2(r.position.x + 560.0, r.end.y - 104.0, 300.0, 64.0)
 
 
 func _contract_card(s: Vector2) -> void:
 	var k: float = clampf(card_k.x, 0.0, 1.2)
 	var a := clampf(k, 0.0, 1.0)
 	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.55 * a))
-	var w := 900.0
 	var r := _card_rect(s)
 	_panel(r, 0.95 * a)
 	c.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Pal.heat(a, 1.0))
 	var g = game
 	var x := r.position.x + 48
 	var y := r.position.y + 58
+	var w := 470.0
+	_card_numbers(r, a)
 	var rows: Array = _offer_rows() if g.job.has("reg") else []
 	if rows.is_empty():
 		rows.append(["h", g.txt("c_title"), 14])
@@ -1074,35 +1112,32 @@ func _contract_card(s: Vector2) -> void:
 				y += 40
 			"li":
 				c.draw_circle(Vector2(x + 6 + dx, y - 5), 2.0, Pal.ink(0.7 * ra))
-				_text(row[1], Vector2(x + 20 + dx, y), row[2], Pal.ink(0.85 * ra), font)
-				y += 25
+				var lines: int = clampi(int(ceil(_tw(row[1], row[2]) / (w - 20.0))), 1, 2)
+				c.draw_multiline_string(font, Vector2(x + 20 + dx, y), row[1], HORIZONTAL_ALIGNMENT_LEFT, w - 20.0, row[2], 2, Pal.ink(0.88 * ra))
+				y += 25 + (lines - 1) * 22
 			"kv":
 				_text(row[1], Vector2(x + 20 + dx, y), 15, Pal.ink(0.55 * ra), font)
 				_text(row[2], Vector2(x + 300 + dx, y), 15, Pal.ink(0.9 * ra), font_b)
 				y += 24
 			"p":
-				c.draw_multiline_string(font, Vector2(x + dx, y), row[1], HORIZONTAL_ALIGNMENT_LEFT, w - 100, row[2], 3, Pal.ink(0.75 * ra))
+				c.draw_multiline_string(font, Vector2(x + dx, y), row[1], HORIZONTAL_ALIGNMENT_LEFT, w, row[2], 3, Pal.ink(0.8 * ra))
 				y += 48
 			"gap":
 				y += row[2]
 		i += 1
 	# the hint tier: chosen here, the same ship in all three
-	var ty := r.end.y - 104.0
-	_text(g.txt("tier_label") + "  ·  1 / 2 / 3", Vector2(x, ty), 13, Pal.ink(0.5 * a), font)
+	var tx := r.position.x + 560.0
+	_text(g.txt("tier_label") + "  ·  1 / 2 / 3", Vector2(tx, r.position.y + 318), 14, Pal.ink(0.6 * a), font)
 	var m := c.get_local_mouse_position()
 	for ti in 3:
 		var tid: String = Txt.TIERS[ti]
 		var br := _tier_rect(r, ti)
 		var on: bool = Txt.hint_tier == tid
-		c.draw_rect(br, Color(0.04, 0.042, 0.048, 0.9 * a))
-		c.draw_rect(br, Pal.ink((0.7 if on else (0.35 if br.has_point(m) else 0.16)) * a), false, 1.2)
-		if on:
-			c.draw_rect(Rect2(br.position.x, br.end.y - 2, br.size.x, 2), Pal.heat(a, 1.0))
-		_text(str(ti + 1) + "  " + g.txt("tier_" + tid), br.position + Vector2(14, 22), 15, Pal.ink((0.95 if on else 0.6) * a), font_b if on else font)
-		_text(g.txt("tier_desc_" + tid), br.position + Vector2(14, 42), 13, Pal.ink(0.5 * a), font)
-	_text(g.txt("tier_rule"), Vector2(x, r.end.y - 22), 13, Pal.ink(0.5 * a), font)
-	var pulse := 0.6 + 0.4 * sin(t * 3.0)
-	_text(g.txt("c_start"), Vector2(r.end.x - 48, r.end.y - 22), 16, Pal.ink(pulse * a), font_b, 1)
+		UI.panel(c, br, a, 1.0 if on else (0.4 if br.has_point(m) else 0.0))
+		_text(str(ti + 1) + "  " + g.txt("tier_" + tid), br.position + Vector2(16, 24), 16, Pal.ink((0.95 if on else 0.7) * a), font_b if on else font)
+		_text(g.txt("tier_desc_" + tid), br.position + Vector2(16, 45), 13, Pal.ink(0.55 * a), font)
+	c.draw_multiline_string(font, Vector2(tx, r.position.y + 540), g.txt("tier_rule"), HORIZONTAL_ALIGNMENT_LEFT, 300, 13, 2, Pal.ink(0.5 * a))
+	UI.button(c, font_b, _start_rect(r), g.txt("c_start_btn"), 1.0 if _start_rect(r).has_point(m) else 0.0, true, a, t)
 
 
 # a contract from the market: its card is the offer the player took
@@ -1112,7 +1147,7 @@ func _offer_rows() -> Array:
 	var ty: Dictionary = Market.TYPES.get(o.get("ship", ""), {})
 	var rows: Array = []
 	rows.append(["h", g.txt("c_title_n") % o.get("id", ""), 14])
-	rows.append(["t", "%s  ·  %s · %d m" % [o.get("reg", ""), (ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else "", int(ty.get("length", 0))], 30])
+	rows.append(["t", "%s · %s" % [o.get("reg", ""), (ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else ""], 28])
 	rows.append(["gap", "", 12])
 	rows.append(["h", g.txt("c_req"), 13])
 	rows.append(["li", g.txt("c_req1"), 16])
@@ -1136,7 +1171,6 @@ func _offer_rows() -> Array:
 	if o.get("scope", "full") != "full":
 		rows.append(["h", g.txt("sc_" + o.scope), 13])
 		rows.append(["p", Market.scope_text(o), 15])
-	rows.append(["h", g.txt("c_fee_n") % [Pal.money(float(o.get("fee", 0.0))), int(float(o.get("time", 0.0)) / 60.0)], 13])
 	return rows
 
 

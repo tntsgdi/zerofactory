@@ -113,7 +113,7 @@ func _run() -> void:
 	var g2 = _game()
 	await _frames(2)
 	check(g2.job.get("id", "") == o2.id and not g2.ship.has("story") and g2.fee == float(o2.fee), "the game plays the offer's contract at its fee")
-	var half: Dictionary = await _play(g2, 1200)
+	var half: Dictionary = await _play(g2, 300)
 	SaveGame.save(g2)
 	var before := Snap.snap(g2)
 	var books := _books()

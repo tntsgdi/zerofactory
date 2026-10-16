@@ -726,8 +726,16 @@ func _stars(n: int, p: Vector2, a: float, delay: float) -> void:
 func _market(s: Vector2, a: float) -> void:
 	var os := offers()
 	if os.is_empty():
-		_text(Txt.t("tm_none"), Vector2(s.x * 0.5, s.y * 0.45), 18, Pal.ink(0.5 * a), font, 0)
+		_text(Txt.t("tm_none"), Vector2(s.x * 0.5, s.y * 0.45), 18, Pal.ink(0.6 * a), font, 0)
 		return
+	# what the cards are compared by: the net, and the net per minute of standard time
+	var best_net := -1
+	var best_rate := -1
+	for i in os.size():
+		if best_net < 0 or _net(os[i]) > _net(os[best_net]):
+			best_net = i
+		if best_rate < 0 or _rate(os[i]) > _rate(os[best_rate]):
+			best_rate = i
 	for i in os.size():
 		var o: Dictionary = os[i]
 		var r := _item_rect(i)
@@ -739,80 +747,103 @@ func _market(s: Vector2, a: float) -> void:
 			continue
 		# dealt from below, lifted on hover
 		r.position.y += (1.0 - k) * 36.0 - hk * 6.0
-		var shade := Rect2(r.position + Vector2(0, 10 + hk * 6.0), r.size)
-		draw_rect(shade, Color(0, 0, 0, (0.25 + 0.2 * hk) * k))
-		draw_rect(r, Color(0.03 + 0.012 * sk, 0.032 + 0.012 * sk, 0.037 + 0.012 * sk, 0.96 * k))
-		draw_rect(r, Pal.ink((0.14 + 0.16 * hk + 0.4 * sk) * k), false, 1.2)
-		# the chosen card: a hot edge that runs in, and a glow along the top
-		draw_rect(Rect2(r.position, Vector2(3, r.size.y * sk)), Pal.heat(k, 1.1))
-		Pal.band(self, Rect2(r.position, Vector2(r.size.x, 40)), 0.06 * sk * k)
+		draw_rect(Rect2(r.position + Vector2(0, 10 + hk * 6.0), r.size), Color(0, 0, 0, (0.25 + 0.2 * hk) * k))
+		UI.panel(self, r, k, sk)
 		var x := r.position.x + 28
-		var y := r.position.y + 44
-		var ty: Dictionary = Market.TYPES.get(o.ship, {})
+		var w := r.size.x - 56
+		var y := r.position.y
 		var row_k := func(n: int) -> float: return Pal.ease_out(clampf((deal_t - 0.15 - i * 0.07 - n * 0.035) / 0.3, 0.0, 1.0)) * a
-		_text("CONTRACT %s" % o.id, Vector2(x, y), 12, Pal.ink(0.4 * k), font)
-		_text(o.reg + "  ·  " + (ty.name[0] if Txt.zh else ty.name[1]), Vector2(x + (1.0 - row_k.call(0)) * 14.0, y + 34), 22, Pal.ink(0.95 * row_k.call(0)), font_b)
-		_text("%d m" % int(ty.get("length", 0)), Vector2(r.end.x - 28, y + 34), 14, Pal.ink(0.45 * k), font, 1)
-		_stars(int(o.stars), Vector2(x + 7, y + 64), k, 0.25 + i * 0.07)
-		_text(Txt.t("tm_risk"), Vector2(x + 70, y + 69), 12, Pal.ink(0.4 * k), font)
+		var ty: Dictionary = Market.TYPES.get(o.ship, {})
 		var scope: String = o.get("scope", "full")
+		# 1 · what kind of job, how risky, which ship
 		var sct := Txt.t("sc_" + scope)
-		var scw := font_b.get_string_size(sct, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 18.0
-		var scr := Rect2(r.end.x - 28 - scw, y + 54, scw, 22)
-		draw_rect(scr, (Pal.heat(0.16 * k, 1.0) if scope != "full" else Pal.ink(0.05 * k)))
-		draw_rect(scr, (Pal.heat(0.6 * k, 1.1) if scope != "full" else Pal.ink(0.2 * k)), false, 1.0)
-		_text(sct, Vector2(scr.get_center().x, y + 70), 13, (Pal.heat(0.95 * k, 1.2) if scope != "full" else Pal.ink(0.6 * k)), font_b, 0)
-		_thumb(o, Rect2(x, y + 96, r.size.x - 56, 96), row_k.call(1))
-		_text(Txt.t("tm_reason"), Vector2(x, y + 222), 13, Pal.ink(0.5 * row_k.call(2)), font)
-		_wrap(Copy.slot(o.reason), Vector2(x, y + 246), r.size.x - 56, 15, Pal.ink(0.85 * row_k.call(2)))
-		if scope != "full":
-			_wrap(Market.scope_text(o), Vector2(x, y + 292), r.size.x - 56, 13, Pal.heat(0.9 * row_k.call(2), 1.1))
-		# figures count up as the card lands
+		var cw := font_b.get_string_size(sct, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 24.0
+		var chip := Rect2(x, y + 22, cw, 30)
+		var ccol: Color = Pal.HEAT if scope != "full" else Pal.INK
+		draw_rect(chip, Color(ccol.r, ccol.g, ccol.b, (0.18 if scope != "full" else 0.08) * k))
+		draw_rect(chip, Color(ccol.r, ccol.g, ccol.b, 0.7 * k), false, 1.2)
+		_text(sct, chip.get_center() + Vector2(0, 6), 16, Pal.ink(0.98 * k), font_b, 0)
+		_stars(int(o.stars), Vector2(chip.end.x + 22, y + 37), k, 0.25 + i * 0.07)
+		_text(Txt.t("tm_risk_" + str(int(o.stars))), Vector2(chip.end.x + 80, y + 43), 15, Pal.ink(0.75 * k), font)
+		_text(Txt.t("tm_contract_n") % o.id, Vector2(r.end.x - 28, y + 43), 13, Pal.ink(0.5 * k), font, 1)
+		_text("%s  ·  %s  ·  %d m" % [o.reg, (ty.name[0] if Txt.zh else ty.name[1]), int(ty.get("length", 0))], Vector2(x, y + 82), 17, Pal.ink(0.85 * row_k.call(0)), font_b)
+		# 2 · the number to choose by
+		var net := _net(o)
 		var cnt := Pal.ease_out(clampf((deal_t - 0.2 - i * 0.07) / 0.7, 0.0, 1.0))
+		var hk2: float = row_k.call(1)
+		_text(Txt.t("tm_net"), Vector2(x, y + 122), 14, Pal.ink(0.6 * hk2), font)
+		_text(Pal.money(snappedf(net * cnt, 100.0)), Vector2(x, y + 172), 46, Pal.ink(0.98 * hk2) if net >= 0.0 else Pal.heat(0.95 * hk2, 1.2), font_l)
+		_text(Txt.t("tm_per_min") % Pal.money(snappedf(_rate(o), 10.0)), Vector2(r.end.x - 28, y + 146), 17, Pal.ink(0.9 * hk2), font_b, 1)
+		_text(Txt.t("tm_minutes") % int(float(o.time) / 60.0), Vector2(r.end.x - 28, y + 172), 15, Pal.ink(0.6 * hk2), font, 1)
+		# the best of the three, said plainly
+		var badges: Array = []
+		if i == best_net and os.size() > 1:
+			badges.append(Txt.t("tm_best_net"))
+		if i == best_rate and os.size() > 1:
+			badges.append(Txt.t("tm_best_rate"))
+		var bx := x
+		for bdg in badges:
+			var bw := font_b.get_string_size(bdg, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 16.0
+			draw_rect(Rect2(bx, y + 186, bw, 22), Pal.tint(Pal.FLUID, 0.16 * hk2, 1.0))
+			_text(bdg, Vector2(bx + 8, y + 202), 13, Pal.tint(Pal.FLUID, 0.95 * hk2, 1.1), font_b)
+			bx += bw + 8.0
+		# 3 · what the job is, on the ship
+		_thumb(o, Rect2(x, y + 222, w, 92), row_k.call(2))
+		var task := Market.scope_text(o) if scope != "full" else Txt.t("tm_task_full")
+		c_wrap(task, Vector2(x, y + 340), w, 15, Pal.ink(0.88 * row_k.call(3)))
+		# 4 · the money, line by line
 		var due := Career.due_for(o)
-		var rows := [
-			[Txt.t("tm_value"), Pal.money(snappedf(float(o.value) * cnt, 100.0))],
-			[Txt.t("tm_fee"), "−" + Pal.money(snappedf(float(o.fee) * cnt, 100.0))],
-			[Txt.t("tm_due_c"), "−" + Pal.money(snappedf(due * cnt, 100.0))],
-			[Txt.t("tm_time"), "%d min" % int(float(o.time) / 60.0)],
+		var lines := [
+			[Txt.t("tm_value"), Pal.money(float(o.value))],
+			[Txt.t("tm_fee"), "−" + Pal.money(float(o.fee))],
+			[Txt.t("tm_due_c"), "−" + Pal.money(due)],
 		]
-		for j in rows.size():
-			var yy := y + 340 + j * 28
-			var jk: float = row_k.call(3 + j)
-			_text(rows[j][0], Vector2(x, yy), 14, Pal.ink(0.6 * jk), font)
-			_text(rows[j][1], Vector2(r.end.x - 28, yy), 16, Pal.ink(0.9 * jk), font_b, 1)
-		# what is left: the number to compare the cards by
-		var net := float(o.value) - float(o.fee) - due
-		var nk: float = row_k.call(7)
-		draw_line(Vector2(x, y + 444), Vector2(x + (r.size.x - 56) * nk, y + 444), Pal.ink(0.2 * nk), 1.0)
-		_text(Txt.t("tm_net"), Vector2(x, y + 478), 17, Pal.ink(0.9 * nk), font_b)
-		_text(Txt.t("tm_net_d"), Vector2(x, y + 500), 13, Pal.ink(0.5 * nk), font)
-		_text(Pal.money(snappedf(net * cnt, 100.0)), Vector2(r.end.x - 28, y + 488), 32, Pal.ink(0.98 * nk) if net >= 0.0 else Pal.heat(0.95 * nk, 1.2), font_l, 1)
-		_text(Txt.t("tm_logs"), Vector2(x, y + 540), 13, Pal.ink(0.5 * row_k.call(8)), font)
-		_text(Txt.t("tm_logs_note"), Vector2(r.end.x - 28, y + 540), 12, Pal.ink(0.4 * row_k.call(8)), font, 1)
-		var ly := y + 566.0
+		for j in lines.size():
+			var yy := y + 400 + j * 26
+			var jk: float = row_k.call(4 + j)
+			_text(lines[j][0], Vector2(x, yy), 14, Pal.ink(0.6 * jk), font)
+			_text(lines[j][1], Vector2(r.end.x - 28, yy), 15, Pal.ink(0.85 * jk), font_b, 1)
+		if float(Career.data.money) < float(o.fee):
+			_text(Txt.t("tm_borrow") % Pal.money(float(o.fee) - float(Career.data.money)), Vector2(x, y + 478), 13, Pal.heat(0.9 * k, 1.1), font)
+		# 5 · the paperwork: why it was scrapped, what the logs say, what is declared
+		var pk: float = row_k.call(8)
+		draw_line(Vector2(x, y + 496), Vector2(x + w, y + 496), Pal.ink(0.1 * pk), 1.0)
+		_text(Txt.t("tm_reason"), Vector2(x, y + 522), 13, Pal.ink(0.55 * pk), font)
+		_text(Copy.slot(o.reason), Vector2(x + 96, y + 522), 14, Pal.ink(0.8 * pk), font)
+		_text(Txt.t("tm_logs"), Vector2(x, y + 550), 13, Pal.ink(0.55 * pk), font)
+		var ly := y + 550.0
 		for li in o.logs.size():
-			var lk: float = row_k.call(9 + li)
-			_text("›", Vector2(x + (1.0 - lk) * 10.0, ly), 14, Pal.tint(Pal.AIR, 0.6 * lk, 1.0), font)
-			_text(Copy.slot(o.logs[li]), Vector2(x + 16 + (1.0 - lk) * 10.0, ly), 14, Pal.tint(Pal.AIR, 0.85 * lk, 1.0), font)
-			ly += 26.0
-		# a survey report bought for this offer: typed in behind a scan line
-		if o.has("intel"):
-			var it_t := intel_t.get(o.id, 9.0) as float
-			var full := intel_text(o)
-			var shown := full.substr(0, int(it_t * 40.0))
-			_text(Txt.t("tm_intel"), Vector2(x, r.end.y - 72), 13, Pal.tint(Pal.AIR, 0.8 * k, 1.0), font)
-			_text(shown, Vector2(x + 90, r.end.y - 72), 14, Pal.tint(Pal.AIR, 0.95 * k, 1.0), font)
-			if it_t < 1.0:
-				var sx := r.position.x + r.size.x * it_t
-				draw_rect(Rect2(sx, r.end.y - 92, 2, 30), Pal.tint(Pal.AIR, (1.0 - it_t) * k, 2.0))
-		# the manifest: what the paperwork says is in the hold, by name
-		var mk: float = row_k.call(12)
+			_text("› " + Copy.slot(o.logs[li]), Vector2(x + 96, ly), 14, Pal.tint(Pal.AIR, 0.85 * pk, 1.0), font)
+			ly += 22.0
 		var parts: Array = []
 		for cg in o.get("cargo", []):
 			parts.append("%s %s" % [cg[0], Txt.cargo(cg[1])])
-		_text(Txt.t("tm_cargo"), Vector2(x, r.end.y - 38), 13, Pal.ink(0.5 * mk), font)
-		_text("  ·  ".join(parts) if not parts.is_empty() else Txt.t("tm_no_cargo"), Vector2(x, r.end.y - 16), 14, Pal.ink(0.8 * mk), font)
+		_text(Txt.t("tm_cargo"), Vector2(x, ly + 12), 13, Pal.ink(0.55 * pk), font)
+		c_wrap("  ·  ".join(parts) if not parts.is_empty() else Txt.t("tm_no_cargo"), Vector2(x, ly + 34), w, 14, Pal.ink(0.8 * pk))
+		# a survey report bought for this offer: typed in behind a scan line
+		if o.has("intel"):
+			var it_t := intel_t.get(o.id, 9.0) as float
+			var shown := intel_text(o).substr(0, int(it_t * 40.0))
+			var ir := Rect2(x - 10, r.end.y - 64, w + 20, 48)
+			draw_rect(ir, Pal.tint(Pal.AIR, 0.08 * k, 1.0))
+			_text(Txt.t("tm_intel"), ir.position + Vector2(10, 20), 13, Pal.tint(Pal.AIR, 0.85 * k, 1.0), font)
+			_text(shown, ir.position + Vector2(10, 40), 14, Pal.tint(Pal.AIR, 0.95 * k, 1.0), font)
+			if it_t < 1.0:
+				draw_rect(Rect2(ir.position.x + ir.size.x * it_t, ir.position.y, 2, ir.size.y), Pal.tint(Pal.AIR, (1.0 - it_t) * k, 2.0))
+		else:
+			_text(Txt.t("tm_logs_note"), Vector2(x, r.end.y - 20), 13, Pal.ink(0.45 * pk), font)
+
+
+func _net(o: Dictionary) -> float:
+	return float(o.value) - float(o.fee) - Career.due_for(o)
+
+
+func _rate(o: Dictionary) -> float:
+	return _net(o) / maxf(1.0, float(o.time) / 60.0)
+
+
+func c_wrap(s: String, pos: Vector2, w: float, size_px: int, col: Color) -> void:
+	draw_multiline_string(font, pos, s, HORIZONTAL_ALIGNMENT_LEFT, w, size_px, 2, col)
 
 
 # a cross-section of the ship on the card: only what the paperwork mentions —
@@ -870,6 +901,9 @@ func _shop(_s: Vector2, a: float) -> void:
 	_schematic(sr, ka)
 	for i in FITTED:
 		_callout_box(i, ka)
+	# how to read the drawing
+	var lg := Txt.t("tm_legend")
+	_text(lg, Vector2(sr.get_center().x, sr.end.y - 14), 13, Pal.ink(0.55 * ka), font, 0)
 	# stock: a row of cells under the drawing
 	var g := _grid_rect()
 	_text(Txt.t("tm_items"), g.position + Vector2(0, 22), 15, Pal.ink(0.6 * ka), font_b)
