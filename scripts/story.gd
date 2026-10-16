@@ -240,7 +240,7 @@ func ending_key(k: int) -> bool:
 				_next()
 		"next":
 			if phase_t > 0.8:
-				game.to_title()
+				game.leave()
 	return true
 
 

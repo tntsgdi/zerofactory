@@ -253,4 +253,4 @@ func _next_card(s: Vector2, e: float) -> void:
 	if te > 0.0:
 		var slam := Pal.back(te, 2.4)
 		_text(game.story.pair(nx.get("tbc", ["", ""])), Vector2(r.end.x - 44, r.end.y - 34), int(22 * maxf(slam, 0.05)), Pal.heat(te, 1.2), font_b, 1)
-		_text(game.txt("st_to_title"), Vector2(s.x * 0.5, r.end.y + 50), 13, Pal.ink(0.3 + 0.2 * sin(t * 3.0)), font, 0)
+		_text(game.txt("st_to_terminal" if game.career() else "st_to_title"), Vector2(s.x * 0.5, r.end.y + 50), 13, Pal.ink(0.3 + 0.2 * sin(t * 3.0)), font, 0)

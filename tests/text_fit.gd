@@ -50,6 +50,7 @@ func _all_strings() -> Array:
 	for f in DirAccess.get_files_at("res://ships"):
 		if f.ends_with(".json"):
 			_collect(JSON.parse_string(FileAccess.get_file_as_string("res://ships/" + f)), out)
+	_collect(JSON.parse_string(FileAccess.get_file_as_string(Copy.FILE)), out)
 	return out
 
 
@@ -140,7 +141,35 @@ func _fit_all() -> void:
 			tiers.append(_both("m_tier")[i] % _both("tier_" + tr)[i])
 	_fit("menu", _keys(["m_resume", "m_end", "m_skip", "m_abandon", "m_settings", "m_title", "m_confirm", "m_hints", "m_hints_off"]) + tiers, 20, 420)
 	_fit("menu warning", _keys(["end_warn"]), 14, 1500)
-	_fit("title menu", _keys(["t_continue", "t_new", "t_train", "m_settings", "t_quit"]), 22, 390)
+	_fit("title menu", _keys(["t_continue", "t_new", "t_train", "m_settings", "t_quit", "t_career_go", "t_career_new", "t_career_confirm"]), 22, 390)
+	_fit("title note", _keys(["t_note", "t_career_note"]), 13, 900)
+	# the berth terminal
+	var tabs: Array = []
+	for k in ["tm_tab_market", "tm_tab_shop", "tm_tab_berth"]:
+		for x in _both(k):
+			tabs.append("1  " + x)
+	_fit("terminal tab", tabs, 17, 190, "Medium")
+	_fit("terminal top label", _keys(["tm_money", "tm_loan", "tm_due", "tm_rep"]), 13, 230)
+	_fit("terminal reputation", _prefixed("rep_"), 26, 230, "Light")
+	_fit("terminal rep next", _keys(["tm_rep_next"]), 11, 300)
+	_fit("offer card label", _keys(["tm_reason", "tm_logs", "tm_risk"]), 12, 500)
+	_fit("offer card row", _keys(["tm_value", "tm_fee", "tm_time"]), 14, 360)
+	_fit("offer card note", _keys(["tm_logs_note"]), 11, 520)
+	_fit("shop item", _prefixed("up_") + _prefixed("it_") + _prefixed("fa_"), 17, 1000, "Medium")
+	_fit("terminal keys and messages", _keys(["tm_keys", "tm_borrow", "tm_short", "tm_bought", "tm_none", "tm_later", "tm_owned"]), 16, 1300)
+	_fit("terminal button", _keys(["tm_take", "tm_buy"]), 20, 260, "Medium")
+	var copy: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(Copy.FILE))
+	var reasons: Array = []
+	var logs: Array = []
+	for id in copy:
+		if not copy[id] is Array:
+			continue
+		if id.begins_with("R_"):
+			reasons.append_array(copy[id])
+		elif id.begins_with("G_log") or id.begins_with("X_log"):
+			logs.append_array(copy[id])
+	_fit("offer reason (2 lines)", reasons, 15, 1000)
+	_fit("offer log (2 lines)", logs, 14, 980)
 	# settings rows: label on the left, value between the arrows
 	_fit("settings label", _keys(["s_vol_master", "s_vol_music", "s_vol_sfx", "s_quality", "s_lang", "s_back"]), 18, 360)
 	_fit("settings value", _keys(["s_q_high", "s_q_low"]) + ["中文", "ENGLISH", "100%"], 18, 140, "Medium")
@@ -153,7 +182,7 @@ func _fit_all() -> void:
 			tb.append("1  " + s)
 	_fit("tier button", tb, 15, 228, "Medium")
 	_fit("tier description", _prefixed("tier_desc_"), 11, 228)
-	_fit("contract card", _keys(["tier_rule", "c_title"]) + _prefixed("c_req"), 15, 804)
+	_fit("contract card", _keys(["tier_rule", "c_title", "c_title_n", "c_log_n", "c_fee_n"]) + _prefixed("c_req"), 15, 804)
 	# Liang's radio: two lines of 700 px at most (keep a margin for wrapping)
 	var radio: Array = _prefixed("as_") + _prefixed("rc_") + _prefixed("ex_l") + _keys(["ex_hint_cost", "ex_free", "ex_broken", "ex_a", "ex_bc", "tier_now"])
 	var course: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://ships/ts1_course.json"))

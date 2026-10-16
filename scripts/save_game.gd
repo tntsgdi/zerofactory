@@ -158,6 +158,8 @@ static func save(g) -> void:
 			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode, "reveals": g.reveal_count, "respawn": g.drone_respawn,
 			"debris": debris},
 	}
+	if not g.job.is_empty():
+		d.job = g.job
 	if g.tutorial != null:
 		d.tutorial = g.tutorial.save_state()
 	if g.story != null:
@@ -184,11 +186,19 @@ static func write_file(file: String, d: Dictionary) -> bool:
 
 
 static func read(file: String = "") -> Dictionary:
+	return _read(path if file == "" else file, true)
+
+
+# the career file: the same checks and backup, but not a contract to migrate
+static func read_career(file: String) -> Dictionary:
+	return _read(file, false)
+
+
+static func _read(f: String, contract: bool) -> Dictionary:
 	recovered = false
-	var f := path if file == "" else file
-	var d := read_file(f)
+	var d := read_file(f, contract)
 	if d.is_empty() and FileAccess.file_exists(f + ".bak"):
-		d = read_file(f + ".bak")
+		d = read_file(f + ".bak", contract)
 		recovered = not d.is_empty()
 		if recovered:
 			push_warning("save damaged, loaded the backup")
@@ -196,7 +206,7 @@ static func read(file: String = "") -> Dictionary:
 
 
 # A checked, migrated save, or {} when the file is missing or damaged.
-static func read_file(file: String) -> Dictionary:
+static func read_file(file: String, contract: bool = true) -> Dictionary:
 	if not FileAccess.file_exists(file):
 		return {}
 	var f := FileAccess.open(file, FileAccess.READ)
@@ -215,7 +225,7 @@ static func read_file(file: String) -> Dictionary:
 	var d = JSON.parse_string(body)
 	if typeof(d) != TYPE_DICTIONARY:
 		return {}
-	return migrate(d)
+	return migrate(d) if contract else d
 
 
 # Bring an older save up to VERSION one step at a time; {} if it comes from the

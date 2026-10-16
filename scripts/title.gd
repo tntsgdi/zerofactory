@@ -1,5 +1,7 @@
 extends Control
-# Title: GR-7 is drawn line by line, the name settles in, and the contract waits.
+# Title: GR-7 is drawn line by line, the name settles in, and the career waits:
+# continue it, start a new one (asked twice; the old one is kept aside),
+# the training course, settings, quit.
 
 var font: Font
 var font_l: Font
@@ -13,6 +15,8 @@ var dust: Array = []
 var music: AudioStreamPlayer
 var music_k := 0.0
 var settings: SettingsPanel
+var confirm_new := false
+var next_scene := "res://scenes/main.tscn"
 
 
 const HERON := [
@@ -59,11 +63,17 @@ func _ready() -> void:
 		dust.append([Vector2(randf(), randf()), randf_range(0.004, 0.02), randf() * TAU])
 
 
+# a player from before careers has a contract save and no career: continue picks it up
+func _has_career() -> bool:
+	return Career.exists() or SaveGame.exists()
+
+
 func _items() -> Array:
 	var out: Array = []
-	if SaveGame.exists():
-		out.append(["continue", Txt.t("t_continue")])
-	out.append_array([["new", Txt.t("t_new")], ["train", Txt.t("t_train")], ["settings", Txt.t("m_settings")], ["quit", Txt.t("t_quit")]])
+	if _has_career():
+		out.append(["continue", Txt.t("t_career_go")])
+	out.append(["new", Txt.t("t_career_confirm") if confirm_new else Txt.t("t_career_new")])
+	out.append_array([["train", Txt.t("t_train")], ["settings", Txt.t("m_settings")], ["quit", Txt.t("t_quit")]])
 	return out
 
 
@@ -85,7 +95,10 @@ func _process(dt: float) -> void:
 	if leaving >= 0.0:
 		leaving += dt
 		if leaving > 0.6:
-			get_tree().change_scene_to_file("res://scenes/main.tscn")
+			if next_scene == "career":
+				Game.play_career(get_tree())
+			else:
+				get_tree().change_scene_to_file(next_scene)
 	queue_redraw()
 
 
@@ -108,17 +121,28 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 
 func _pick(id: String) -> void:
+	if id != "new":
+		confirm_new = false
 	match id:
 		"continue":
 			if leaving < 0.0:
-				Game.start_ship = ""
-				SaveGame.load_requested = true
+				# the contract in progress (from its save), or the berth terminal
+				next_scene = "career"
 				leaving = 0.0
 		"new":
 			if leaving < 0.0:
+				if _has_career() and not confirm_new:
+					confirm_new = true
+					return
+				confirm_new = false
+				Career.start_new()
+				SaveGame.clear()
 				# a new operator goes through the training course first
-				Game.start_ship = "gr7" if Txt.certified else "ts1"
-				SaveGame.load_requested = not Txt.certified and SaveGame.exists(SaveGame.train_path)
+				if Txt.certified:
+					next_scene = "career"
+				else:
+					Game.start_ship = "ts1"
+					SaveGame.load_requested = SaveGame.exists(SaveGame.train_path)
 				leaving = 0.0
 		"train":
 			if leaving < 0.0:
@@ -183,6 +207,9 @@ func _draw() -> void:
 		var w := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
 		draw_string(font, Vector2(r.get_center().x - w * 0.5, r.position.y + 30), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Pal.ink((0.95 if i == hover else 0.55) * ia))
 	var note := Txt.t("t_note")
+	if Career.exists():
+		var cd := Career.load_or_new()
+		note = Txt.t("t_career_note") % [int(cd.get("done", 0)), Pal.money(float(cd.get("money", 0.0))), Pal.money(float(cd.get("loan", 0.0)))]
 	draw_string(font, Vector2(40, s.y - 32), note, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.ink(0.25))
 	if leaving >= 0.0:
 		draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, clampf(leaving / 0.5, 0.0, 1.0)))

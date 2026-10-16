@@ -122,13 +122,31 @@ func start_ending(early: bool) -> void:
 		["e_metal", g.income_metal + g.income_hazard],
 		["e_fluid", g.sys.gas_value() + g.sys.fluid_value()],
 		["e_loss", -g.losses],
-		["e_fee", -Game.CONTRACT_FEE],
+		["e_fee_paid" if g.job.get("fee_paid", false) else "e_fee", -g.fee],
 	]
+
+
+# the career's books after this contract: [label key, amount, kind]
+func career_rows() -> Array:
+	var r: Dictionary = game.career_result
+	if r.is_empty():
+		return []
+	var out: Array = [["e_inst", -float(r.installment), "money"], ["e_interest", -float(r.interest), "money"]]
+	if float(r.short) > 0.5:
+		out.append(["e_short", float(r.short), "note"])
+	out.append(["e_loan_left", float(r.loan), "plain"])
+	out.append(["e_funds", float(r.money), "plain"])
+	return out
 
 
 func ending_key(k: int) -> void:
 	if end_t < 1.0:
 		end_t = 9.0
+		return
+	if game.career():
+		# settled with the career: no second go at the same contract
+		if game.story == null or not game.story.wants_epilogue():
+			game.leave()
 		return
 	if k == KEY_R:
 		game.restart()
@@ -720,22 +738,23 @@ func _contract_card(s: Vector2) -> void:
 	var g = game
 	var x := r.position.x + 48
 	var y := r.position.y + 58
-	var rows: Array = []
-	rows.append(["h", g.txt("c_title"), 14])
-	rows.append(["t", g.txt("ship"), 30])
-	rows.append(["gap", "", 12])
-	rows.append(["h", g.txt("c_req"), 13])
-	for i in range(1, 5):
-		rows.append(["li", g.txt("c_req%d" % i), 16])
-	rows.append(["gap", "", 10])
-	rows.append(["h", g.txt("c_log"), 13])
-	for i in range(1, 6):
-		rows.append(["kv", g.txt("c_log%d" % i), g.txt("c_log%dv" % i)])
-	rows.append(["gap", "", 10])
-	rows.append(["p", g.txt("c_brief"), 15])
-	rows.append(["p", g.txt("c_drawing"), 15])
-	rows.append(["gap", "", 6])
-	rows.append(["h", g.txt("c_fee"), 13])
+	var rows: Array = _offer_rows() if g.job.has("reg") else []
+	if rows.is_empty():
+		rows.append(["h", g.txt("c_title"), 14])
+		rows.append(["t", g.txt("ship"), 30])
+		rows.append(["gap", "", 12])
+		rows.append(["h", g.txt("c_req"), 13])
+		for i in range(1, 5):
+			rows.append(["li", g.txt("c_req%d" % i), 16])
+		rows.append(["gap", "", 10])
+		rows.append(["h", g.txt("c_log"), 13])
+		for i in range(1, 6):
+			rows.append(["kv", g.txt("c_log%d" % i), g.txt("c_log%dv" % i)])
+		rows.append(["gap", "", 10])
+		rows.append(["p", g.txt("c_brief"), 15])
+		rows.append(["p", g.txt("c_drawing"), 15])
+		rows.append(["gap", "", 6])
+		rows.append(["h", g.txt("c_fee"), 13])
 	var i := 0
 	for row in rows:
 		var rk := Motion.stagger(card_t, i, 0.03, 0.3)
@@ -779,6 +798,32 @@ func _contract_card(s: Vector2) -> void:
 	_text(g.txt("tier_rule"), Vector2(x, r.end.y - 22), 12, Pal.ink(0.3 * a), font)
 	var pulse := 0.6 + 0.4 * sin(t * 3.0)
 	_text(g.txt("c_start"), Vector2(r.end.x - 48, r.end.y - 22), 16, Pal.ink(pulse * a), font_b, 1)
+
+
+# a contract from the market: its card is the offer the player took
+func _offer_rows() -> Array:
+	var g = game
+	var o: Dictionary = g.job
+	var ty: Dictionary = Market.TYPES.get(o.get("ship", ""), {})
+	var rows: Array = []
+	rows.append(["h", g.txt("c_title_n") % o.get("id", ""), 14])
+	rows.append(["t", "%s  ·  %s · %d m" % [o.get("reg", ""), (ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else "", int(ty.get("length", 0))], 30])
+	rows.append(["gap", "", 12])
+	rows.append(["h", g.txt("c_req"), 13])
+	rows.append(["li", g.txt("c_req1"), 16])
+	rows.append(["li", g.txt("c_req2"), 16])
+	rows.append(["li", g.txt("c_req3_n") % Pal.money(float(o.get("value", 0.0))), 16])
+	rows.append(["li", g.txt("c_req4"), 16])
+	rows.append(["gap", "", 10])
+	rows.append(["h", g.txt("tm_reason"), 13])
+	rows.append(["p", Copy.slot(o.get("reason", "")), 15])
+	rows.append(["h", g.txt("c_log_n"), 13])
+	for lid in o.get("logs", []):
+		rows.append(["li", Copy.slot(lid), 16])
+	rows.append(["gap", "", 6])
+	rows.append(["p", g.txt("c_drawing"), 15])
+	rows.append(["h", g.txt("c_fee_n") % [Pal.money(float(o.get("fee", 0.0))), int(float(o.get("time", 0.0)) / 60.0)], 13])
+	return rows
 
 
 # ---------------------------------------------------------------- pause menu
@@ -918,11 +963,24 @@ func _settlement(s: Vector2) -> void:
 		_text(g.txt("e_net"), Vector2(cx - 260, ny + 10), 18, Pal.ink(0.7), font)
 		_text(Pal.money(g.net() * Pal.ease_out(clampf(ne / 0.8, 0.0, 1.0))), Vector2(cx + 260, ny + 14), int(44 * ns) if ns > 0.05 else 1, Pal.ink(0.98), font_l, 1)
 		_text(g.txt("e_time") + "  " + _clock(g.playtime), Vector2(cx - 260, ny + 46), 14, Pal.ink(0.4), font)
+		var crows := career_rows()
+		for i in crows.size():
+			var ce := ne - 0.6 - i * 0.18
+			if ce < 0.0:
+				break
+			var ca := clampf(ce / 0.2, 0.0, 1.0)
+			var cy := ny + 92 + i * 30
+			var row: Array = crows[i]
+			var v: float = row[1]
+			_text(g.txt(row[0]), Vector2(cx - 260, cy), 15, Pal.ink(0.5 * ca), font)
+			var vt := Pal.money(v) if row[2] != "note" else "+" + Pal.money(v)
+			var col := Pal.heat(0.9 * ca, 1.1) if (row[2] == "money" and v < -0.5) or row[2] == "note" else Pal.ink(0.85 * ca)
+			_text(vt, Vector2(cx + 260, cy), 17, col, font_b, 1)
 	var ge := ne - 0.9
 	if ge > 0.0:
 		_stamp(Vector2(cx + 330, y + 100), ge)
 		var pulse := 0.5 + 0.4 * sin(t * 3.0)
-		var go: String = g.txt("st_go_on") if g.story != null and g.story.wants_epilogue() else g.txt("e_again")
+		var go: String = g.txt("st_go_on") if g.story != null and g.story.wants_epilogue() else g.txt("e_to_terminal" if g.career() else "e_again")
 		_text(go, Vector2(cx, s.y - 80), 16, Pal.ink(pulse), font_b, 0)
 
 

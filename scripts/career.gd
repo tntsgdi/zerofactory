@@ -19,6 +19,18 @@ static var path := PATH           # tests point this at their own file
 static var data: Dictionary = {}
 
 
+# a test run never touches the player's own career file
+static func _test_run() -> bool:
+	for a in OS.get_cmdline_args():
+		if a == "-s" or a == "--script" or a.find("tests/") >= 0:
+			return true
+	return false
+
+
+static func usable() -> bool:
+	return path != PATH or not _test_run()
+
+
 static func fresh() -> Dictionary:
 	return {
 		"version": VERSION,
@@ -39,22 +51,37 @@ static func fresh() -> Dictionary:
 
 
 static func exists() -> bool:
-	return SaveGame.exists(path)
+	return usable() and SaveGame.exists(path)
 
 
 static func load_or_new() -> Dictionary:
 	if data.is_empty():
-		var d := SaveGame.read(path)
+		var d := SaveGame.read_career(path) if usable() else {}
 		data = d if not d.is_empty() else fresh()
 		for k in fresh():
 			if not data.has(k):
 				data[k] = fresh()[k]
+		_normalize()
 	return data
+
+
+# JSON gives every number back as a float: counts, levels and seeds are whole
+static func _normalize() -> void:
+	for k in ["rep", "done", "seed", "version"]:
+		data[k] = int(data.get(k, 0))
+	for bag in ["items", "upgrades"]:
+		var b: Dictionary = data.get(bag, {})
+		for k in b:
+			b[k] = int(b[k])
+	for o in data.get("offers", []) + [data.get("active", {})]:
+		for k in ["stars", "variant"]:
+			if o.has(k):
+				o[k] = int(o[k])
 
 
 # a new career: the old one is kept beside it as .old
 static func start_new() -> void:
-	if FileAccess.file_exists(path):
+	if usable() and FileAccess.file_exists(path):
 		var full := ProjectSettings.globalize_path(path)
 		if FileAccess.file_exists(path + ".old"):
 			DirAccess.remove_absolute(full + ".old")
@@ -66,7 +93,7 @@ static func start_new() -> void:
 
 
 static func save() -> bool:
-	if data.is_empty():
+	if data.is_empty() or not usable():
 		return false
 	return SaveGame.write_file(path, data)
 

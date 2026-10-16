@@ -1,10 +1,11 @@
 class_name Game
 extends Node2D
-# Contract #001: the dock, the ship, the drone and everything that happens
+# A contract: the dock, the ship, the drone and everything that happens
 # between them. Holds the camera, routes input, reacts to every event the
 # systems raise (cuts, arcs, leaks, blowouts, recoveries) and keeps the books.
+# A career contract (Game.contract) also settles with the career at the end.
 
-const CONTRACT_FEE := 9000.0
+const CONTRACT_FEE := 9000.0     # a contract that names no fee of its own
 const DRONE_FEE := 2000.0
 const CAM_ZOOM := 1.65
 const SHIP_CENTER := Vector2(21.0 * 48.0, 0.0)
@@ -23,6 +24,10 @@ var bot = null               # tests drive the game through this dict
 var ship_id := "gr7"         # which ship file this contract is about
 var ship: Dictionary = {}
 static var start_ship := ""  # the title screen picks the next ship (training, exam, contract)
+static var contract: Dictionary = {}   # the career's contract to play next (empty: a contract outside any career)
+var job: Dictionary = {}     # the career contract this scene plays
+var fee := CONTRACT_FEE
+var career_result: Dictionary = {}     # the settlement with the career, once the contract is over
 var training := false        # the ship file is a training course, not a contract
 var tutorial: Tutorial
 var assist: Assist
@@ -106,14 +111,26 @@ func _ready() -> void:
 	# the assessment draws one of its four problems
 	if ship_id == "exam":
 		ship_id = Exam.pick()
+	job = contract
+	contract = {}
 	var data := {}
 	if SaveGame.load_requested and (not testing or SaveGame.allow_test):
 		data = SaveGame.read(SaveGame.file_for_ship(Ship.load_data(ship_id)))
+		# a save left over from another contract of the career is not this one
+		if not job.is_empty() and data.has("job") and data.job.get("id", "") != job.get("id", ""):
+			data = {}
 	SaveGame.load_requested = false
 	if not data.is_empty():
 		ship_id = data.get("ship", "gr7")
+		if data.has("job"):
+			job = data.job
 	ship = Ship.load_data(ship_id)
 	training = ship.get("training", false)
+	if training or ship.has("exam"):
+		job = {}
+	if job.has("variant"):
+		ship = Variant.make(ship, job)
+	fee = float(job.get("fee", ship.get("fee", CONTRACT_FEE)))
 	dock.set_ship(ship)
 	if not data.is_empty() and SaveGame.apply(self, data):
 		Ship.rooms(world, ship)
@@ -589,9 +606,22 @@ func finish_contract(early: bool) -> void:
 	else:
 		hud.start_ending(early)
 	sfx.play("end")
-	if not testing:
+	if not testing or SaveGame.allow_test:
 		SaveGame.clear()
+	if not testing:
 		best = SaveGame.record_best(recovery_rate(), net(), playtime, hud.grade())
+	if not job.is_empty() and Career.usable():
+		Career.load_or_new()
+		career_result = Career.settle(settle_report())
+
+
+# what the career needs to know about how this contract went
+func settle_report() -> Dictionary:
+	return {"earned": earned(), "losses": losses, "rate": recovery_rate(), "grade": hud.grade(), "time": playtime, "fee": fee}
+
+
+func career() -> bool:
+	return not job.is_empty()
 
 
 func _ending(_dt: float) -> void:
@@ -609,6 +639,9 @@ func after_training(where: String) -> void:
 	SaveGame.clear(SaveGame.train_path)
 	Engine.time_scale = 1.0
 	get_tree().paused = false
+	if where != "exam" and Career.usable():
+		play_career(get_tree())
+		return
 	start_ship = "exam" if where == "exam" else "gr7"
 	SaveGame.load_requested = false
 	get_tree().reload_current_scene()
@@ -642,6 +675,30 @@ func to_title() -> void:
 	get_tree().change_scene_to_file("res://scenes/title.tscn")
 
 
+# the contract is over and settled: a career goes back to the berth terminal
+func leave() -> void:
+	if not career():
+		to_title()
+		return
+	Engine.time_scale = 1.0
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/terminal.tscn")
+
+
+# the career's contract in hand (the first one after training), or the terminal when there is none
+static func play_career(tree: SceneTree) -> void:
+	Career.load_or_new()
+	var a: Dictionary = Career.active()
+	if a.is_empty():
+		tree.change_scene_to_file("res://scenes/terminal.tscn")
+		return
+	contract = a
+	start_ship = a.get("ship", "gr7")
+	var saved := SaveGame.read(SaveGame.path) if SaveGame.exists() else {}
+	SaveGame.load_requested = not saved.is_empty() and saved.get("job", a).get("id", "") == a.get("id", "")
+	tree.change_scene_to_file("res://scenes/main.tscn")
+
+
 # ---------------------------------------------------------------- economy
 
 func earned() -> float:
@@ -653,7 +710,7 @@ func recovery_rate() -> float:
 
 
 func net() -> float:
-	return earned() - losses - CONTRACT_FEE
+	return earned() - losses - fee
 
 
 func incident(kind: String, detail: String = "") -> void:
@@ -1133,6 +1190,18 @@ func on_ignite(cl: Dictionary, pos: Vector2) -> void:
 	sfx.play("ignite")
 	lose("loss_fire", 1500.0, c + Vector2(0, -60))
 	hint("fire")
+
+
+# a finished laser stroke through one attached piece (pl in world space), as
+# the laser would make it: equipment it touches, lines it crosses, the kerf
+func cut_kerf(p, pl: PackedVector2Array) -> void:
+	if pl.is_empty():
+		return
+	on_cut_into(p, pl[0])
+	if pl.size() >= 2:
+		for hit in world.cut_lines(pl):
+			on_line_cut(hit[0], hit[1])
+	on_kerf(p, world.commit_cut(p, world.frame(p).affine_inverse() * pl))
 
 
 func on_kerf(p, res: Dictionary) -> void:

@@ -1,15 +1,16 @@
 """Build the game fonts: Noto Sans SC (OFL) cut to every character the scripts can show.
 Regular (400) for UI, Light (300) for big numerals and titles.
-Usage: python tools/subset_font.py"""
+Usage: python tools/subset_font.py [path/to/NotoSansSC-VF.ttf]"""
+import sys
 from pathlib import Path
 from fontTools import subset
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 root = Path(__file__).resolve().parents[1]
-source = Path("E:/godot/zengliang/build/NotoSansSC-VF.ttf")
+source = Path(sys.argv[1] if len(sys.argv) > 1 else "E:/godot/zengliang/build/NotoSansSC-VF.ttf")
 chars = set(chr(c) for c in range(0x20, 0x7F))
 chars |= set("·—–→←↑↓×÷±%…「」『』（）《》，。！？：；、“”‘’°²³▲△▽◆◇○●■□★☆✦⌁∞≈≥≤▸▹◂◃")
-for folder in ['scripts', 'scenes', 'ships']:
+for folder in ['scripts', 'scenes', 'ships', 'data']:
     for f in (root / folder).rglob('*'):
         if f.suffix in ('.gd', '.tscn', '.json'):
             chars |= set(f.read_text(encoding='utf-8'))

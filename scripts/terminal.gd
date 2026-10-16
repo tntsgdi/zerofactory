@@ -163,6 +163,7 @@ func take(i: int) -> void:
 	if o.is_empty():
 		return
 	Game.start_ship = o.ship
+	Game.contract = o
 	SaveGame.load_requested = false
 	leaving = 0.0
 

@@ -52,6 +52,9 @@ static func to_srgb8(img: Image) -> Image:
 
 static func save(root: Viewport, path: String) -> void:
 	var t := Time.get_ticks_msec()
+	# headless runs have no picture to take
+	if DisplayServer.get_name() == "headless":
+		return
 	var img := to_srgb8(root.get_texture().get_image())
 	img.save_png(path)
 	print("SHOT ", path, " (", Time.get_ticks_msec() - t, " ms)")
