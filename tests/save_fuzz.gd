@@ -29,8 +29,8 @@ func _initialize() -> void:
 	for ext in ["", ".bak", ".tmp"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveGame.path + ext))
 	# migration: a v1 save gains the v2 fields, a save from the future is refused
-	var m1 := SaveGame.migrate({"version": 1, "world": {}, "sys": {}, "game": {}})
-	var m_ok: bool = int(m1.get("version", 0)) == SaveGame.VERSION and m1.sys.has("leaks") and m1.game.has("debris") and SaveGame.migrate({"version": 99, "world": {}, "sys": {}, "game": {}}).is_empty()
+	var m1 := SaveGame.migrate({"version": 1, "world": {}, "sys": {"VC01": true, "cap": 0.5}, "game": {"bb": true}})
+	var m_ok: bool = int(m1.get("version", 0)) == SaveGame.VERSION and m1.sys.has("leaks") and m1.game.has("debris") and m1.sys.switch["V-C01"] and m1.sys.src["CAP-01"].charge == 0.5 and m1.game.must["BB-01"] and m1.ship == "gr7" and SaveGame.migrate({"version": 99, "world": {}, "sys": {}, "game": {}}).is_empty()
 	print("migration v1 -> v%d: %s" % [SaveGame.VERSION, "OK" if m_ok else "FAIL"])
 	if not m_ok:
 		fails += 1
@@ -90,9 +90,17 @@ func _snap() -> Dictionary:
 	for k in s.vols:
 		vols[k] = s.vols[k].n
 	out.vols = vols
-	out.flags = [s.VC01, s.VF01, s.VE1, s.VE2, s.G_running, s.KG, s.KB, s.aux, s.discharge, s.g_remote]
-	out.nums = {"bat": s.bat, "cap": s.cap, "nav": s.nav_bat, "fuel": s.fuel, "fline": s.fuel_line, "cool": s.cool, "coolb": s.cool_broken,
-		"T": s.loop_T, "frec": s.fuel_recovered, "crec": s.cool_recovered, "grec": s.gas_recovered, "glost": s.gas_lost, "flost": s.fluid_lost}
+	out.flags = [s.switch.duplicate(), s.aux, s.remote_sent]
+	out.nums = {"T": s.loop_T, "grec": s.gas_recovered, "glost": s.gas_lost, "flost": s.fluid_lost}
+	for t in s.src:
+		out.nums["charge " + t] = s.src[t].charge
+		out.flags.append(s.src[t].running)
+	for t in s.iso:
+		out.nums["iso " + t] = s.iso[t].charge
+	for k in s.fvol:
+		out.nums["fluid " + k] = s.fvol[k].amount
+	for f in s.fluid_rec:
+		out.nums["rec " + f] = s.fluid_rec[f]
 	var hoses := {}
 	for k in s.hoses:
 		hoses[k] = s.hoses[k].mode
@@ -110,7 +118,7 @@ func _snap() -> Dictionary:
 	out.clouds = s.clouds.size()
 	out.blown = s.blown.keys()
 	out.books = {"ie": game.income_equip, "im": game.income_metal, "ih": game.income_hazard, "loss": game.losses, "lines": game.loss_lines.size(),
-		"bb": game.bb_ok, "gen": game.gen_ok, "ledger": game.ledger.size(), "hp": game.drone.integrity, "alive": game.drone.alive,
+		"must": game.mandatory_ok.duplicate(), "ledger": game.ledger.size(), "hp": game.drone.integrity, "alive": game.drone.alive,
 		"tool": game.tools.tool, "mode": game.tools.hose_mode, "reveals": game.reveal_count}
 	out.debris = game.dock.debris.size() + game.dock.swallowing.size()
 	return out

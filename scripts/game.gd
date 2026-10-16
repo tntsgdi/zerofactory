@@ -4,7 +4,6 @@ extends Node2D
 # between them. Holds the camera, routes input, reacts to every event the
 # systems raise (cuts, arcs, leaks, blowouts, recoveries) and keeps the books.
 
-const TOTAL_VALUE := 120000.0
 const CONTRACT_FEE := 9000.0
 const DRONE_FEE := 2000.0
 const CAM_ZOOM := 1.65
@@ -21,6 +20,8 @@ var blueprint: Blueprint
 var sfx: Sfx
 var cam: Camera2D
 var bot = null               # tests drive the game through this dict
+var ship_id := "gr7"         # which ship file this contract is about
+var ship: Dictionary = {}
 var testing := false
 
 var state := "intro"         # intro play ending
@@ -50,8 +51,9 @@ var income_metal := 0.0
 var income_hazard := 0.0
 var losses := 0.0
 var loss_lines: Array = []   # [text_key, amount]
-var bb_ok := false
-var gen_ok := false
+var mandatory_ok := {}     # tag -> recovered intact into the equipment bay
+var _mand: Array = []
+var _mand_zh := -1
 var feed: Array = []         # [text, amount, t] recent income lines for the HUD
 var drone_respawn := -1.0
 var hurt_cd := {}
@@ -90,15 +92,19 @@ func _ready() -> void:
 	if SaveGame.load_requested and (not testing or SaveGame.allow_test):
 		data = SaveGame.read()
 	SaveGame.load_requested = false
+	if not data.is_empty():
+		ship_id = data.get("ship", "gr7")
+	ship = Ship.load_data(ship_id)
+	dock.set_ship(ship)
 	if not data.is_empty() and SaveGame.apply(self, data):
-		GR7.rooms_only(world)
+		Ship.rooms(world, ship)
 	else:
 		data = {}
-		GR7.build(world)
+		Ship.build(world, ship)
 	sys = Systems.new()
 	add_child(sys)
-	world.finalize()
-	sys.setup(self, world)
+	world.finalize(float(ship.get("value", {}).get("metal", 12000.0)))
+	sys.setup(self, world, ship)
 	world.piece_freed.connect(on_body_freed)
 	add_child(fx)
 	blueprint = Blueprint.new()
@@ -171,6 +177,29 @@ func _is_test() -> bool:
 
 func txt(key: String) -> String:
 	return Txt.t(key)
+
+
+# the contract's named items: [tag, name text], in ship-file order
+func mandatory_items() -> Array:
+	if _mand_zh == int(Txt.zh):
+		return _mand
+	_mand = []
+	_mand_zh = int(Txt.zh)
+	for pd in ship.get("pieces", []):
+		if pd.get("mandatory", false):
+			_mand.append([pd.get("tag", ""), txt(pd.get("name_key", ""))])
+	return _mand
+
+
+func all_mandatory_ok() -> bool:
+	for it in mandatory_items():
+		if not mandatory_ok.get(it[0], false):
+			return false
+	return true
+
+
+func room_name(room: String) -> String:
+	return txt(Ship.room_name_key(ship, room))
 
 
 func cam_zoom() -> float:
@@ -375,12 +404,12 @@ func _intro(dt: float) -> void:
 	world.position.x = ship_offset * (1.0 - k)
 	cam_override = Vector2(21.0 * 48.0 + world.position.x * 0.35, -0.5 * 48.0)
 	zoom_override = 0.62
-	for i in 4:
+	for i in dock.clamps.size():
 		var on := clampf((t - 3.5 - i * 0.22) / 0.3, 0.0, 1.0)
 		dock.clamp_t[i] = 1.0 - Pal.ease_out(on)
 		if on > 0.0 and not dock.has_meta("cl%d" % i):
 			dock.set_meta("cl%d" % i, true)
-			var p := Vector2(Dock.CLAMPS[i] * 48.0, 4.0 * 48.0)
+			var p: Vector2 = dock.clamps[i] * 48.0
 			fx.flash(p, 60.0, 0.35, Pal.ink(0.8, 1.6))
 			fx.sparks(p, Vector2.UP, 10, Pal.heat(1.0, 2.0), 260.0, 0.35, 1.2)
 			shake(0.15)
@@ -398,7 +427,7 @@ func _end_intro() -> void:
 	if state != "intro":
 		return
 	world.position.x = 0.0
-	for i in 4:
+	for i in dock.clamps.size():
 		dock.clamp_t[i] = 0.0
 	if not drone.alive:
 		_launch_drone()
@@ -467,7 +496,7 @@ func earned() -> float:
 
 
 func recovery_rate() -> float:
-	return earned() / TOTAL_VALUE
+	return earned() / float(ship.get("value", {}).get("total", 120000.0))
 
 
 func net() -> float:
@@ -558,17 +587,16 @@ func on_swallowed(b, zone: String) -> void:
 		v += piece_value(p, zone)
 		if p.tag != "" and p.cls == "equip":
 			names.append(p.tag)
-		if zone == "equip" and p.intact and p.cls == "equip":
-			if p.tag == "BB-01":
-				bb_ok = true
-			if p.tag == "G-01":
-				gen_ok = true
+		if zone == "equip" and p.intact and p.cls == "equip" and p.mandatory:
+			mandatory_ok[p.tag] = true
 		if zone == "metal" and sys.dest_of(p) == "hazard":
 			boom = true
-		if p.tag == "T-F01":
-			sys.fuel = 0.0
-		if p.tag == "CAP-01":
-			sys.cap = 0.0
+		# whatever it held goes with it
+		var fv: String = sys.fluid_in_piece(p)
+		if fv != "":
+			sys.set_fluid(fv, 0.0)
+		if sys.src.has(p.tag) and sys.src[p.tag].kind == "cap":
+			sys.drain_source(p.tag)
 	var label := ", ".join(names) if not names.is_empty() else txt("scrap_metal")
 	ledger.append([label, zone, v])
 	if zone == "metal" and b.pieces.any(func(p): return p.cls == "equip" and p.intact):
@@ -773,16 +801,15 @@ func on_cut_into(p, pos: Vector2) -> void:
 		return
 	var was_value: float = p.value * p.cond
 	var volts: float = sys.piece_volts(p)
-	if p.hazard == "gas_tank" and sys.P(sys.tank_vol(p)) > 200.0:
+	var fv: String = sys.fluid_in_piece(p)
+	if sys.bursts(p):
 		_burst(p, pos)
-	elif p.hazard == "fuel_tank" and sys.fuel > 0.02:
-		_leak("fuel", "fuel_tank", pos, p)
+	elif fv != "" and sys.fluid(fv) > 0.02:
+		_leak(sys.fvol[fv].fluid, fv, pos, p)
 	if volts > 30.0:
 		_arc(pos, volts, p)
-		match p.tag:
-			"CAP-01": sys.cap = 0.0
-			"B-01": sys.bat = 0.0
-			"G-01": sys.G_running = false
+		# the arc empties whatever stored it
+		sys.drain_source(p.tag)
 	elif volts > 0.0:
 		fx.sparks(pos, Vector2.UP, 8, Pal.tint(Pal.VOLT, 1.0, 2.0), 160.0, 0.3, PI)
 		sfx.play("zap_small")
@@ -880,23 +907,22 @@ func on_line_cut(l, at: Vector2) -> void:
 			fx.sparks(at, Vector2.UP, 4, Pal.ink(0.8, 1.3), 120.0, 0.2, PI)
 		say("cable_cut", at, l.id.to_upper())
 		return
-	match l.net:
-		"coolant", "coolant_broken":
-			var amt: float = sys.cool if l.net == "coolant" else sys.cool_broken
-			if amt > 0.02:
-				_leak("coolant", "cool" if l.net == "coolant" else "cool_broken", at)
-				if sys.loop_T > 60.0 and drone.alive and drone.global_position.distance_to(at) < 2.5 * 48.0:
+	var vk: String = sys.fluid_of_net(l.net)
+	if vk != "":
+		var v: Dictionary = sys.fvol[vk]
+		if sys.fluid_behind(vk) > float(v.get("leak_min", 0.02)):
+			_leak(v.fluid, vk, at)
+			if v.fluid != "fuel":
+				# hot coolant scalds and fouls what it lands on
+				if sys.line_temp(l) > 60.0 and drone.alive and drone.global_position.distance_to(at) < 2.5 * 48.0:
 					hurt_drone(25.0, at, "scald", "scald", 1.0)
 				for q in _equip_near(at, 2.0 * 48.0):
 					q.contam = true
 				world.redraw_all()
-		"fuel":
-			if sys.fuel_line > 0.005 or (sys.VF01 and sys.fuel > 0.02):
-				_leak("fuel", "fuel_line", at)
-		"gas":
-			for i in 10:
-				fx.puff(at, Vector2.from_angle(randf() * TAU) * 120.0, 0.6, 4.0, 22.0, Pal.tint(Pal.AIR, 0.1))
-			sfx.play("hiss")
+	elif l.net == "gas":
+		for i in 10:
+			fx.puff(at, Vector2.from_angle(randf() * TAU) * 120.0, 0.6, 4.0, 22.0, Pal.tint(Pal.AIR, 0.1))
+		sfx.play("hiss")
 	fx.sparks(at, Vector2.UP, 3, Pal.ink(0.7, 1.2), 100.0, 0.2, PI)
 
 
@@ -991,23 +1017,22 @@ func do_measure(tg: Dictionary) -> void:
 		"ctrl":
 			var c = tg.ctrl
 			if c.kind == "discharge":
-				var l3 = world.lines["c3"]
-				sys.measure(c.id, "volts", c.id, "inst_volts", {"ctrl": c, "volts_fn": func(): return sys.line_volts(l3) if l3.alive else 0.0})
+				sys.measure(c.id, "volts", c.id, "inst_volts", {"ctrl": c, "volts_fn": _ctrl_volts_fn(c)})
 			else:
 				match c.medium:
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
-						if c.id == "P-C01" and not sys.VC01:
+						if sys.dead_leg_closed(c):
 							hint("dead_leg")
 					"volt":
-						sys.measure(c.id, "volts", c.id, "inst_volts", {"ctrl": c, "volts_fn": func(): return sys.bus_volts()})
-						if sys.g_remote and sys.bus_live:
+						sys.measure(c.id, "volts", c.id, "inst_volts", {"ctrl": c, "volts_fn": _ctrl_volts_fn(c)})
+						if sys.remote_sent and sys.bus_live:
 							hint("not_off")
-					"fuel":
-						sys.measure(c.id, "fluid", c.id, "inst_fluid", {"ctrl": c, "fluid_fn": func(): return sys.fuel})
-					"coolant":
-						sys.measure(c.id, "fluid", c.id, "inst_fluid", {"ctrl": c, "fluid_fn": func(): return sys.cool / 0.25})
-						sys.measure(c.id + "/T", "temp", c.id, "inst_temp", {"ctrl": c, "temp_fn": func(): return sys.loop_T})
+					_:
+						if sys.fluid_at_port(c.id) != "":
+							sys.measure(c.id, "fluid", c.id, "inst_fluid", {"ctrl": c, "fluid_fn": func(): return sys.port_level(c.id)})
+						if sys.is_heat_port(c.id):
+							sys.measure(c.id + "/T", "temp", c.id, "inst_temp", {"ctrl": c, "temp_fn": func(): return sys.loop_T})
 		"line":
 			var l = tg.line
 			if l.kind == "cable":
@@ -1020,7 +1045,7 @@ func do_measure(tg: Dictionary) -> void:
 			var local: Vector2 = world.frame(p).affine_inverse() * tg.pos
 			var label: String = p.tag if p.tag != "" else Txt.piece_name(p)
 			sys.measure(key, "temp", label, "inst_inspect", {"piece": p, "local": local, "inspect": _inspect_text(p), "temp_fn": func(): return p.temp})
-			if p.cls == "equip" and (p.hazard in ["gen", "battery", "cap"] or p.tag in ["SWB", "C-03", "NAV-01", "CON-A"]):
+			if sys.electric_piece(p):
 				sys.measure(key + "/V", "volts", label, "inst_volts", {"piece": p, "local": local + Vector2(0, 16), "volts_fn": func(): return sys.piece_volts(p)})
 	sfx.play("measure")
 	fx.ring(tg.pos, 4.0, 26.0, 0.35, Pal.ink(0.8, 1.3), 1.4)
@@ -1059,18 +1084,24 @@ func restore_reading(rd: Dictionary) -> void:
 		extra = {"ctrl": c, "vol": rd.vol}
 		match rd.kind:
 			"volts":
-				if c.kind == "discharge":
-					var l3 = world.lines["c3"]
-					extra.volts_fn = func(): return sys.line_volts(l3) if l3.alive else 0.0
-				else:
-					extra.volts_fn = func(): return sys.bus_volts()
+				extra.volts_fn = _ctrl_volts_fn(c)
 			"fluid":
-				extra.fluid_fn = (func(): return sys.fuel) if c.medium == "fuel" else (func(): return sys.cool / 0.25)
+				extra.fluid_fn = func(): return sys.port_level(c.id)
 			"temp":
 				extra.temp_fn = func(): return sys.loop_T
 	var r := {"key": key, "kind": rd.kind, "at": rd.at, "inst": rd.inst, "t": rd.t, "val": rd.val, "text": rd.text, "ver": int(rd.ver), "vk": ""}
 	r.merge(extra, true)
 	sys.readings[key] = r
+
+
+# What a volt probe on this control shows: a discharge plug reads its
+# capacitor's own cable, a test point reads the bus.
+func _ctrl_volts_fn(c) -> Callable:
+	if c.kind == "discharge":
+		var cap_tag: String = sys.discharge_source(c.id)
+		var l3 = world.lines.get(sys.src[cap_tag].cable) if cap_tag != "" else null
+		return func(): return sys.line_volts(l3) if l3 != null and l3.alive else 0.0
+	return func(): return sys.bus_volts()
 
 
 func _inspect_text(p) -> String:
@@ -1141,26 +1172,32 @@ func _operate(c, at: Vector2) -> void:
 			say("sw_on" if c.state else "sw_off", at, c.id)
 			sfx.play("switch")
 		"remote":
-			sys.g_remote = true
+			# a remote stop may or may not reach the machine: the ship file says
+			sys.remote_sent = true
 			c.state = true
+			var rt: String = Ship.ctrl_cfg(ship, c.id).get("target", "")
+			if sys.src.has(rt) and sys.src[rt].get("remote_works", true):
+				sys.stop_source(rt)
 			say("remote_sent", at)
 			sfx.play("switch")
 			hint("remote")
 		"stop":
-			if sys.G_running:
-				sys.G_running = false
+			var st: String = Ship.ctrl_cfg(ship, c.id).get("target", "")
+			if sys.running(st):
+				sys.stop_source(st)
 				say("gen_stopped", at)
 				sfx.play("gen_down")
 				shake(0.15)
 		"socket":
 			sys.aux = not sys.aux
 			c.state = sys.aux
+			sys.set_switch(c.id, sys.aux)
 			say("aux_on" if sys.aux else "aux_off", at)
 			sfx.play("plug")
 		"discharge":
-			sys.discharge = not sys.discharge
-			c.state = sys.discharge
-			say("discharge_on" if sys.discharge else "discharge_off", at)
+			c.state = not c.state
+			sys.set_switch(c.id, c.state)
+			say("discharge_on" if c.state else "discharge_off", at)
 			sfx.play("plug")
 		"door":
 			if not (sys.bus_live or sys.aux):
@@ -1182,19 +1219,21 @@ func _operate(c, at: Vector2) -> void:
 			sfx.play("unjam")
 			fx.sparks(at, Vector2.UP, 12, Pal.ink(0.9, 1.4), 200.0, 0.3, 1.2)
 		"hatch":
-			var jam = world.ctrls.get("HATCH-JAM")
+			var hc := Ship.ctrl_cfg(ship, c.id)
+			var jam = world.ctrls.get(hc.get("jam", ""))
 			if jam != null and not jam.state:
 				say("hatch_jammed", at)
 				sfx.play("deny")
 				hint("hatch_jam")
 				return
-			var powered: bool = (sys.bus_live and world.lines["c9"].alive) or sys.aux
+			var feed = world.lines.get(hc.get("cable", ""))
+			var powered: bool = (sys.bus_live and (feed == null or feed.alive)) or sys.aux
 			if not powered:
 				say("no_power", at)
 				sfx.play("deny")
 				hint("no_power")
 				return
-			for t in ["HATCH-1", "HATCH-2"]:
+			for t in hc.get("doors", []):
 				var hp = world.tag(t)
 				if hp != null and hp.body == null:
 					hp.door_open = not hp.door_open
@@ -1211,7 +1250,7 @@ func do_hose(tg: Dictionary) -> void:
 		sfx.play("unplug")
 		return
 	var mode := tools.hose_mode if c.medium == "gas" else "recover"
-	if c.id == "P-C01" and not sys.VC01:
+	if sys.dead_leg_closed(c):
 		hint("dead_leg_hose")
 	sys.hoses[c.id] = {"mode": mode, "t": 0.0}
 	dock.hose_attach(c.id, tg.pos)
@@ -1226,7 +1265,7 @@ func on_reveal(room: String, from: Vector2) -> void:
 	reveal_count += 1
 	if state == "play":
 		sfx.play("reveal", from)
-		say("room_open", from, txt("room_" + room))
+		say("room_open", from, room_name(room))
 
 
 func on_blowout(room: String, pos: Vector2, dir: Vector2, p0: float) -> void:
@@ -1240,7 +1279,7 @@ func on_blowout(room: String, pos: Vector2, dir: Vector2, p0: float) -> void:
 	fx.burst_shards(pos, 12, 500.0, Pal.ink(0.8), 7.0)
 	hud.white_flash(0.12)
 	sfx.play("blowout", pos)
-	say("blowout", pos, txt("room_" + room))
+	say("blowout", pos, room_name(room))
 	var k := clampf(p0 / 108.0, 0.2, 1.2)
 	var lost := 0.0
 	for id in world.order:
@@ -1285,8 +1324,8 @@ func on_jet(room: String, pos: Vector2, dir: Vector2, p: float, g: float) -> voi
 				hurt_drone(25.0, pos, "jet_hit", "jet", 1.5)
 
 
-func on_discharge_refused() -> void:
-	var c = world.ctrls.get("E-D02")
+func on_discharge_refused(ctrl_id: String) -> void:
+	var c = world.ctrls.get(ctrl_id)
 	if c != null:
 		c.state = false
 		say("discharge_refused", world.ctrl_world(c))

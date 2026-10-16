@@ -11,7 +11,7 @@ func _initialize() -> void:
 	root.add_child(preload("res://tests/test_window.gd").new())
 	var w := World.new()
 	root.add_child(w)
-	GR7.build(w)
+	Ship.build(w, Ship.load_data("gr7"))
 	w.finalize()
 	if reveal:
 		for n in w.rooms:

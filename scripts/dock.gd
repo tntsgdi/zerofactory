@@ -13,7 +13,6 @@ const ZONES := {
 const NET := Vector2(2.8, 8.3)
 const BAY := Vector2(-5.0, -6.0)
 const MASTS := [Vector2(5.0, -10.0), Vector2(23.0, -10.0), Vector2(38.0, 6.6)]
-const CLAMPS := [7.0, 15.8, 23.4, 28.6]
 # semi-open berth: a floor platform, a tower on the left with an arm reaching
 # over the ship; the top and the right are open to space, held only by a
 # tractor field that eases strays back in
@@ -31,7 +30,8 @@ var zone_state := {}       # id -> {"glow": float, "busy": float, "reject": floa
 var swallowing: Array = [] # [body, zone, t, start_pos, start_rot]
 var debris: Array = []     # [pos, vel, t, poly, rot, spin, value, trail]
 var hoses := {}            # port id -> {"pts": [], "prev": [], "mast": Vector2, "t": float}
-var clamp_t := [0.0, 0.0, 0.0, 0.0]
+var clamps: Array = []     # Vector2 in metres: where each dock clamp grips the ship (from the ship file)
+var clamp_t: Array = []
 var field_glow: Array = []  # [point on the field edge, strength]
 var bounds_body: StaticBody2D
 var font: Font
@@ -83,6 +83,15 @@ func _init() -> void:
 	clamp_node.show_behind_parent = true
 	clamp_node.draw.connect(_draw_clamps)
 	add_child(clamp_node)
+
+
+func set_ship(ship: Dictionary) -> void:
+	clamps = []
+	clamp_t = []
+	for c in ship.get("clamps", []):
+		clamps.append(Vector2(c[0], c[1]))
+		clamp_t.append(0.0)
+	_clamp_drawn = []
 
 
 static func zpos(id: String) -> Vector2:
@@ -143,10 +152,10 @@ func _process(dt: float) -> void:
 	for g in field_glow:
 		g[1] -= dt * 2.5
 	field_glow = field_glow.filter(func(g): return g[1] > 0.0)
-	for i in 4:
+	for i in clamps.size():
 		var alive := false
 		for j in world.joints:
-			if j.alive and j.type == "clamp" and absf(j.pos.x / Geom.M - CLAMPS[i]) < 0.3:
+			if j.alive and j.type == "clamp" and absf(j.pos.x / Geom.M - clamps[i].x) < 0.3:
 				alive = true
 		clamp_t[i] = move_toward(clamp_t[i], 0.0 if alive else 1.0, dt / 0.8)
 	if Txt.zh != _zh:
@@ -390,10 +399,10 @@ func _draw_static() -> void:
 func _draw_clamps() -> void:
 	var M := Geom.M
 	var ink := Pal.ink(0.32)
-	for i in 4:
-		var x: float = CLAMPS[i] * M
+	for i in clamps.size():
+		var x: float = clamps[i].x * M
 		var k: float = Pal.ease_io(clamp_t[i])
-		var top := lerpf(4.0 * M, 7.6 * M, k)
+		var top := lerpf(clamps[i].y * M, 7.6 * M, k)
 		clamp_node.draw_rect(Rect2(x - 7, top + 10, 14, 9.0 * M - top - 10), Color(0.07, 0.073, 0.082))
 		clamp_node.draw_rect(Rect2(x - 7, top + 10, 14, 9.0 * M - top - 10), ink, false, 1.2)
 		for yy in range(int(top + 22), int(9.0 * M), 18):

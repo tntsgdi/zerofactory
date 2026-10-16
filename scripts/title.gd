@@ -14,14 +14,20 @@ var music: AudioStreamPlayer
 var music_k := 0.0
 
 
+const HERON := [
+	Vector2(0.2, 0.5), Vector2(0.9, -1.6), Vector2(2.4, -3.3), Vector2(4.6, -4.0),
+	Vector2(33.0, -4.0), Vector2(33.0, 4.0), Vector2(4.6, 4.0), Vector2(2.4, 3.4), Vector2(0.8, 2.2),
+]
+
 func _ready() -> void:
 	Txt.load_settings(false)
 	font = Fonts.get_font("Regular")
 	font_l = Fonts.get_font("Light")
 	font_b = Fonts.get_font("Medium")
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var outer: Array = GR7.OUTER.duplicate()
-	outer.append(GR7.OUTER[0])
+	# the title drawing: GR-7's silhouette, line by line
+	var outer: Array = HERON.duplicate()
+	outer.append(HERON[0])
 	strokes.append(PackedVector2Array(outer))
 	for x in [5.0, 10.0, 27.0]:
 		strokes.append(PackedVector2Array([Vector2(x, -3.55), Vector2(x, 2.95)]))

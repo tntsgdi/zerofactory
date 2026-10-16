@@ -117,11 +117,13 @@ func _process(dt: float) -> void:
 	want["thrust_loop"] = fl * 0.6 if playing else 0.0
 	want["pump_loop"] = (0.35 if not game.sys.hoses.is_empty() else 0.0) if playing else 0.0
 	var hum := 0.0
-	if game.sys.G_running:
-		var g = game.world.tag("G-01")
-		if g != null:
+	for t in game.sys.src_order:
+		if not game.sys.running(t):
+			continue
+		var g = game.world.tag(t)
+		if g != null and not g.gone:
 			var d: float = game.drone.global_position.distance_to(game.world.frame(g) * Geom.centroid(g.poly))
-			hum = clampf(1.0 - d / (10.0 * 48.0), 0.0, 1.0) * 0.5
+			hum = maxf(hum, clampf(1.0 - d / (10.0 * 48.0), 0.0, 1.0) * 0.5)
 	want["hum_loop"] = hum if playing else 0.0
 	want["tether_loop"] = (0.25 + 0.5 * game.tools.tether_force) if playing and game.tools.held_piece != null else 0.0
 	var ending: bool = game.state == "ending" and ending_player != null

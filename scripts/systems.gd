@@ -1,14 +1,13 @@
 class_name Systems
 extends Node
 # The ship's hidden truth: gas in every compartment, the electric network,
-# propellant and coolant, temperatures. The player only ever sees readings
-# (KnownState) taken with an instrument at a real test point; a reading
-# records where, when and through what it was taken, and goes stale once the
-# system it describes has changed.
+# fluids and their temperature. What exists and how it is wired comes from the
+# ship file (gas / power / fluids sections); nothing here knows a ship by name.
+# The player only ever sees readings (KnownState) taken with an instrument at
+# a real test point; a reading records where, when and through what it was
+# taken, and goes stale once the system it describes has changed.
 
 const SPACE := 0
-const ROOM_IDS := {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5}
-const ROOM_NAMES := ["", "A", "B", "C", "D", "E"]
 const CELL := 0.1                 # metres per gas cell
 const GX0 := -1.0
 const GY0 := -5.0
@@ -19,12 +18,17 @@ const SAFE_KPA := 5.0
 
 var game: Game
 var world: World
+var cfg: Dictionary = {}          # the ship file
 var cell_owner := PackedByteArray()
 var room_cells := {}
+var room_ids := {}                # room name -> grid id 1..n
+var room_names: Array = [""]      # grid id -> room name
 var time := 0.0
 
 # gas: volumes by id -> {n, V}; pressure = n / V (kPa)
 var vols := {}
+var vessel_cfg := {}              # vessel id -> its ship-file entry
+var gas_valves: Array = []        # [{ctrl, a, b, g}]
 var links: Array = []             # [a_id, b_id, g, pos(px), dir]
 var link_sig := {}                # room -> signature of its openings
 var vol_ver := {}                 # volume id -> version (bumped when its openings change)
@@ -38,36 +42,29 @@ var gas_lost := 0.0
 var blown := {}                   # room -> time of last blowout
 var flow_rate := {}               # room -> kPa/s (negative when draining)
 
+# switches, valves and other two-state controls: ctrl id -> on
+var switch := {}
 # electric
-var G_running := true
-var KG := true
-var KB := true
-var bat := 0.84
-var cap := 1.0
-var nav_bat := 1.0
-var aux := false
-var discharge := false
-var g_remote := false
-var bus_live := true
+var src := {}                     # source piece tag -> its ship-file entry + live "charge" / "running"
+var src_order: Array = []
+var iso := {}                     # isolated source tag -> {volts, charge}
+var bus_tag := ""
+var bus_live := false
+var powered := {}                 # piece id -> true: reached from the bus through live cables
+var iso_powered := {}             # piece id -> volts of its own little network
+var aux := false                  # external power plugged into the dock socket
+var remote_sent := false          # a remote stop was sent (and may not have worked)
 var elec_ver := 0
 var _elec_sig := ""
 
 # fluids
-var VC01 := false
-var VF01 := true
-var VE1 := true
-var VE2 := true
-var fuel := 0.35
-var fuel_line := 0.04
-var cool := 0.25
-var cool_broken := 0.06
-var loop_T := 138.0
-var fuel_recovered := 0.0
-var cool_recovered := 0.0
+var fvol := {}                    # volume id -> its ship-file entry + live "amount"
+var fluid0 := {}                  # fluid kind -> amount at the start
+var fluid_rec := {}               # fluid kind -> amount recovered
 var fluid_lost := 0.0
-const COOL0 := 0.31
-const FUEL0 := 0.39
-var leaks: Array = []             # {pos, dir, fluid, rate, src, t, body, local}
+var loop_T := 20.0
+var heat: Dictionary = {}
+var leaks: Array = []             # {pos, dir, fluid, rate, src, t, piece, local}
 var clouds: Array = []            # {pos, r, amount, t}
 
 # hoses: port id -> {"mode": "recover"|"vent", "t": age}
@@ -75,15 +72,22 @@ var hoses := {}
 var readings := {}
 
 
-func setup(g, w) -> void:
+func setup(g, w, ship: Dictionary) -> void:
 	game = g
 	world = w
+	cfg = ship
+	var gas: Dictionary = cfg.get("gas", {})
+	room_ids = {}
+	room_names = [""]
+	for n in world.rooms:
+		room_names.append(n)
+		room_ids[n] = room_names.size() - 1
 	cell_owner.resize(GW * GH)
 	cell_owner.fill(0)
 	for n in world.rooms:
 		var r = world.rooms[n]
 		var bb: Rect2 = r.bbox
-		var id: int = ROOM_IDS[n]
+		var id: int = room_ids[n]
 		var c := 0
 		var x0 := maxi(0, int((bb.position.x / Geom.M - GX0) / CELL))
 		var x1 := mini(GW - 1, int((bb.end.x / Geom.M - GX0) / CELL) + 1)
@@ -95,17 +99,44 @@ func setup(g, w) -> void:
 					cell_owner[gy * GW + gx] = id
 					c += 1
 		room_cells[n] = c
-	var start := {"A": 92.0, "B": 92.0, "C": 108.0, "D": 72.0, "E": 0.0}
-	for n in start:
+	var start: Dictionary = gas.get("rooms", {})
+	for n in world.rooms:
 		var v: float = room_cells[n] * CELL * CELL
-		vols[n] = {"n": start[n] * v, "V": v}
-	vols["SC"] = {"n": 0.0, "V": 0.05}
-	vols["T1"] = {"n": 1820.0 * 0.6, "V": 0.6}
-	vols["T2"] = {"n": 1760.0 * 0.6, "V": 0.6}
+		vols[n] = {"n": float(start.get(n, 0.0)) * v, "V": v}
+	vessel_cfg = gas.get("vessels", {})
+	for k in vessel_cfg:
+		var vc: Dictionary = vessel_cfg[k]
+		vols[k] = {"n": float(vc.kpa) * float(vc.V), "V": float(vc.V)}
+	gas_valves = gas.get("valves", [])
 	for k in vols:
 		gas0 += vols[k].n
 		vol_ver[k] = 0
+	# every control with two states starts as the ship file says
+	for id in world.ctrls:
+		var c = world.ctrls[id]
+		if c.kind in ["valve", "switch", "discharge", "socket"]:
+			switch[id] = c.state
+	var pw: Dictionary = cfg.get("power", {})
+	bus_tag = pw.get("bus", "")
+	for s in pw.get("sources", []):
+		var e: Dictionary = s.duplicate()
+		e.charge = float(s.get("charge", 1.0))
+		e.running = bool(s.get("running", false))
+		src[s.piece] = e
+		src_order.append(s.piece)
+	for s in pw.get("isolated", []):
+		iso[s.piece] = {"volts": float(s.volts), "charge": float(s.get("charge", 1.0))}
+	var fl: Dictionary = cfg.get("fluids", {})
+	for k in fl.get("volumes", {}):
+		var e: Dictionary = fl.volumes[k].duplicate()
+		e.amount = float(e.amount)
+		fvol[k] = e
+		fluid0[e.fluid] = fluid0.get(e.fluid, 0.0) + e.amount
+		fluid_rec[e.fluid] = 0.0
+	heat = fl.get("heat", {})
+	loop_T = _heat_target() if not heat.is_empty() else 20.0
 	_compute_now()
+	_step_elec(0.0)
 
 
 func _cell_px(gx: int, gy: int) -> Vector2:
@@ -117,6 +148,10 @@ func P(id: String) -> float:
 	if v == null:
 		return 0.0
 	return v.n / v.V
+
+
+func on(ctrl_id: String) -> bool:
+	return switch.get(ctrl_id, false)
 
 
 # ---------------------------------------------------------------- gas topology
@@ -206,13 +241,13 @@ func _grid_job_calc(polys: Array) -> Array:
 		if border:
 			for r in ks:
 				var cc: Array = contact[r]
-				out.append([ROOM_NAMES[r], "space", float(cc[0]), cc[1] / cc[0], (cc[2] as Vector2).normalized()])
+				out.append([room_names[r], "space", float(cc[0]), cc[1] / cc[0], (cc[2] as Vector2).normalized()])
 		else:
 			for i in ks.size():
 				for k in range(i + 1, ks.size()):
 					var a: Array = contact[ks[i]]
 					var b: Array = contact[ks[k]]
-					out.append([ROOM_NAMES[ks[i]], ROOM_NAMES[ks[k]], float(mini(a[0], b[0])), (a[1] / a[0] + b[1] / b[0]) * 0.5, Vector2.ZERO])
+					out.append([room_names[ks[i]], room_names[ks[k]], float(mini(a[0], b[0])), (a[1] / a[0] + b[1] / b[0]) * 0.5, Vector2.ZERO])
 	return out
 
 
@@ -224,7 +259,7 @@ func _apply_links(new_links: Array) -> void:
 			if side == "space":
 				continue
 			sig[side] = sig.get(side, "") + "%s:%d;" % [l[1] if side == l[0] else l[0], int(l[2])]
-	for n in ROOM_NAMES:
+	for n in room_names:
 		if n == "":
 			continue
 		var s: String = sig.get(n, "")
@@ -272,9 +307,15 @@ func _physics_process(dt: float) -> void:
 	_step_fluids(dt)
 
 
+func _exit_tree() -> void:
+	if job_id >= 0:
+		WorkerThreadPool.wait_for_task_completion(job_id)
+		job_id = -1
+
+
 func _step_gas(dt: float) -> void:
 	var before := {}
-	for n in ROOM_IDS:
+	for n in room_ids:
 		before[n] = P(n)
 	var sub := 4
 	var h := dt / sub
@@ -294,19 +335,19 @@ func _step_gas(dt: float) -> void:
 				gas_lost += maxf(dn, 0.0)
 			else:
 				vols[b].n += dn
-		if VC01:
-			var dn2 := 20.0 * (P("C") - P("SC")) * h
-			dn2 = _limit(dn2, "C", "SC")
-			vols["C"].n -= dn2
-			vols["SC"].n += dn2
+		for gv in gas_valves:
+			if not on(gv.ctrl):
+				continue
+			var dn2: float = float(gv.g) * (P(gv.a) - P(gv.b)) * h
+			dn2 = _limit(dn2, gv.a, gv.b)
+			vols[gv.a].n -= dn2
+			vols[gv.b].n += dn2
 		for port_id in hoses:
 			var c = world.ctrls.get(port_id)
-			if c == null or c.medium != "gas":
+			if c == null or c.medium != "gas" or not vols.has(c.target):
 				continue
 			var v: String = c.target
-			var k := 0.2 if v.begins_with("T") else (6.0 if v == "D" else 9.0)
-			if v == "SC":
-				k = 3.0
+			var k := port_rate(port_id)
 			var hose: Dictionary = hoses[port_id]
 			if hose.mode == "vent":
 				k *= 3.0
@@ -316,7 +357,7 @@ func _step_gas(dt: float) -> void:
 				gas_lost += take
 			else:
 				gas_recovered += take
-	for n in ROOM_IDS:
+	for n in room_ids:
 		vols[n].n = maxf(0.0, vols[n].n)
 		var rate: float = (P(n) - before[n]) / maxf(dt, 1e-4)
 		flow_rate[n] = rate
@@ -338,6 +379,17 @@ func _step_gas(dt: float) -> void:
 				game.on_jet(l[0], l[3], l[4], p, l[2])
 
 
+# how fast a gas port's hose draws (m² of the volume per second)
+func port_rate(port_id: String) -> float:
+	var cc := Ship.ctrl_cfg(cfg, port_id)
+	if cc.has("rate"):
+		return float(cc.rate)
+	var c = world.ctrls.get(port_id)
+	if c != null and vessel_cfg.has(c.target):
+		return 0.2
+	return 9.0
+
+
 func _limit(dn: float, a: String, b: String) -> float:
 	# never push more than it takes to equalise
 	var va: float = vols[a].V
@@ -350,42 +402,11 @@ func _limit(dn: float, a: String, b: String) -> float:
 	return clampf(dn, eq * 0.95, 0.0)
 
 
-func _step_elec(dt: float) -> void:
-	var c1 := _alive("c1")
-	var c2 := _alive("c2")
-	var c3 := _alive("c3")
-	var src_g := G_running and KG and c1 and _piece_ok("G-01")
-	var src_b := KB and bat > 0.01 and c2 and _piece_ok("B-01")
-	var src_c := cap > 0.02 and c3 and _piece_ok("CAP-01")
-	bus_live = (src_g or src_b or src_c) and _piece_ok("SWB")
-	if discharge:
-		if src_g or src_b:
-			discharge = false
-			if game != null:
-				game.on_discharge_refused()
-		elif c3:
-			cap = maxf(0.0, cap - cap * dt / 0.9 - dt * 0.02)
-	if src_b and not src_g:
-		bat = maxf(0.0, bat - dt * 0.0004)
-	var lit := {}
-	lit["D"] = bus_live and _alive("c5") and _piece_ok("LAMP-D")
-	var c6 := bus_live and _alive("c6")
-	lit["C"] = c6 and _piece_ok("LAMP-C")
-	var c7 := c6 and _alive("c7") and _piece_ok("LAMP-C")
-	lit["B"] = c7 and _piece_ok("LAMP-B")
-	lit["A"] = c7 and _alive("c8") and _piece_ok("LAMP-B") and _piece_ok("LAMP-A")
-	lit["E"] = false
-	var redraw := false
-	for n in lit:
-		if world.rooms[n].lit != lit[n]:
-			world.rooms[n].lit = lit[n]
-			redraw = true
-	if redraw:
-		world.light_layer.queue_redraw()
-	var sig := "%s%s%s%s%s%d%d%s%s" % [G_running, KG, KB, bus_live, aux, int(cap * 20), int(bat * 50), c1, c3]
-	if sig != _elec_sig:
-		_elec_sig = sig
-		elec_ver += 1
+# ---------------------------------------------------------------- electric
+
+func _piece_ok(t: String) -> bool:
+	var p = world.tag(t)
+	return p != null and not p.gone
 
 
 func _alive(id: String) -> bool:
@@ -393,73 +414,312 @@ func _alive(id: String) -> bool:
 	return l != null and l.alive
 
 
-func _piece_ok(t: String) -> bool:
-	var p = world.tag(t)
-	return p != null and not p.gone and (p.cls != "equip" or p.intact)
+# does this source hold energy and stand ready to feed (switch closed)?
+func _energized(s: Dictionary) -> bool:
+	if s.has("switch") and not on(s.switch):
+		return false
+	match s.kind:
+		"gen":
+			return s.running
+		"battery":
+			return s.charge > 0.01
+		"cap":
+			return s.charge > 0.02
+	return false
+
+
+func _feeding(s: Dictionary) -> bool:
+	return _energized(s) and _alive(s.cable) and _piece_ok(s.piece)
+
+
+func _step_elec(dt: float) -> void:
+	var feeding := {}
+	for t in src_order:
+		feeding[t] = _feeding(src[t])
+	bus_live = feeding.values().has(true) and _piece_ok(bus_tag)
+	for t in src_order:
+		var s: Dictionary = src[t]
+		if s.kind == "cap" and s.has("discharge") and on(s.discharge):
+			# a capacitor can only be bled while nothing else holds the bus up
+			var fed := false
+			for o in src_order:
+				if o != t and feeding[o]:
+					fed = true
+			if fed:
+				switch[s.discharge] = false
+				var dc = world.ctrls.get(s.discharge)
+				if dc != null:
+					dc.state = false
+				if game != null:
+					game.on_discharge_refused(s.discharge)
+			elif _alive(s.cable):
+				s.charge = maxf(0.0, s.charge - s.charge * dt / 0.9 - dt * 0.02)
+		if s.kind == "battery" and feeding[t]:
+			var gen_on := false
+			for o in src_order:
+				if src[o].kind == "gen" and feeding[o]:
+					gen_on = true
+			if not gen_on:
+				s.charge = maxf(0.0, s.charge - dt * float(s.get("drain", 0.0)))
+	# what the bus reaches, through live cables and whole pieces
+	powered = {}
+	if bus_live:
+		var bus = world.tag(bus_tag)
+		_flood(bus.id, powered, {})
+	iso_powered = {}
+	for t in iso:
+		var p = world.tag(t)
+		if p == null or p.gone or iso[t].charge <= 0.0:
+			continue
+		var seen := {}
+		_flood(p.id, seen, {})
+		for id in seen:
+			iso_powered[id] = iso[t].volts
+	# rooms whose lamp is on
+	var redraw := false
+	var lamps: Dictionary = cfg.get("power", {}).get("lamps", {})
+	for n in world.rooms:
+		var lp = world.tag(lamps.get(n, ""))
+		var lit: bool = bus_live and lp != null and powered.has(lp.id)
+		if world.rooms[n].lit != lit:
+			world.rooms[n].lit = lit
+			redraw = true
+	for n in lamps:
+		if world.rooms.has(n):
+			continue
+		var lp2 = world.tag(lamps[n])
+		var lit2: bool = bus_live and lp2 != null and powered.has(lp2.id)
+		if lp2 != null and lp2.get_meta("lit", false) != lit2:
+			lp2.set_meta("lit", lit2)
+			redraw = true
+	if redraw:
+		world.light_layer.queue_redraw()
+	var sig := "%s%s%s" % [bus_live, aux, powered.size()]
+	for t in src_order:
+		sig += "%s%d" % [src[t].running, int(src[t].charge * (20 if src[t].kind == "cap" else 50))]
+	for t in src_order:
+		sig += "%s%s" % [_alive(src[t].cable), on(src[t].get("switch", ""))]
+	if sig != _elec_sig:
+		_elec_sig = sig
+		elec_ver += 1
+
+
+# all pieces reachable from piece id through live power cables
+func _flood(start: int, seen: Dictionary, _unused: Dictionary) -> void:
+	var stack: Array = [start]
+	seen[start] = true
+	while not stack.is_empty():
+		var id = stack.pop_back()
+		for lid in world.lines:
+			var l = world.lines[lid]
+			if not l.alive or l.kind != "cable":
+				continue
+			var other := -1
+			if l.a == id:
+				other = l.b
+			elif l.b == id:
+				other = l.a
+			if other < 0 or seen.has(other):
+				continue
+			var q = world.pieces.get(other)
+			if q == null or q.gone:
+				continue
+			seen[other] = true
+			stack.append(other)
+
+
+func source_of_cable(l) -> String:
+	for t in src_order:
+		if src[t].cable == l.id:
+			return t
+	return ""
+
+
+func line_live(l) -> bool:
+	if not l.alive or l.kind != "cable":
+		return false
+	var st := source_of_cable(l)
+	if st != "":
+		return bus_live or _energized(src[st])
+	if iso_powered.has(l.a) or iso_powered.has(l.b):
+		return true
+	return bus_live and (powered.has(l.a) or powered.has(l.b))
+
+
+func line_volts(l) -> float:
+	if not line_live(l):
+		return 0.0
+	if iso_powered.has(l.a) or iso_powered.has(l.b):
+		return iso_powered.get(l.a, iso_powered.get(l.b, 0.0))
+	var st := source_of_cable(l)
+	if st != "" and not bus_live:
+		return _local_volts(src[st])
+	return bus_volts()
+
+
+func _local_volts(s: Dictionary) -> float:
+	match s.kind:
+		"gen":
+			return s.volts if s.running else 0.0
+		"battery":
+			return s.get("local_volts", s.volts) if s.charge > 0.01 else 0.0
+		"cap":
+			return s.volts * s.charge if s.charge > 0.02 else 0.0
+	return 0.0
+
+
+func bus_volts() -> float:
+	if not bus_live:
+		return 0.0
+	for t in src_order:
+		var s: Dictionary = src[t]
+		if _feeding(s):
+			return s.volts * (s.charge if s.kind == "cap" else 1.0)
+	return 0.0
+
+
+# Is cutting into this piece going to arc? Returns volts (0 = dead).
+func piece_volts(p) -> float:
+	if p.cls != "equip" or not p.intact:
+		return 0.0
+	if src.has(p.tag):
+		return _local_volts(src[p.tag])
+	if iso.has(p.tag):
+		return iso[p.tag].volts if iso[p.tag].charge > 0.0 else 0.0
+	if iso_powered.has(p.id):
+		return iso_powered[p.id]
+	if p.tag == bus_tag or powered.has(p.id):
+		return bus_volts()
+	return 0.0
+
+
+# is this piece part of an electric network at all (worth a volt reading)?
+func electric_piece(p) -> bool:
+	if p.cls != "equip":
+		return false
+	if src.has(p.tag) or iso.has(p.tag) or p.tag == bus_tag:
+		return true
+	for l in world.lines_of(p):
+		if l.kind == "cable":
+			return true
+	return false
+
+
+func running(tag: String) -> bool:
+	return src.has(tag) and src[tag].running
+
+
+func any_running() -> bool:
+	for t in src_order:
+		if src[t].kind == "gen" and src[t].running:
+			return true
+	return false
+
+
+func stop_source(tag: String) -> void:
+	if src.has(tag):
+		src[tag].running = false
+
+
+func drain_source(tag: String) -> void:
+	if src.has(tag):
+		src[tag].charge = 0.0
+		src[tag].running = false
+	if iso.has(tag):
+		iso[tag].charge = 0.0
+
+
+func charge(tag: String) -> float:
+	return src[tag].charge if src.has(tag) else 0.0
+
+
+# the capacitor a discharge control bleeds
+func discharge_source(ctrl_id: String) -> String:
+	for t in src_order:
+		if src[t].get("discharge", "") == ctrl_id:
+			return t
+	return ""
+
+
+# ---------------------------------------------------------------- fluids
+
+func _heat_target() -> float:
+	return float(heat.hot) if running(heat.get("source", "")) else float(heat.cold)
 
 
 func _step_fluids(dt: float) -> void:
-	# coolant temperature follows the generator
-	var tgt := 138.0 if G_running else 20.0
-	loop_T = Pal.damp(loop_T, tgt, 1.0 / (8.0 if G_running else 13.0), dt)
-	for t in ["CP-E", "RAD", "ENG-F"]:
-		var p = world.tag(t)
-		if p != null:
-			p.temp = loop_T if t != "ENG-F" else lerpf(20.0, loop_T, 0.5)
-	var gp = world.tag("G-01")
-	if gp != null:
-		gp.temp = loop_T + (12.0 if G_running else 0.0)
-	# valves join the broken segment to the loop
-	var joined := VE1 or VE2
-	if joined:
-		var tot := cool + cool_broken
-		cool = tot * 0.25 / 0.31
-		cool_broken = tot - cool
-	# the crack drips slowly
-	var drip := minf(cool_broken, dt * 0.0016)
-	cool_broken -= drip
-	fluid_lost += drip
-	if VF01:
-		var tot2 := fuel + fuel_line
-		fuel_line = minf(0.04, tot2)
-		fuel = tot2 - fuel_line
+	if not heat.is_empty():
+		var hot := running(heat.source)
+		loop_T = Pal.damp(loop_T, _heat_target(), 1.0 / float(heat.tau_on if hot else heat.tau_off), dt)
+		var hp: Dictionary = heat.get("pieces", {})
+		for t in hp:
+			var p = world.tag(t)
+			if p != null:
+				p.temp = lerpf(20.0, loop_T, float(hp[t]))
+		var sp = world.tag(heat.source)
+		if sp != null:
+			sp.temp = loop_T + (float(heat.get("source_extra", 0.0)) if hot else 0.0)
+	var joins: Array = cfg.get("fluids", {}).get("joins", [])
+	var joined := {}
+	for jn in joins:
+		var open := false
+		for v in jn.valves:
+			if on(v):
+				open = true
+		if not open:
+			continue
+		joined[jn.b] = jn
+		var a: Dictionary = fvol[jn.a]
+		var b: Dictionary = fvol[jn.b]
+		match jn.mode:
+			"share":
+				var tot: float = a.amount + b.amount
+				a.amount = tot * float(jn.share)
+				b.amount = tot - a.amount
+			"fill":
+				var tot2: float = a.amount + b.amount
+				b.amount = minf(float(jn.cap), tot2)
+				a.amount = tot2 - b.amount
+	# a cracked volume drips on its own
+	for k in fvol:
+		var v: Dictionary = fvol[k]
+		if v.has("drip"):
+			var drip := minf(v.amount, dt * float(v.drip))
+			v.amount -= drip
+			fluid_lost += drip
 	for port_id in hoses:
 		var c = world.ctrls.get(port_id)
-		if c == null:
+		if c == null or c.medium in ["gas", "volt", ""]:
 			continue
-		if c.medium == "fuel":
-			var take := minf(fuel, (0.12 * fuel + 0.008) * dt)
-			fuel -= take
-			fuel_recovered += take
-			if VF01:
-				var t2 := minf(fuel_line, 0.02 * dt)
-				fuel_line -= t2
-				fuel_recovered += t2
-		elif c.medium == "coolant":
-			var take := minf(cool, (0.22 * cool + 0.006) * dt)
-			cool -= take
-			cool_recovered += take
+		var vk := fluid_at_port(port_id)
+		if vk == "":
+			continue
+		var v: Dictionary = fvol[vk]
+		var pump: Array = v.get("pump", [0.1, 0.005])
+		var take := minf(v.amount, (float(pump[0]) * v.amount + float(pump[1])) * dt)
+		v.amount -= take
+		fluid_rec[v.fluid] += take
+		# a pump on the tank also draws the line it feeds through an open valve
+		for jn in joins:
+			if jn.a == vk and joined.has(jn.b) and jn.has("pump_through"):
+				var b: Dictionary = fvol[jn.b]
+				var t2 := minf(b.amount, float(jn.pump_through) * dt)
+				b.amount -= t2
+				fluid_rec[b.fluid] += t2
 	# leaks drain what they are attached to
 	for lk in leaks:
 		lk.t += dt
 		var take := 0.0
-		match lk.src:
-			"fuel_tank":
-				take = minf(fuel, dt * 0.1)
-				fuel -= take
-			"fuel_line":
-				take = minf(fuel_line, dt * 0.05)
-				fuel_line -= take
-				if VF01:
-					var t3 := minf(fuel, dt * 0.06)
-					fuel -= t3
-					take += t3
-			"cool":
-				take = minf(cool, dt * 0.2)
-				cool -= take
-			"cool_broken":
-				take = minf(cool_broken, dt * 0.2)
-				cool_broken -= take
+		var v = fvol.get(lk.src)
+		if v != null:
+			take = minf(v.amount, dt * float(v.get("leak", 0.1)))
+			v.amount -= take
+			# a line that leaks keeps being fed through an open valve
+			if joined.has(lk.src) and joined[lk.src].has("leak_through"):
+				var a2: Dictionary = fvol[joined[lk.src].a]
+				var t3 := minf(a2.amount, dt * float(joined[lk.src].leak_through))
+				a2.amount -= t3
+				take += t3
 		lk.rate = take / maxf(dt, 1e-4)
 		fluid_lost += take
 		if lk.fluid == "fuel" and take > 0.0:
@@ -470,6 +730,62 @@ func _step_fluids(dt: float) -> void:
 		cl.amount = maxf(0.0, cl.amount - dt * 0.004)
 		cl.r = clampf(Geom.M * (1.2 + sqrt(cl.amount) * 9.0), Geom.M * 1.0, Geom.M * 3.6)
 	clouds = clouds.filter(func(cl): return cl.amount > 0.002)
+
+
+func fluid(id: String) -> float:
+	return fvol[id].amount if fvol.has(id) else 0.0
+
+
+# the fluid volume a port draws from
+func fluid_at_port(port_id: String) -> String:
+	for k in fvol:
+		if fvol[k].get("port", "") == port_id:
+			return k
+	return ""
+
+
+# the fluid volume a piece holds (a tank), or ""
+func fluid_in_piece(p) -> String:
+	for k in fvol:
+		if fvol[k].get("piece", "") == p.tag and p.tag != "":
+			return k
+	return ""
+
+
+# the fluid volume running through a pipe of this net, or ""
+func fluid_of_net(net: String) -> String:
+	for k in fvol:
+		if net in fvol[k].get("nets", []):
+			return k
+	return ""
+
+
+# what is left in the volume, counting the source it is fed from through an open valve
+func fluid_behind(vk: String) -> float:
+	var amt := fluid(vk)
+	for jn in cfg.get("fluids", {}).get("joins", []):
+		if jn.b == vk and jn.has("leak_through"):
+			for v in jn.valves:
+				if on(v) and fluid(jn.a) > 0.02:
+					return maxf(amt, fluid(jn.a))
+	return amt
+
+
+# reading of a fluid port: amount relative to its full level
+func port_level(port_id: String) -> float:
+	var vk := fluid_at_port(port_id)
+	if vk == "":
+		return 0.0
+	return fvol[vk].amount / float(fvol[vk].get("full", 1.0))
+
+
+func set_fluid(id: String, amount: float) -> void:
+	if fvol.has(id):
+		fvol[id].amount = amount
+
+
+func is_heat_port(port_id: String) -> bool:
+	return port_id in heat.get("ports", [])
 
 
 func _feed_cloud(pos: Vector2, amt: float) -> void:
@@ -489,74 +805,44 @@ func cloud_at(pos: Vector2):
 
 # ---------------------------------------------------------------- queries
 
-func line_live(l) -> bool:
-	if not l.alive or l.kind != "cable":
-		return false
-	match l.id:
-		"c1": return bus_live or (G_running and KG)
-		"c2": return bus_live or (KB and bat > 0.01)
-		"c3": return bus_live or cap > 0.02
-		"cn": return nav_bat > 0.0
-		"c7": return bus_live and _alive("c6")
-		"c8": return bus_live and _alive("c6") and _alive("c7")
-	return bus_live
-
-
-func line_volts(l) -> float:
-	if not line_live(l):
-		return 0.0
-	if l.id == "cn":
-		return 24.0
-	if l.id == "c3" and not bus_live:
-		return 380.0 * cap
-	if l.id == "c2" and not bus_live:
-		return 52.0
-	return bus_volts()
-
-
-func bus_volts() -> float:
-	if not bus_live:
-		return 0.0
-	if G_running and KG and _alive("c1"):
-		return 400.0
-	if KB and bat > 0.01 and _alive("c2"):
-		return 396.0
-	return 380.0 * cap
-
-
-# Is cutting into this piece going to arc? Returns volts (0 = dead).
-func piece_volts(p) -> float:
-	if p.cls != "equip" or not p.intact:
-		return 0.0
-	match p.tag:
-		"G-01": return 400.0 if G_running else 0.0
-		"B-01": return 52.0 if bat > 0.01 else 0.0
-		"CAP-01": return 380.0 * cap if cap > 0.02 else 0.0
-		"SWB": return bus_volts()
-		"C-03": return bus_volts() if _alive("c4") else 0.0
-		"NAV-01", "CON-A": return 24.0 if _alive("cn") or p.tag == "NAV-01" else 0.0
-	return 0.0
-
-
 func line_fluid(l) -> float:
-	match l.net:
-		"coolant": return cool
-		"coolant_broken": return cool_broken
-		"fuel": return fuel_line
-		"gas": return 0.0
-	return 0.0
+	var vk := fluid_of_net(l.net)
+	return fluid(vk) if vk != "" else 0.0
 
 
 func line_temp(l) -> float:
-	if l.net in ["coolant", "coolant_broken"]:
+	if l.net in heat.get("nets", []):
 		return loop_T
 	return 20.0
 
 
 func content_mass(p) -> float:
-	if p.tag == "T-F01" and p.intact:
-		return fuel * 2.6
-	return 0.0
+	if not p.intact:
+		return 0.0
+	var vk := fluid_in_piece(p)
+	if vk == "":
+		return 0.0
+	return fvol[vk].amount * float(fvol[vk].get("content", 0.0))
+
+
+# the gas vessel a piece is (a bottle), or ""
+func tank_vol(p) -> String:
+	for k in vessel_cfg:
+		if vessel_cfg[k].get("piece", "") == p.tag and p.tag != "":
+			return k
+	return ""
+
+
+# would cutting into this piece burst a pressure vessel?
+func bursts(p) -> bool:
+	var v := tank_vol(p)
+	return v != "" and P(v) > float(vessel_cfg[v].get("burst", 200.0))
+
+
+# the dead-leg vessel behind a port is cut off by its valve
+func dead_leg_closed(c) -> bool:
+	var vc = vessel_cfg.get(c.target)
+	return vc != null and vc.has("dead_leg") and not on(vc.dead_leg)
 
 
 # where a piece pays most right now (hazardous contents go to the hazard bay)
@@ -565,44 +851,37 @@ func dest_of(p) -> String:
 		return "metal"
 	if not p.intact:
 		return "metal"
-	match p.hazard:
-		"fuel_tank":
-			if fuel > 0.02:
-				return "hazard"
-		"gas_tank":
-			if P("T1" if p.tag == "TK-B1" else "T2") > 200.0:
-				return "hazard"
-		"cap":
-			if cap > 0.05:
-				return "hazard"
+	var fv := fluid_in_piece(p)
+	if fv != "" and fvol[fv].amount > float(fvol[fv].get("hazard", 0.02)):
+		return "hazard"
+	if bursts(p):
+		return "hazard"
+	if src.has(p.tag) and src[p.tag].kind == "cap" and src[p.tag].charge > 0.05:
+		return "hazard"
 	return "equip"
-
-
-func tank_vol(p) -> String:
-	return "T1" if p.tag == "TK-B1" else "T2"
 
 
 # ---------------------------------------------------------------- actions
 
-func set_switch(id: String, on: bool) -> void:
-	match id:
-		"K-G": KG = on
-		"K-B": KB = on
-		"V-C01": VC01 = on
-		"V-F01": VF01 = on
-		"V-E1": VE1 = on
-		"V-E2": VE2 = on
-	if id.begins_with("V-C"):
-		vol_ver["SC"] = vol_ver.get("SC", 0) + 1
-		vol_ver["C"] = vol_ver.get("C", 0) + 1
+func set_switch(id: String, state: bool) -> void:
+	switch[id] = state
+	for gv in gas_valves:
+		if gv.ctrl == id:
+			vol_ver[gv.a] = vol_ver.get(gv.a, 0) + 1
+			vol_ver[gv.b] = vol_ver.get(gv.b, 0) + 1
 
 
 func gas_value() -> float:
-	return gas_recovered / maxf(gas0, 1.0) * 1200.0
+	return gas_recovered / maxf(gas0, 1.0) * float(cfg.get("gas", {}).get("value", 0.0))
 
 
 func fluid_value() -> float:
-	return fuel_recovered / FUEL0 * 900.0 + cool_recovered / COOL0 * 400.0
+	var v := 0.0
+	var vals: Dictionary = cfg.get("fluids", {}).get("value", {})
+	for f in fluid_rec:
+		if fluid0.get(f, 0.0) > 0.0:
+			v += fluid_rec[f] / fluid0[f] * float(vals.get(f, 0.0))
+	return v
 
 
 # ---------------------------------------------------------------- readings
@@ -626,12 +905,11 @@ func refresh_reading(r: Dictionary, take: bool) -> void:
 
 # [value, text, version, version-key]
 func _current(r: Dictionary) -> Array:
-	var key: String = r.key
 	match r.kind:
 		"pressure":
 			var v: String = r.get("vol", "")
 			var pv := P(v) + (randf_range(-0.3, 0.3) if P(v) > 1.0 else 0.0)
-			return [pv, "%.1f kPa" % maxf(0.0, pv), vol_ver.get(v, 0), "gas"]
+			return [pv, "%.1f kPa(a)" % maxf(0.0, pv), vol_ver.get(v, 0), "gas"]
 		"volts":
 			var vv: float = r.get("volts_fn").call()
 			return [vv, "%d V" % int(round(vv)), elec_ver, "elec"]

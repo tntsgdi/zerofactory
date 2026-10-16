@@ -49,7 +49,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			L(ci, Vector2(w * 0.92, r + 2), Vector2(w * 0.92, h - r - 2), 0.55)
 			for i in 2:
 				L(ci, Vector2(w * 0.08, h * (0.38 + i * 0.24)), Vector2(w * 0.92, h * (0.38 + i * 0.24)), 0.3)
-			ci.draw_string(font, Vector2(w * 0.22, h * 0.56), "O₂" if p.tag == "TK-B1" else "N₂", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.45))
+			ci.draw_string(font, Vector2(w * 0.22, h * 0.56), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.45))
 		"env":
 			ring(ci, Vector2(w * 0.3, h * 0.45), h * 0.26, 0.55)
 			for i in 6:
@@ -66,9 +66,8 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				L(ci, Vector2(w * i / n, 3), Vector2(w * i / n, h - 3), 0.22)
 			box(ci, Rect2(3, 3, w - 6, h - 6), 0.4)
 			ci.draw_string(font, Vector2(w * 0.08, h * 0.2), p.tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.7))
-			var sub := {"C-01": "IND. METAL", "C-02": "PRECISION", "C-03": "ELECTRONIC"}
-			ci.draw_string(font, Vector2(w * 0.08, h * 0.2 + 13), sub.get(p.tag, ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.4))
-			if p.tag == "C-02":
+			ci.draw_string(font, Vector2(w * 0.08, h * 0.2 + 13), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.4))
+			if p.fragile >= 0.85:
 				ci.draw_string(font, Vector2(w * 0.08, h * 0.9), "FRAGILE ▲▲", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.5))
 		"hook":
 			L(ci, Vector2(w * 0.5, 0), Vector2(w * 0.5, h * 0.7), 0.5)
@@ -88,7 +87,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			for i in 4:
 				for k in 2:
 					box(ci, Rect2(w * (0.08 + i * 0.22), h * (0.2 + k * 0.36), w * 0.18, h * 0.3), 0.35)
-			ci.draw_string(font, Vector2(w * 0.08, h * 0.15), "B-01", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.6))
+			ci.draw_string(font, Vector2(w * 0.08, h * 0.15), p.tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.6))
 		"cap":
 			var r := w * 0.42
 			ci.draw_arc(Vector2(w * 0.5, r + 3), r, PI, TAU, 14, Pal.ink(0.5), 1.0, true)
@@ -117,7 +116,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			box(ci, Rect2(w * 0.15, h * 0.2, w * 0.7, h * 0.6), 0.6)
 			L(ci, Vector2(w * 0.3, h * 0.5), Vector2(w * 0.7, h * 0.5), 0.5)
 		"panel":
-			ci.draw_string(font, Vector2(4, h * 0.95), "CTRL-D", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.4))
+			ci.draw_string(font, Vector2(4, h * 0.95), p.tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.4))
 		"eng_front":
 			for i in 4:
 				L(ci, Vector2(w * 0.15, h * (0.2 + i * 0.2)), Vector2(w * 0.85, h * (0.2 + i * 0.2)), 0.3)

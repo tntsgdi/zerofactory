@@ -67,17 +67,17 @@ func _prep() -> void:
 			Engine.time_scale = 4.0
 		_:
 			if phase_t % 60 == 0:
-				say("A %.1f B %.1f C %.1f D %.1f  cap %.2f fuel %.3f cool %.3f T %.0f bus %s" % [s.P("A"), s.P("B"), s.P("C"), s.P("D"), s.cap, s.fuel, s.cool, s.loop_T, s.bus_live])
+				say("A %.1f B %.1f C %.1f D %.1f  cap %.2f fuel %.3f cool %.3f T %.0f bus %s" % [s.P("A"), s.P("B"), s.P("C"), s.P("D"), s.charge("CAP-01"), s.fluid("fuel"), s.fluid("cool"), s.loop_T, s.bus_live])
 			if s.P("D") < 5.0 and not game.world.rooms["D"].revealed:
 				# open D's roof with a real kerf to reach the local stop
 				var roof = game.world.piece_at(Vector2(28.6, -3.8) * M, ["hull"])
 				game.world.commit_cut(roof, PackedVector2Array([Vector2(28.2, -4.3) * M, Vector2(28.2, -3.4) * M]))
 				game.world.commit_cut(roof, PackedVector2Array([Vector2(29.0, -4.3) * M, Vector2(29.0, -3.4) * M]))
 				say("cut D roof")
-			if game.world.rooms["D"].revealed and s.G_running:
+			if game.world.rooms["D"].revealed and s.running("G-01"):
 				wrench("G-LOCAL")
 				say("G-01 local stop")
-			var ok: bool = s.P("A") < 5.0 and s.P("C") < 5.0 and s.P("D") < 5.0 and s.cap < 0.05 and s.fuel < 0.02 and s.cool < 0.02 and s.loop_T < 60.0 and not s.G_running
+			var ok: bool = s.P("A") < 5.0 and s.P("C") < 5.0 and s.P("D") < 5.0 and s.charge("CAP-01") < 0.05 and s.fluid("fuel") < 0.02 and s.fluid("cool") < 0.02 and s.loop_T < 60.0 and not s.running("G-01")
 			if ok or phase_t > 4000:
 				Engine.time_scale = 1.0
 				say("prep done (ok=%s) at t=%.1f s sim" % [ok, s.time])
@@ -191,7 +191,7 @@ func _process(_dt: float) -> bool:
 		for l in game.ledger:
 			if l[2] > 300.0:
 				say("  %-28s %-7s %8.0f" % [l[0], l[1], l[2]])
-		say("ENDING  rate %.1f%%  equip $%d metal $%d hazard $%d gas+fluid $%d losses $%d net $%d  bb %s gen %s  grade %d" % [game.recovery_rate() * 100.0, game.income_equip, game.income_metal, game.income_hazard, game.sys.gas_value() + game.sys.fluid_value(), game.losses, game.net(), game.bb_ok, game.gen_ok, game.hud.grade()])
+		say("ENDING  rate %.1f%%  equip $%d metal $%d hazard $%d gas+fluid $%d losses $%d net $%d  bb %s gen %s  grade %d" % [game.recovery_rate() * 100.0, game.income_equip, game.income_metal, game.income_hazard, game.sys.gas_value() + game.sys.fluid_value(), game.losses, game.net(), game.mandatory_ok.get("BB-01", false), game.mandatory_ok.get("G-01", false), game.hud.grade()])
 	if end_frame > 0:
 		var e := frame - end_frame
 		if e in [60, 160, 260, 420]:

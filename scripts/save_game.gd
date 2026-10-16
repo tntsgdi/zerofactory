@@ -7,7 +7,7 @@ class_name SaveGame
 
 const PATH := "user://zeropower_save.json"
 const BEST := "user://zeropower_best.json"
-const VERSION := 2
+const VERSION := 3
 const MAGIC := "ZEROPRESSURE"
 
 static var load_requested := false
@@ -83,7 +83,7 @@ static func save(g) -> void:
 			"cond": p.cond, "intact": p.intact, "art": p.art, "axf": _xf(p.art_xf), "asz": _v2(p.art_size),
 			"frag": p.fragile, "contam": p.contam, "cs": p.cut_speed, "room": p.room, "bar": p.barrier,
 			"door": p.door, "open": p.door_open, "odir": _v2(p.open_dir), "haz": p.hazard, "temp": p.temp,
-			"must": p.mandatory, "dest": p.dest, "hid": p.hidden_by, "seen": p.seen,
+			"must": p.mandatory, "dest": p.dest, "hid": p.hidden_by, "seen": p.seen, "label": p.label,
 		})
 	var joints: Array = []
 	for j in w.joints:
@@ -118,18 +118,26 @@ static func save(g) -> void:
 	var debris: Array = []
 	for db in g.dock.debris:
 		debris.append({"p": _v2(db[0]), "v": _v2(db[1]), "t": db[2], "poly": _poly(db[3]), "rot": db[4], "spin": db[5], "val": db[6]})
+	var src := {}
+	for t in s.src:
+		src[t] = {"charge": s.src[t].charge, "running": s.src[t].running}
+	var iso := {}
+	for t in s.iso:
+		iso[t] = s.iso[t].charge
+	var fluid := {}
+	for k in s.fvol:
+		fluid[k] = s.fvol[k].amount
 	var d := {
 		"version": VERSION,
+		"ship": g.ship_id,
 		"world": {"pieces": pieces, "joints": joints, "lines": lines, "ctrls": ctrls, "rooms": rooms, "bodies": bodies,
 			"next_id": w.next_id, "next_joint": w.next_joint, "metal_price": w.metal_price, "smass": w.structural_mass},
-		"sys": {"vols": vols, "VC01": s.VC01, "VF01": s.VF01, "VE1": s.VE1, "VE2": s.VE2, "G": s.G_running, "KG": s.KG, "KB": s.KB,
-			"bat": s.bat, "cap": s.cap, "aux": s.aux, "dis": s.discharge, "grem": s.g_remote, "fuel": s.fuel, "fline": s.fuel_line,
-			"cool": s.cool, "coolb": s.cool_broken, "T": s.loop_T, "frec": s.fuel_recovered, "crec": s.cool_recovered,
-			"grec": s.gas_recovered, "glost": s.gas_lost, "flost": s.fluid_lost, "time": s.time, "hoses": s.hoses, "readings": readings,
-			"vol_ver": s.vol_ver, "nav_bat": s.nav_bat, "elec_ver": s.elec_ver, "elec_sig": s._elec_sig, "leaks": leaks,
-			"clouds": clouds, "blown": s.blown},
+		"sys": {"vols": vols, "switch": s.switch, "src": src, "iso": iso, "fluid": fluid, "frec": s.fluid_rec, "aux": s.aux,
+			"remote": s.remote_sent, "T": s.loop_T, "grec": s.gas_recovered, "glost": s.gas_lost, "flost": s.fluid_lost,
+			"time": s.time, "hoses": s.hoses, "readings": readings, "vol_ver": s.vol_ver, "elec_ver": s.elec_ver,
+			"elec_sig": s._elec_sig, "leaks": leaks, "clouds": clouds, "blown": s.blown},
 		"game": {"ie": g.income_equip, "im": g.income_metal, "ih": g.income_hazard, "loss": g.losses, "lines": g.loss_lines,
-			"bb": g.bb_ok, "gen": g.gen_ok, "time": g.playtime, "hints": g.hints_seen, "ledger": g.ledger,
+			"must": g.mandatory_ok, "time": g.playtime, "hints": g.hints_seen, "ledger": g.ledger,
 			"drone": {"p": _v2(g.drone.global_position), "v": _v2(g.drone.linear_velocity), "hp": g.drone.integrity, "alive": g.drone.alive},
 			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode, "reveals": g.reveal_count, "respawn": g.drone_respawn,
 			"debris": debris},
@@ -201,6 +209,27 @@ static func migrate(d: Dictionary) -> Dictionary:
 				# v2 added accidents in progress, electric state and debris in flight
 				d.sys.merge({"nav_bat": 1.0, "elec_ver": 0, "elec_sig": "", "leaks": [], "clouds": [], "blown": {}})
 				d.game.merge({"reveals": 0, "respawn": -1.0, "debris": []})
+			2:
+				# v3: ships are data. Every v1/v2 save is GR-7; its named fields become
+				# the generic switch / source / fluid tables of the ship file.
+				var sd: Dictionary = d.sys
+				d.ship = "gr7"
+				d.sys = {"vols": sd.get("vols", {}),
+					"switch": {"V-C01": sd.get("VC01", false), "V-F01": sd.get("VF01", true), "V-E1": sd.get("VE1", true), "V-E2": sd.get("VE2", true), "K-G": sd.get("KG", true), "K-B": sd.get("KB", true),
+						"E-D02": sd.get("dis", false), "PWR-EXT": sd.get("aux", false)},
+					"src": {"G-01": {"charge": 1.0, "running": sd.get("G", true)}, "B-01": {"charge": sd.get("bat", 0.84), "running": false},
+						"CAP-01": {"charge": sd.get("cap", 1.0), "running": false}},
+					"iso": {"NAV-01": sd.get("nav_bat", 1.0)},
+					"fluid": {"cool": sd.get("cool", 0.25), "cool_broken": sd.get("coolb", 0.06), "fuel": sd.get("fuel", 0.35), "fuel_line": sd.get("fline", 0.04)},
+					"frec": {"fuel": sd.get("frec", 0.0), "coolant": sd.get("crec", 0.0)}, "aux": sd.get("aux", false), "remote": sd.get("grem", false), "T": sd.get("T", 138.0),
+					"grec": sd.get("grec", 0.0), "glost": sd.get("glost", 0.0), "flost": sd.get("flost", 0.0), "time": sd.get("time", 0.0), "hoses": sd.get("hoses", {}),
+					"readings": sd.get("readings", []), "vol_ver": sd.get("vol_ver", {}), "elec_ver": sd.get("elec_ver", 0), "elec_sig": "",
+					"leaks": sd.get("leaks", []), "clouds": sd.get("clouds", []), "blown": sd.get("blown", {})}
+				var leak_names := {"fuel_tank": "fuel", "fuel_line": "fuel_line", "cool": "cool", "cool_broken": "cool_broken"}
+				for lk in d.sys.leaks:
+					lk.src = leak_names.get(lk.src, lk.src)
+				var gd: Dictionary = d.game
+				gd.must = {"BB-01": gd.get("bb", false), "G-01": gd.get("gen", false)}
 		v += 1
 	d.version = VERSION
 	return d
@@ -241,6 +270,7 @@ static func apply(g, d: Dictionary) -> bool:
 		p.dest = pd.dest
 		p.hidden_by = int(pd.hid)
 		p.seen = pd.get("seen", false)
+		p.label = pd.get("label", "")
 		p.set_meta("body", int(pd.body))
 		w.pieces[p.id] = p
 		w.order.append(p.id)
@@ -331,32 +361,29 @@ static func apply_late(g, d: Dictionary) -> void:
 	for k in sd.vols:
 		if s.vols.has(k):
 			s.vols[k].n = sd.vols[k]
-	s.VC01 = sd.VC01
-	s.VF01 = sd.VF01
-	s.VE1 = sd.VE1
-	s.VE2 = sd.VE2
-	s.G_running = sd.G
-	s.KG = sd.KG
-	s.KB = sd.KB
-	s.bat = sd.bat
-	s.cap = sd.cap
+	for k in sd.switch:
+		s.switch[k] = sd.switch[k]
+	for t in sd.src:
+		if s.src.has(t):
+			s.src[t].charge = sd.src[t].charge
+			s.src[t].running = sd.src[t].running
+	for t in sd.iso:
+		if s.iso.has(t):
+			s.iso[t].charge = sd.iso[t]
+	for k in sd.fluid:
+		if s.fvol.has(k):
+			s.fvol[k].amount = sd.fluid[k]
+	for f in sd.frec:
+		s.fluid_rec[f] = sd.frec[f]
 	s.aux = sd.aux
-	s.discharge = sd.dis
-	s.g_remote = sd.grem
-	s.fuel = sd.fuel
-	s.fuel_line = sd.fline
-	s.cool = sd.cool
-	s.cool_broken = sd.coolb
+	s.remote_sent = sd.remote
 	s.loop_T = sd.T
-	s.fuel_recovered = sd.frec
-	s.cool_recovered = sd.crec
 	s.gas_recovered = sd.grec
 	s.gas_lost = sd.glost
 	s.fluid_lost = sd.flost
 	s.time = sd.time
 	for k in sd.vol_ver:
 		s.vol_ver[k] = int(sd.vol_ver[k])
-	s.nav_bat = sd.nav_bat
 	s.elec_ver = int(sd.elec_ver)
 	s._elec_sig = sd.elec_sig
 	for k in sd.blown:
@@ -381,8 +408,8 @@ static func apply_late(g, d: Dictionary) -> void:
 	g.income_hazard = gd.ih
 	g.losses = gd.loss
 	g.loss_lines = gd.lines
-	g.bb_ok = gd.bb
-	g.gen_ok = gd.gen
+	for k in gd.must:
+		g.mandatory_ok[k] = gd.must[k]
 	g.playtime = gd.time
 	g.hints_seen = gd.hints
 	g.ledger = gd.ledger

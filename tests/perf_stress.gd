@@ -169,7 +169,7 @@ func _report() -> void:
 	for l in slow_log.slice(0, 30):
 		print(l)
 	var rooms := []
-	for n in game.sys.ROOM_NAMES:
+	for n in game.sys.room_names:
 		if n != "":
 			rooms.append("%s %.0f" % [n, game.sys.P(n)])
 	print("state: bodies %d  pieces %d  held %s  rooms kPa %s" % [game.world.bodies.size(), game.world.pieces.size(), game.tools.held_piece != null, ", ".join(rooms)])

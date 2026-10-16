@@ -145,13 +145,14 @@ func add_room(name: String, poly: PackedVector2Array) -> void:
 	rooms[name] = {"name": name, "poly": poly, "revealed": false, "reveal_t": 0.0, "from": Geom.centroid(poly), "lit": false, "bbox": Geom.bbox(poly)}
 
 
-func finalize() -> void:
+# metal_value: what the whole structure fetches as scrap (the ship file says)
+func finalize(metal_value: float = 12000.0) -> void:
 	structural_mass = 0.0
 	for id in order:
 		var p = pieces[id]
 		if p.cls == "metal":
 			structural_mass += p.mass
-	metal_price = 12000.0 / maxf(1.0, structural_mass)
+	metal_price = metal_value / maxf(1.0, structural_mass)
 	for id in order:
 		rebuild_cols(pieces[id])
 	for n in rooms:
@@ -1070,12 +1071,15 @@ func _room_grid(r) -> Array:
 func _draw_light() -> void:
 	if game == null or game.sys == null:
 		return
-	for n in rooms:
-		var r = rooms[n]
-		if not r.revealed or not r.lit:
-			continue
-		var lamp = tag("LAMP-" + n)
+	var lamps: Dictionary = game.ship.get("power", {}).get("lamps", {})
+	for n in lamps:
+		var lamp = tag(lamps[n])
 		if lamp == null or lamp.body != null:
+			continue
+		if rooms.has(n):
+			if not rooms[n].revealed or not rooms[n].lit:
+				continue
+		elif not lamp.get_meta("lit", false):
 			continue
 		var c := frame(lamp) * Geom.centroid(lamp.poly)
 		var tex: Texture2D = game.fx.glow_tex

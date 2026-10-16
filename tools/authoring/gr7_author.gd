@@ -1,6 +1,9 @@
-class_name GR7
-# GR-7 "Grey Heron": the 42 m freighter, built into a World. Units are metres
-# here (converted with Geom.M). x runs bow (0) to stern (42), y is down.
+class_name GR7Author
+# Authoring script for GR-7 "Grey Heron", the 42 m freighter. It is not part
+# of the game: tools/ship_export.gd runs it and writes ships/gr7.json, which is
+# what the game builds from. Units are metres (converted with Geom.M); x runs
+# bow (0) to stern (42), y is down. meta() holds everything that is not
+# geometry: the systems, the contract and the factory drawing.
 #
 # Sections: A cockpit 0–5, B quarters 5–10, C cargo hold 10–27, D power room
 # 27–33 upper, E maintenance bay 27–33 lower, F propulsion 33–42 (open truss).
@@ -532,3 +535,69 @@ static func _rooms() -> void:
 	w.add_room("D", R(27.15, -3.55, 32.55, -0.15))
 	w.add_room("E", R(27.15, 0.15, 32.55, 2.95))
 	# the line between P-C01 and V-C01 is a tiny volume of its own
+
+
+# Systems, contract and drawing data for ships/gr7.json.
+static func meta() -> Dictionary:
+	return {
+		"id": "gr7",
+		"name": "GR-7 GREY HERON",
+		"length": 42.0,
+		"value": {"total": 120000.0, "metal": 12000.0},
+		"clamps": [[7.0, 4.0], [15.8, 4.0], [23.4, 4.0], [28.6, 4.0]],
+		"room_names": {"A": "room_A", "B": "room_B", "C": "room_C", "D": "room_D", "E": "room_E"},
+		"gas": {
+			"rooms": {"A": 92.0, "B": 92.0, "C": 108.0, "D": 72.0, "E": 0.0},
+			"vessels": {
+				"SC": {"V": 0.05, "kpa": 0.0, "dead_leg": "V-C01"},
+				"T1": {"V": 0.6, "kpa": 1820.0, "piece": "TK-B1", "burst": 200.0},
+				"T2": {"V": 0.6, "kpa": 1760.0, "piece": "TK-B2", "burst": 200.0},
+			},
+			"valves": [{"ctrl": "V-C01", "a": "C", "b": "SC", "g": 20.0}],
+			"value": 1200.0,
+		},
+		"power": {
+			"bus": "SWB",
+			"sources": [
+				{"piece": "G-01", "kind": "gen", "volts": 400.0, "cable": "c1", "switch": "K-G", "running": true, "remote": "G-STOP", "remote_works": false, "local": "G-LOCAL"},
+				{"piece": "B-01", "kind": "battery", "volts": 396.0, "local_volts": 52.0, "cable": "c2", "switch": "K-B", "charge": 0.84, "drain": 0.0004},
+				{"piece": "CAP-01", "kind": "cap", "volts": 380.0, "cable": "c3", "charge": 1.0, "discharge": "E-D02"},
+			],
+			"isolated": [{"piece": "NAV-01", "volts": 24.0, "charge": 1.0}],
+			"lamps": {"A": "LAMP-A", "B": "LAMP-B", "C": "LAMP-C", "D": "LAMP-D"},
+			"aux": "PWR-EXT",
+		},
+		"fluids": {
+			"volumes": {
+				"cool": {"fluid": "coolant", "amount": 0.25, "full": 0.25, "nets": ["coolant"], "leak": 0.2, "port": "COOL-E", "pump": [0.22, 0.006]},
+				"cool_broken": {"fluid": "coolant", "amount": 0.06, "nets": ["coolant_broken"], "leak": 0.2, "drip": 0.0016},
+				"fuel": {"fluid": "fuel", "amount": 0.35, "piece": "T-F01", "content": 2.6, "leak": 0.1, "port": "FUEL-F", "pump": [0.12, 0.008], "hazard": 0.02},
+				"fuel_line": {"fluid": "fuel", "amount": 0.04, "nets": ["fuel"], "leak": 0.05, "leak_min": 0.005},
+			},
+			"joins": [
+				{"valves": ["V-E1", "V-E2"], "a": "cool", "b": "cool_broken", "mode": "share", "share": 0.25 / 0.31},
+				{"valves": ["V-F01"], "a": "fuel", "b": "fuel_line", "mode": "fill", "cap": 0.04, "pump_through": 0.02, "leak_through": 0.06},
+			],
+			"value": {"fuel": 900.0, "coolant": 400.0},
+			"heat": {"source": "G-01", "hot": 138.0, "cold": 20.0, "tau_on": 8.0, "tau_off": 13.0, "nets": ["coolant", "coolant_broken"],
+				"ports": ["COOL-E"], "pieces": {"CP-E": 1.0, "RAD": 1.0, "ENG-F": 0.5}, "source_extra": 12.0},
+		},
+		"ctrls_cfg": {
+			"GAS-AB": {"rate": 9.0},
+			"P-C01": {"rate": 3.0},
+			"GAS-D": {"rate": 6.0},
+			"TK-B1": {"rate": 0.2},
+			"TK-B2": {"rate": 0.2},
+			"FUEL-F": {"blocked_by": "GUARD-F"},
+			"HATCH-SW": {"doors": ["HATCH-1", "HATCH-2"], "jam": "HATCH-JAM", "cable": "c9"},
+			"G-STOP": {"target": "G-01"},
+			"G-LOCAL": {"target": "G-01"},
+			"E-D02": {"target": "CAP-01"},
+		},
+		"labels": {"TK-B1": "O₂", "TK-B2": "N₂", "C-01": "IND. METAL", "C-02": "PRECISION", "C-03": "ELECTRONIC"},
+		"blueprint": {
+			"hide": ["LAMP-A", "LAMP-B", "LAMP-C", "LAMP-D", "CTRL-D", "COV-A", "GUARD-F"],
+			"design": {"C-02": [15.0, 1.05, 17.6, 2.95], "RAD": [30.6, 1.8, 32.3, 2.95]},
+			"runs": [[[11.2, -4.0], [11.2, -4.18], [11.85, -4.18], [11.85, -3.4]]],
+		},
+	}

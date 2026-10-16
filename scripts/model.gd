@@ -12,6 +12,7 @@ class Piece:
 	var kind := "hull"        # hull hatch bulkhead door deck keel rib rail beam strut plate fixture equip lamp
 	var tag := ""             # "NAV-01" etc. for named equipment
 	var name_key := ""        # Txt key
+	var label := ""           # short text printed on its art ("O₂", "PRECISION")
 	var poly := PackedVector2Array()
 	var body: Node = null     # FreeBody or null (attached)
 	var mass := 0.0           # tonnes

@@ -2,7 +2,7 @@ extends SceneTree
 func _initialize() -> void:
 	var w := World.new()
 	root.add_child(w)
-	GR7.build(w)
+	Ship.build(w, Ship.load_data("gr7"))
 	w.finalize()
 	for t in ["AUX-1", "T-F01", "AUX-2"]:
 		var p = w.tag(t)

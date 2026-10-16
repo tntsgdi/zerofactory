@@ -181,8 +181,11 @@ func _process(dt: float) -> void:
 		slot_y[i].target = -12.0 if on else 0.0
 		slot_y[i].step(dt)
 		slot_glow[i] = Pal.damp(slot_glow[i], 1.0 if on else 0.0, 14.0, dt)
-	must_k[0] = Pal.damp(must_k[0], 1.0 if game.bb_ok else 0.0, 8.0, dt)
-	must_k[1] = Pal.damp(must_k[1], 1.0 if game.gen_ok else 0.0, 8.0, dt)
+	var items: Array = game.mandatory_items()
+	must_k.resize(items.size())
+	for i in items.size():
+		var mk = must_k[i] if must_k[i] != null else 0.0
+		must_k[i] = Pal.damp(mk, 1.0 if game.mandatory_ok.get(items[i][0], false) else 0.0, 8.0, dt)
 	for f in flyers:
 		f[2] += dt
 	var landed := flyers.filter(func(f): return f[2] >= 0.6)
@@ -272,12 +275,12 @@ func _contract_panel() -> void:
 	var x := 40.0
 	var y := 46.0
 	_text(g.txt("contract"), Vector2(x, y), 13, Pal.ink(0.45), font)
-	_text("GR-7  GREY HERON", Vector2(x, y + 24), 20, Pal.ink(0.92), font_b)
+	_text(g.ship.get("name", ""), Vector2(x, y + 24), 20, Pal.ink(0.92), font_b)
 	# mandatory items
-	var items := [["BB-01", g.txt("p_blackbox")], ["G-01", g.txt("p_gen")]]
-	for i in 2:
+	var items: Array = g.mandatory_items()
+	for i in items.size():
 		var yy := y + 56 + i * 24
-		var k: float = must_k[i]
+		var k: float = must_k[i] if i < must_k.size() else 0.0
 		var dc := Vector2(x + 7, yy - 5)
 		var dia := PackedVector2Array([dc + Vector2(0, -6), dc + Vector2(6, 0), dc + Vector2(0, 6), dc + Vector2(-6, 0)])
 		if k > 0.02:
@@ -707,7 +710,7 @@ func _settlement(s: Vector2) -> void:
 	var cx := s.x * 0.5
 	var y := s.y * 0.5 - 300.0
 	_text(g.txt("e_done") if not end_early else g.txt("e_early"), Vector2(cx, y), 20, Pal.ink(0.7 * a), font, 0)
-	_text(g.txt("e_contract") + " · " + (g.txt("e_must_ok") if g.bb_ok and g.gen_ok else g.txt("e_must_no")), Vector2(cx, y + 30), 14, Pal.ink(0.45 * a), font, 0)
+	_text(g.txt("e_contract") + " · " + (g.txt("e_must_ok") if g.all_mandatory_ok() else g.txt("e_must_no")), Vector2(cx, y + 30), 14, Pal.ink(0.45 * a), font, 0)
 	# the big number rolls up
 	var rk := clampf((e - 0.3) / 1.1, 0.0, 1.0)
 	var pct: float = g.recovery_rate() * 100.0 * Pal.ease_out(rk)
@@ -744,7 +747,7 @@ func _settlement(s: Vector2) -> void:
 func grade() -> int:
 	var g = game
 	var r: float = g.recovery_rate()
-	if not (g.bb_ok and g.gen_ok) or r < 0.7:
+	if not g.all_mandatory_ok() or r < 0.7:
 		return 0
 	if r >= 0.92:
 		return 3

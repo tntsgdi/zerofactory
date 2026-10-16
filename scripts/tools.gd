@@ -123,8 +123,9 @@ func _visible(p: Vector2) -> bool:
 func _ctrl_blocked(c) -> String:
 	if world.room_hidden(c.hidden_room):
 		return "hidden"
-	if c.id == "FUEL-F":
-		var g = world.tag("GUARD-F")
+	var guard: String = Ship.ctrl_cfg(game.ship, c.id).get("blocked_by", "")
+	if guard != "":
+		var g = world.tag(guard)
 		if g != null and g.body == null:
 			return "blocked_guard"
 	return ""

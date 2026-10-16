@@ -2,7 +2,8 @@ class_name Blueprint
 extends Node2D
 # The manufacturer's drawing, laid over the ship with Tab: rooms, ports,
 # valves, pipe and cable runs and where the equipment was designed to sit.
-# It is the original design, not the ship as it is now (C-02 has moved).
+# It is the original design, not the ship as it is now (the ship file's
+# blueprint section moves things back to where they were drawn).
 
 var game: Game
 var on := false
@@ -13,6 +14,9 @@ var runs: Array = []      # [path, label, kind]
 var points: Array = []    # [pos, label, kind]
 var font: Font
 var t := 0.0
+var x0 := -2.0 * 48.0     # drawn extent (px), from the ship's own size
+var x1 := 46.0 * 48.0
+var y_top := -4.0 * 48.0
 
 
 func _init() -> void:
@@ -23,34 +27,47 @@ func _init() -> void:
 
 func snapshot() -> void:
 	# always the factory ship, whatever state the real one is in
+	var d: Dictionary = game.ship
+	var bp: Dictionary = d.get("blueprint", {})
 	var w := World.new()
-	GR7.build(w)
-	w.finalize()
+	Ship.build(w, d)
 	for n in w.rooms:
 		var r = w.rooms[n]
-		rooms.append([r.poly, "room_" + n, r.bbox.position + Vector2(10, 22)])
+		rooms.append([r.poly, Ship.room_name_key(d, n), r.bbox.position + Vector2(10, 22)])
+	var bb := Rect2()
+	var first := true
 	for id in w.order:
 		var p = w.pieces[id]
+		var pb := Geom.bbox(p.poly)
+		bb = pb if first else bb.merge(pb)
+		first = false
 		if p.cls == "equip" or p.kind == "fixture":
-			if p.tag in ["LAMP-A", "LAMP-B", "LAMP-C", "LAMP-D", "CTRL-D", "COV-A", "GUARD-F"]:
+			if p.tag in bp.get("hide", []):
 				continue
 			var poly: PackedVector2Array = p.poly
-			if p.tag == "C-02":
-				poly = Geom.rect_poly(Geom.mrect(15.0, 1.05, 17.6, 2.95))
-			if p.tag == "RAD":
-				poly = Geom.rect_poly(Geom.mrect(30.6, 1.8, 32.3, 2.95))
+			var design: Dictionary = bp.get("design", {})
+			if design.has(p.tag):
+				var r4: Array = design[p.tag]
+				poly = Geom.rect_poly(Geom.mrect(r4[0], r4[1], r4[2], r4[3]))
 			equip.append([poly, p.tag])
+	x0 = bb.position.x - 2.0 * 48.0
+	x1 = bb.end.x + 2.0 * 48.0
+	y_top = bb.position.y
 	for id in w.lines:
 		var l = w.lines[id]
 		runs.append([l.path, l.id.to_upper(), l.kind])
 	for id in w.ctrls:
 		var c = w.ctrls[id]
 		points.append([w.ctrl_world(c), c.id, c.kind])
-	# the stub between P-C01 and the hold, through V-C01
-	runs.append([PackedVector2Array([Geom.m(11.2, -4.0), Geom.m(11.2, -4.18), Geom.m(11.85, -4.18), Geom.m(11.85, -3.4)]), "", "pipe"])
+	# extra runs the drawing shows (stubs that are not lines of their own)
+	for run in bp.get("runs", []):
+		var pts := PackedVector2Array()
+		for q in run:
+			pts.append(Geom.m(q[0], q[1]))
+		runs.append([pts, "", "pipe"])
 	# the designed clamps
-	for x in Dock.CLAMPS:
-		points.append([Geom.m(x, 4.0), "", "clamp"])
+	for c in game.dock.clamps:
+		points.append([c * 48.0, "", "clamp"])
 	w.free()
 
 
@@ -98,8 +115,8 @@ func _draw() -> void:
 	var col := Color(0.62, 0.86, 1.0, 0.75 * a)
 	var dim := Color(0.62, 0.86, 1.0, 0.35 * a)
 	# sweep: the drawing draws itself from bow to stern
-	var sweep := Pal.ease_out(k) * 46.0 * 48.0 - 2.0 * 48.0
-	draw_rect(Rect2(-2.0 * 48.0, -6.0 * 48.0, minf(sweep + 2.0 * 48.0, 46.0 * 48.0), 12.0 * 48.0), Color(0.02, 0.03, 0.05, 0.55 * a))
+	var sweep := x0 + Pal.ease_out(k) * (x1 - x0)
+	draw_rect(Rect2(x0, -6.0 * 48.0, minf(sweep - x0, x1 - x0), 12.0 * 48.0), Color(0.02, 0.03, 0.05, 0.55 * a))
 	for r in rooms:
 		_dpoly(r[0], col, lw * 1.3)
 		draw_string(font, r[2], game.txt(r[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, int(14.0 / z * 1.2), col)
@@ -131,4 +148,4 @@ func _draw() -> void:
 				draw_rect(Rect2(pos - Vector2(s, s) * 0.7, Vector2(s, s) * 1.4), col, false, lw)
 		if p[1] != "":
 			draw_string(font, pos + Vector2(7.0 / z, -6.0 / z), p[1], HORIZONTAL_ALIGNMENT_LEFT, -1, int(11.0 / z * 1.2), col)
-	draw_string(font, Vector2(0, -5.2 * 48.0), "GR-7 GREY HERON  ·  " + game.txt("blueprint"), HORIZONTAL_ALIGNMENT_LEFT, -1, int(15.0 / z * 1.2), col)
+	draw_string(font, Vector2(x0 + 2.0 * 48.0, y_top - 1.2 * 48.0), game.ship.get("name", "") + "  ·  " + game.txt("blueprint"), HORIZONTAL_ALIGNMENT_LEFT, -1, int(15.0 / z * 1.2), col)
