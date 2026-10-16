@@ -21,6 +21,7 @@ func _process(_dt: float) -> bool:
 
 func _frames(n: int) -> void:
 	for i in n:
+		Txt.zh = Txt.test_zh
 		await process_frame
 
 
@@ -28,11 +29,12 @@ func _run() -> void:
 	var l := "" if Txt.zh else "_en"
 	var title: Control = load("res://scenes/title.tscn").instantiate()
 	root.add_child(title)
+	Txt.zh = Txt.test_zh
 	await _frames(200)
 	Cap.save(root, "res://tests/out/title%s.png" % l)
 	title._open_slots()
 	title.slots = [
-		{"company": "第 1 泊位拆解", "money": 0.0, "loan": 300000.0, "done": 0, "rep": 0, "time": 640.0, "certified": false, "active": {"id": "GR-001"}},
+		{"company": "BERTH 07", "money": 0.0, "loan": 300000.0, "done": 0, "rep": 0, "time": 640.0, "certified": false, "active": {"id": "GR-001"}},
 		{"company": "Kessler & Daughters", "money": 48210.0, "loan": 212000.0, "done": 6, "rep": 9, "time": 15780.0, "certified": true, "active": {"id": "008-GR-50"}},
 		{},
 	]
