@@ -463,6 +463,27 @@ func _draw() -> void:
 func _draw_static() -> void:
 	var ci := static_node
 	var M := Geom.M
+	# the berth's back wall: a dark bay behind the ship, ribbed, its number painted big
+	var wall := PackedVector2Array([Vector2(TOWER_X + 0.6, -10.0) * M, Vector2(ARM_X1, -10.0) * M, Vector2(ARM_X1 + 4.0, -5.0) * M,
+		Vector2(FLOOR_X1 - 6.0, -5.0) * M, Vector2(FLOOR_X1 - 2.0, FLOOR_Y) * M, Vector2(TOWER_X + 0.6, FLOOR_Y) * M])
+	ci.draw_colored_polygon(wall, Color(0.015, 0.017, 0.021, 0.92))
+	var wx := TOWER_X + 6.0
+	while wx < FLOOR_X1 - 6.0:
+		var top := -10.0 if wx <= ARM_X1 else (-5.0 if wx >= ARM_X1 + 4.0 else lerpf(-10.0, -5.0, (wx - ARM_X1) / 4.0))
+		ci.draw_rect(Rect2(Vector2(wx - 0.18, top) * M, Vector2(0.36 * M, (FLOOR_Y - top) * M)), Color(0.017, 0.019, 0.024))
+		ci.draw_line(Vector2(wx - 0.18, top) * M, Vector2(wx - 0.18, FLOOR_Y) * M, Pal.ink(0.07), 1.0)
+		wx += 6.0
+	for sy in [-5.0, 2.0]:
+		ci.draw_line(Vector2(TOWER_X + 0.6, sy) * M, Vector2(FLOOR_X1 - 6.0 + (sy + 5.0) / 14.0 * 4.0, sy) * M, Pal.ink(0.05), 1.0)
+	# a strip of small lit ports high on the wall
+	var px := TOWER_X + 2.0
+	while px < ARM_X1 - 1.0:
+		ci.draw_rect(Rect2(Vector2(px, -9.3) * M, Vector2(0.2 * M, 0.2 * M)), Pal.ink(0.07))
+		px += 1.2
+	var wcl := wall.duplicate()
+	wcl.append(wall[0])
+	ci.draw_polyline(wcl, Pal.ink(0.16), 1.2, true)
+	ci.draw_string(font_b, Vector2(TOWER_X + 1.2, 2.6) * M, "07", HORIZONTAL_ALIGNMENT_LEFT, -1, int(4.4 * M), Pal.ink(0.035))
 	# the berth: floor platform with legs into the dark, the tower, the arm
 	_truss(Rect2(TOWER_X * M, FLOOR_Y * M, (FLOOR_X1 - TOWER_X) * M, 0.6 * M))
 	for lx in [-2.0, 10.0, 22.0, 34.0, 46.0]:
@@ -476,7 +497,7 @@ func _draw_static() -> void:
 	ci.draw_rect(Rect2((ARM_X1 - 0.3) * M, -10.8 * M, 0.5 * M, 1.0 * M), Pal.ink(0.5), false, 1.2)
 	ci.draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Color(0.07, 0.073, 0.082))
 	ci.draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Pal.ink(0.5), false, 1.2)
-	ci.draw_string(font, Vector2(TOWER_X + 0.9, -11.4) * M, "BERTH 07  ·  SALVAGE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Pal.ink(0.32))
+
 	# the scrap trough along the floor, into the furnace
 	var tl := Vector2(TROUGH_X0, TROUGH_Y) * M
 	var tr := Vector2(TROUGH_X1, TROUGH_Y) * M
@@ -488,13 +509,21 @@ func _draw_static() -> void:
 	for e in [tl, tr]:
 		ci.draw_line(e - Vector2(0, 6), e + Vector2(0, th), Pal.ink(0.55), 2.0)
 	# its sign at the left end
-	var sr := Rect2(tl + Vector2(0.9 * M, -44), Vector2(206, 30))
+	var sr := Rect2(tl + Vector2(1.7 * M, -44), Vector2(206, 30))
 	ci.draw_rect(sr, Color(0.035, 0.037, 0.042, 0.94))
 	ci.draw_rect(Rect2(sr.position, Vector2(4, sr.size.y)), Pal.heat(0.9, 1.1))
 	ci.draw_string(font_b, sr.position + Vector2(14, 21), game.txt("trough"), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.ink(0.9))
-	# dock floor markings under the ship
-	for x in range(0, 44, 3):
-		ci.draw_line(Vector2(x * M, 8.85 * M), Vector2((x + 1.4) * M, 8.85 * M), Pal.ink(0.1), 2.0)
+	# the open ends: striped, so the edge of the berth reads at a glance
+	_stripes(Rect2((FLOOR_X1 - 2.2) * M, FLOOR_Y * M + 3, 2.0 * M, 0.6 * M - 6))
+	_stripes(Rect2((ARM_X1 - 2.0) * M, -10.6 * M + 3, 1.6 * M, 0.6 * M - 6))
+	# the berth's own plate on the tower: its number, and whose it is
+	var pr := Rect2((TOWER_X + 0.9) * M, 5.0 * M, 8.0 * M, 1.4 * M)
+	ci.draw_rect(pr, Color(0.035, 0.037, 0.042, 0.96))
+	ci.draw_rect(Rect2(pr.position, Vector2(5, pr.size.y)), Pal.heat(0.9, 1.1))
+	ci.draw_rect(pr, Pal.ink(0.25), false, 1.0)
+	ci.draw_string(font_b, pr.position + Vector2(18, 40), "BERTH 07", HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Pal.ink(0.92))
+	var company: String = str(Career.data.get("company", "")) if game != null and game.career() else ""
+	ci.draw_string(font, pr.position + Vector2(190, 40), (company + "  ·  " if company != "" and company != "BERTH 07" else "") + "SALVAGE", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Pal.ink(0.55))
 	# debris net
 	var nc := NET * M
 	var net_pts := PackedVector2Array()
@@ -777,36 +806,63 @@ func _trough_live() -> void:
 		ax += 3.0 * M
 
 
+# a plated girder: a lit top edge, a shadowed bottom, posts and diagonals, rivets at the nodes
 func _truss(r: Rect2) -> void:
-	static_node.draw_rect(r, Color(0.055, 0.058, 0.066))
-	static_node.draw_line(r.position, Vector2(r.end.x, r.position.y), Pal.ink(0.32), 1.2)
-	static_node.draw_line(Vector2(r.position.x, r.end.y), r.end, Pal.ink(0.32), 1.2)
+	var ci := static_node
+	ci.draw_rect(r, Color(0.052, 0.055, 0.062))
+	ci.draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * 0.22)), Color(0.075, 0.079, 0.088))
+	ci.draw_rect(Rect2(Vector2(r.position.x, r.end.y - r.size.y * 0.18), Vector2(r.size.x, r.size.y * 0.18)), Color(0.04, 0.042, 0.048))
 	var x := r.position.x
 	var k := 0
 	while x < r.end.x:
 		var nx := minf(x + r.size.y, r.end.x)
+		ci.draw_line(Vector2(x, r.position.y), Vector2(x, r.end.y), Pal.ink(0.12), 1.0)
 		if k % 2 == 0:
-			static_node.draw_line(Vector2(x, r.position.y), Vector2(nx, r.end.y), Pal.ink(0.12), 1.0)
+			ci.draw_line(Vector2(x, r.position.y), Vector2(nx, r.end.y), Pal.ink(0.16), 1.2)
 		else:
-			static_node.draw_line(Vector2(x, r.end.y), Vector2(nx, r.position.y), Pal.ink(0.12), 1.0)
+			ci.draw_line(Vector2(x, r.end.y), Vector2(nx, r.position.y), Pal.ink(0.16), 1.2)
+		ci.draw_circle(Vector2(x, r.position.y + 3), 1.4, Pal.ink(0.35))
+		ci.draw_circle(Vector2(x, r.end.y - 3), 1.4, Pal.ink(0.25))
 		x = nx
 		k += 1
+	ci.draw_line(r.position, Vector2(r.end.x, r.position.y), Pal.ink(0.6), 1.6)
+	ci.draw_line(Vector2(r.position.x, r.end.y), r.end, Pal.ink(0.28), 1.2)
 
 
 func _truss_v(r: Rect2) -> void:
-	static_node.draw_rect(r, Color(0.055, 0.058, 0.066))
-	static_node.draw_line(r.position, Vector2(r.position.x, r.end.y), Pal.ink(0.32), 1.2)
-	static_node.draw_line(Vector2(r.end.x, r.position.y), r.end, Pal.ink(0.32), 1.2)
+	var ci := static_node
+	ci.draw_rect(r, Color(0.052, 0.055, 0.062))
+	ci.draw_rect(Rect2(r.position, Vector2(r.size.x * 0.22, r.size.y)), Color(0.075, 0.079, 0.088))
 	var y := r.position.y
 	var k := 0
 	while y < r.end.y:
 		var ny := minf(y + r.size.x, r.end.y)
+		ci.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, y), Pal.ink(0.12), 1.0)
 		if k % 2 == 0:
-			static_node.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, ny), Pal.ink(0.12), 1.0)
+			ci.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, ny), Pal.ink(0.16), 1.2)
 		else:
-			static_node.draw_line(Vector2(r.end.x, y), Vector2(r.position.x, ny), Pal.ink(0.12), 1.0)
+			ci.draw_line(Vector2(r.end.x, y), Vector2(r.position.x, ny), Pal.ink(0.16), 1.2)
+		ci.draw_circle(Vector2(r.position.x + 3, y), 1.4, Pal.ink(0.35))
 		y = ny
 		k += 1
+	ci.draw_line(r.position, Vector2(r.position.x, r.end.y), Pal.ink(0.6), 1.6)
+	ci.draw_line(Vector2(r.end.x, r.position.y), r.end, Pal.ink(0.28), 1.2)
+
+
+# diagonal warning stripes over a band (heat on dark)
+func _stripes(r: Rect2, a: float = 0.55) -> void:
+	var ci := static_node
+	ci.draw_rect(r, Color(0.03, 0.03, 0.03))
+	var x := r.position.x - r.size.y
+	var i := 0
+	while x < r.end.x:
+		if i % 2 == 0:
+			var pts := PackedVector2Array([Vector2(x, r.end.y), Vector2(x + r.size.y, r.position.y), Vector2(x + r.size.y + 10, r.position.y), Vector2(x + 10, r.end.y)])
+			for j in pts.size():
+				pts[j] = Vector2(clampf(pts[j].x, r.position.x, r.end.x), pts[j].y)
+			ci.draw_colored_polygon(pts, Pal.heat(a, 1.0))
+		x += 10
+		i += 1
 
 
 func _draw_trough(ci: CanvasItem) -> void:
@@ -824,7 +880,38 @@ func _draw_trough(ci: CanvasItem) -> void:
 		x += 40.0
 
 
+const FLOODS := [9.5, 19.0]      # m along the boom: lamps that light the ship from above
+
+
+func _draw_lights() -> void:
+	var M := Geom.M
+	var tex: Texture2D = game.fx.glow_tex
+	# floodlights: a soft cone down onto the ship, a bright head on the boom
+	for fx_ in FLOODS:
+		var hp := Vector2(fx_, -9.9) * M
+		# the cone fades out downwards (bright at the lamp, nothing by the hull's far side)
+		var cone := PackedVector2Array([hp + Vector2(-10, 0), hp + Vector2(10, 0), hp + Vector2(3.2 * M, 8.0 * M), hp + Vector2(-3.2 * M, 8.0 * M)])
+		var cc := PackedColorArray([Pal.ink(0.045, 1.2), Pal.ink(0.045, 1.2), Pal.ink(0.0), Pal.ink(0.0)])
+		add_node.draw_polygon(cone, cc)
+		add_node.draw_texture_rect(tex, Rect2(hp - Vector2(26, 14), Vector2(52, 28)), false, Pal.ink(0.5, 1.6))
+		add_node.draw_circle(hp, 3.0, Pal.ink(0.95, 2.0))
+	# marker lights along the deck edge and under the boom, chasing slowly toward the furnace
+	var mx: float = zpos("metal").x / M
+	var x := TOWER_X + 1.0
+	while x < FLOOR_X1 - 0.5:
+		var ph := fposmod(t * 0.8 - absf(x - mx) * 0.08, 1.0)
+		var a := 0.15 + 0.55 * pow(1.0 - ph, 6.0)
+		add_node.draw_circle(Vector2(x, FLOOR_Y) * M + Vector2(0, -2), 2.2, Pal.heat(a, 1.6))
+		x += 2.0
+	x = TOWER_X + 1.0
+	while x < ARM_X1 - 0.5:
+		var a2 := 0.12 + 0.12 * sin(t * 1.5 + x)
+		add_node.draw_circle(Vector2(x, -10.0) * M + Vector2(0, 2), 1.8, Pal.ink(a2, 1.6))
+		x += 3.0
+
+
 func _draw_add() -> void:
+	_draw_lights()
 	var tex: Texture2D = game.fx.glow_tex
 	var M := Geom.M
 	# beacons on the open ends of the arm and the platform, and the field corners

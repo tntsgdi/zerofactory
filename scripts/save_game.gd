@@ -72,6 +72,9 @@ static func save(g) -> void:
 		return
 	var w = g.world
 	var s = g.sys
+	# a cut made this frame splits the body before it is written, as it would next physics step
+	if w.dirty_links:
+		w.relink()
 	var body_ids := {}
 	var bodies: Array = []
 	var taken := {}

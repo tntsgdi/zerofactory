@@ -165,9 +165,9 @@ static func _logs(rng: RandomNumberGenerator, traps: Array) -> Array:
 
 
 # for tests: the offer a seed makes at a given risk
-static func offer_for(seed: int, career: Dictionary, stars: int = 1) -> Dictionary:
+static func offer_for(seed: int, career: Dictionary, stars: int = 1, scope: String = "full") -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
-	var o := offer(rng, career, stars)
+	var o := offer(rng, career, stars, {}, scope)
 	o.erase("_ship")
 	return o

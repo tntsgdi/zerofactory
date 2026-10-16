@@ -626,7 +626,8 @@ func _contract_panel() -> void:
 	var y := 46.0
 	var items0: Array = g.mandatory_items()
 	var by0 := maxf(y + 120, y + 56 + items0.size() * 24 + 18)
-	var ph := by0 - y + 80.0 + (56.0 if g.scope() != "full" else 0.0)
+	var lrow := 0.0 if g.training or g.exam != null else 24.0     # the "pieces left" row
+	var ph := by0 - y + 80.0 + lrow + (56.0 if g.scope() != "full" else 0.0)
 	UI.panel(c, Rect2(x - 18, y - 30, 340, ph), 0.82)
 	_text(g.txt("contract") + " " + g.ship.get("contract", ""), Vector2(x, y), 13, Pal.ink(0.5), font)
 	if g.scope() != "full":
@@ -688,17 +689,17 @@ func _contract_panel() -> void:
 	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 13, Pal.ink(0.5), font)
 	if not g.training and g.exam == null:
 		var nl: int = g.pieces_left().size()
-		_text(g.txt("left_n") % nl, Vector2(x + 150, by + 36), 13, Pal.heat(0.9, 1.2) if nl > 0 and nl <= 8 else Pal.ink(0.5), font_b if nl <= 8 else font, 0)
+		_text(g.txt("left_n") % nl, Vector2(x, by + 60), 13, Pal.heat(0.9, 1.2) if nl > 0 and nl <= 8 else Pal.ink(0.5), font_b if nl <= 8 else font)
 	if g.story != null and not g.story.items.is_empty():
 		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 13, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
 	elif g.standard_time() > 0.0:
 		# the clock against the standard time: past it, the time bonus starts to shrink
 		var late: bool = g.playtime > g.standard_time()
 		_text(_clock(g.playtime) + " / " + _clock(g.standard_time()), Vector2(x + 300, by + 36), 13, Pal.heat(0.8, 1.0) if late else Pal.ink(0.5), font, 1)
-	var ry := by + 70
+	var ry := by + 70 + lrow
 	if g.scope() != "full":
-		c.draw_rect(Rect2(x - 8, by + 50, 2, 44), Pal.heat(0.9, 1.1))
-		c.draw_multiline_string(font, Vector2(x, by + 66), Market.scope_text(g.job), HORIZONTAL_ALIGNMENT_LEFT, 300, 13, 2, Pal.ink(0.85))
+		c.draw_rect(Rect2(x - 8, by + 50 + lrow, 2, 44), Pal.heat(0.9, 1.1))
+		c.draw_multiline_string(font, Vector2(x, by + 66 + lrow), Market.scope_text(g.job), HORIZONTAL_ALIGNMENT_LEFT, 300, 13, 2, Pal.ink(0.85))
 		ry += 36
 	_recall(x, ry)
 
