@@ -14,6 +14,7 @@ const CHECKS := [
 	["connected", "结构连接", "CONNECTED"],
 	["controls", "接口可达", "CONTROLS REACHABLE"],
 	["mandatory", "强制目标", "MANDATORY ITEMS"],
+	["story", "剧情物件", "STORY ITEMS"],
 	["settle", "可结算", "SETTLEABLE"],
 ]
 const CTRL_KINDS := ["port", "test", "valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam"]
@@ -37,6 +38,7 @@ static func run(d: Dictionary) -> Dictionary:
 	_connected(d, w, out.connected)
 	_controls(d, w, out.controls)
 	_mandatory(d, w, out.mandatory)
+	_story(d, w, out.story)
 	_settle(d, w, out.settle)
 	w.free()
 	return out
@@ -377,6 +379,31 @@ static func _reachable(w, pos: Vector2, hidden_room: String) -> bool:
 			if not blocked:
 				return true
 	return false
+
+
+# every inspectable sits on a real piece in the room it claims; the recorder exists
+static func _story(d: Dictionary, w, bad: Array) -> void:
+	var st: Dictionary = d.get("story", {})
+	var ids := {}
+	for it in st.get("inspect", []):
+		if ids.has(it.id):
+			bad.append("story item %s listed twice" % it.id)
+		ids[it.id] = true
+		var p = w.tag(it.get("piece", ""))
+		if p == null:
+			bad.append("story item %s sits on missing piece %s" % [it.id, it.get("piece", "")])
+		elif it.has("room") and p.room != it.room:
+			bad.append("story item %s: %s is in room %s, not %s" % [it.id, p.tag, p.room, it.room])
+		for f in ["title", "text"]:
+			if it.get(f, []).size() != 2:
+				bad.append("story item %s needs %s in both languages" % [it.id, f])
+	var rc: Dictionary = st.get("recorder", {})
+	if not rc.is_empty():
+		var bb = w.tag(rc.get("piece", ""))
+		if bb == null:
+			bad.append("story recorder %s is missing" % rc.get("piece", ""))
+		elif not bb.mandatory:
+			bad.append("story recorder %s is not a contract item" % bb.tag)
 
 
 static func _mandatory(d: Dictionary, w, bad: Array) -> void:

@@ -241,6 +241,8 @@ func _near_joint(pick: float) -> Dictionary:
 			var pa = world.pieces.get(j.a)
 			if pa != null and pa.body == null and world.room_hidden(pa.room):
 				continue
+			if world.joint_covered(j):
+				continue
 			bd = d
 			best = {"kind": "joint", "joint": j, "pos": p, "d": d, "label": j.get_meta("tag", "")}
 	return best

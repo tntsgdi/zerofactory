@@ -10,7 +10,6 @@ extends Node
 
 const STUCK_1 := 20.0        # s without progress: Liang gives a direction
 const STUCK_2 := 40.0        # the target flashes
-const LINE_MAX_WAIT := 20.0
 const RESET_DELAY := 1.5
 
 signal step_changed
@@ -24,10 +23,6 @@ var flags := {}               # TUT_01_COMPLETE ... (the state markers of the co
 var step_t := 0.0
 var idle_t := 0.0
 var hint_level := 0
-var radio: Array = []         # [line id, queued at]
-var line_now := {}            # {id, t, dur}
-var said := {}
-var last_said := ""
 var bp_seen := false
 var choice_pick := ""
 var rings_done := 0
@@ -55,6 +50,7 @@ func setup(g: Game, ship_id: String) -> void:
 	var f := FileAccess.open("res://ships/%s_course.json" % ship_id, FileAccess.READ)
 	if f != null:
 		course = JSON.parse_string(f.get_as_text())
+	game.radio.lines = course.get("lines", {})
 	for r in course.get("rings", []):
 		rings.append([Vector2(r[0], r[1]) * Geom.M, float(r[2]) * Geom.M])
 	var lr: Array = course.get("long_ring", [])
@@ -106,54 +102,15 @@ func text(d) -> String:
 	return str(d)
 
 
-func line_text(id: String) -> String:
-	var l: Dictionary = course.get("lines", {}).get(id, {})
-	return l.get("zh", "") if Txt.zh else l.get("en", "")
-
-
-func line_who(id: String) -> String:
-	return course.get("lines", {}).get(id, {}).get("who", "liang")
-
-
 # ---------------------------------------------------------------- radio
 
 func say(id: String, once: bool = true) -> void:
-	if id == "" or not course.get("lines", {}).has(id):
-		return
-	if once and said.has(id):
-		return
-	if id == last_said:
-		return
-	said[id] = true
-	radio.append([id, t])
-
-
-# one line at a time: ~0.08 s a character, 2.5..12 s; queued while the hands are busy
-func _step_radio(dt: float) -> void:
-	if not line_now.is_empty():
-		line_now.t += dt
-		if line_now.t >= line_now.dur:
-			line_now = {}
-		return
-	radio = radio.filter(func(r): return t - r[1] < LINE_MAX_WAIT)
-	if radio.is_empty():
-		return
-	if _busy() and line_who(radio[0][0]) == "liang":
-		return
-	var r = radio.pop_front()
-	var n := line_text(r[0]).length()
-	line_now = {"id": r[0], "t": 0.0, "dur": clampf(1.6 + n * 0.075, 2.5, 12.0)}
-	last_said = r[0]
-	game.sfx.play("radio_on" if line_who(r[0]) == "liang" else "term")
-
-
-func _busy() -> bool:
-	var tl = game.tools
-	return tl.cutting or (tl.held_piece != null and tl.tether_force > 0.2)
+	if id != "":
+		game.radio.say(id, once)
 
 
 func lines_idle() -> bool:
-	return line_now.is_empty() and radio.is_empty()
+	return game.radio.idle()
 
 
 # ---------------------------------------------------------------- frame
@@ -164,7 +121,6 @@ func _process(dt: float) -> void:
 	t += dt
 	step_t += dt
 	idle_t += dt
-	_step_radio(dt)
 	_watch_flight(dt)
 	_watch_incidents()
 	_react()
@@ -415,8 +371,7 @@ func request_hint() -> void:
 	if lockstep() and st.has("auto"):
 		autopilot = Vector2(st.auto[0], st.auto[1]) * Geom.M
 	elif st.has("hint"):
-		said.erase(st.hint)
-		last_said = ""
+		game.radio.forget(st.hint)
 		say(st.hint)
 
 
@@ -549,6 +504,12 @@ func reset_props(keys: Array, restore: Dictionary = {}) -> void:
 	# the openings are worked out again right now, before any gas is put back
 	if not made.is_empty():
 		s._compute_now()
+	# whatever a rebuilt piece holds comes back with it (a tank that went
+	# into the furnace was emptied there)
+	var vols: Dictionary = d.get("fluids", {}).get("volumes", {})
+	for fk in vols:
+		if vols[fk].get("piece", "") in keys:
+			s.set_fluid(fk, float(vols[fk].get("amount", 0.0)))
 	# system state
 	var gas: Dictionary = d.get("gas", {})
 	for v in restore.get("gas", []):
@@ -621,7 +582,7 @@ func _react() -> void:
 # ---------------------------------------------------------------- save
 
 func save_state() -> Dictionary:
-	return {"lesson": lesson_i, "step": step_i, "flags": flags, "guard": guard_used, "recovered": recovered, "said": said,
+	return {"lesson": lesson_i, "step": step_i, "flags": flags, "guard": guard_used, "recovered": recovered, "said": game.radio.said,
 		"rings": rings_done, "dash": dash_done, "assist": assist_seen_off, "done": done, "ends": step_end_time}
 
 
@@ -631,7 +592,7 @@ func load_state(d: Dictionary) -> void:
 	flags = d.get("flags", {})
 	guard_used = d.get("guard", {})
 	recovered = d.get("recovered", {})
-	said = d.get("said", {})
+	game.radio.said = d.get("said", {})
 	rings_done = int(d.get("rings", 0))
 	dash_done = d.get("dash", false)
 	assist_seen_off = d.get("assist", false)
@@ -641,5 +602,5 @@ func load_state(d: Dictionary) -> void:
 	# the lines of the step being resumed are said again
 	var st := step()
 	for id in st.get("in", []):
-		said.erase(id)
+		game.radio.forget(id)
 	_enter_step()

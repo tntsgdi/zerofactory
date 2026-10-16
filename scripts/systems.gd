@@ -891,6 +891,8 @@ func measure(key: String, kind: String, at_text: String, inst: String, extra: Di
 	r.merge(extra, true)
 	readings[key] = r
 	refresh_reading(r, true)
+	if game != null and game.assist != null:
+		game.assist.on_measure(key, r)
 	return r
 
 

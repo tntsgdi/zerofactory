@@ -12,6 +12,7 @@ var total_len := 0.0
 var dust: Array = []
 var music: AudioStreamPlayer
 var music_k := 0.0
+var settings: SettingsPanel
 
 
 const HERON := [
@@ -48,8 +49,12 @@ func _ready() -> void:
 		st.loop = true
 		music.stream = st
 		music.volume_db = -80.0
+		music.bus = "Music"
 		add_child(music)
 		music.play()
+	Settings.apply(get_viewport())
+	settings = SettingsPanel.new()
+	add_child(settings)
 	for i in 140:
 		dust.append([Vector2(randf(), randf()), randf_range(0.004, 0.02), randf() * TAU])
 
@@ -58,7 +63,7 @@ func _items() -> Array:
 	var out: Array = []
 	if SaveGame.exists():
 		out.append(["continue", Txt.t("t_continue")])
-	out.append_array([["new", Txt.t("t_new")], ["train", Txt.t("t_train")], ["lang", Txt.t("m_lang")], ["quit", Txt.t("t_quit")]])
+	out.append_array([["new", Txt.t("t_new")], ["train", Txt.t("t_train")], ["settings", Txt.t("m_settings")], ["quit", Txt.t("t_quit")]])
 	return out
 
 
@@ -120,9 +125,8 @@ func _pick(id: String) -> void:
 				Game.start_ship = "ts1"
 				SaveGame.load_requested = SaveGame.exists(SaveGame.train_path)
 				leaving = 0.0
-		"lang":
-			Txt.zh = not Txt.zh
-			Txt.save_settings(false)
+		"settings":
+			settings.open()
 		"quit":
 			get_tree().quit()
 

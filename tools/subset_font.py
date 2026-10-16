@@ -9,7 +9,7 @@ root = Path(__file__).resolve().parents[1]
 source = Path("E:/godot/zengliang/build/NotoSansSC-VF.ttf")
 chars = set(chr(c) for c in range(0x20, 0x7F))
 chars |= set("·—–→←↑↓×÷±%…「」『』（）《》，。！？：；、“”‘’°²³▲△▽◆◇○●■□★☆✦⌁∞≈≥≤▸▹◂◃")
-for folder in ['scripts', 'scenes']:
+for folder in ['scripts', 'scenes', 'ships']:
     for f in (root / folder).rglob('*'):
         if f.suffix in ('.gd', '.tscn', '.json'):
             chars |= set(f.read_text(encoding='utf-8'))

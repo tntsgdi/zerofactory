@@ -253,6 +253,18 @@ func lines_of(p) -> Array:
 	return out
 
 
+# a fixing behind a cover plate that is still on: not drawn, not reachable
+func joint_covered(j) -> bool:
+	var pos := joint_world(j)
+	for id in order:
+		var c = pieces[id]
+		if c.art != "cover" or c.gone or c.body != null or c.id == j.a or c.id == j.b:
+			continue
+		if Geometry2D.is_point_in_polygon(pos, c.poly):
+			return true
+	return false
+
+
 func joint_world(j) -> Vector2:
 	var p = pieces.get(j.a)
 	return frame(p) * j.pos if p != null else j.pos
@@ -977,6 +989,8 @@ func draw_joints_of(ci: CanvasItem, list: Array) -> void:
 		var pa = ids[j.a]
 		var pos: Vector2 = j.pos + door_offset(pa)
 		if pa.room != "" and rooms.has(pa.room) and not rooms[pa.room].revealed and pa.body == null:
+			continue
+		if pa.body == null and j.type == "bolt" and joint_covered(j):
 			continue
 		match j.type:
 			"bolt":

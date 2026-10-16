@@ -120,7 +120,6 @@ func _draw_ui() -> void:
 		return
 	var s := c.size
 	_task_list()
-	_radio(s)
 	_marker(s)
 	_tool_locks()
 	if choice_k > 0.01:
@@ -180,35 +179,6 @@ func _tick(p: Vector2, k: float, a: float) -> void:
 		c.draw_line(pts[1], pts[1].lerp(pts[2], (k - 0.5) * 2.0), Pal.ink(a), 2.0, true)
 
 
-func _radio(s: Vector2) -> void:
-	var tut := game.tutorial
-	var ln: Dictionary = tut.line_now
-	if ln.is_empty():
-		return
-	var id: String = ln.id
-	var term := tut.line_who(id) == "term"
-	var full := tut.line_text(id)
-	var lt: float = ln.t
-	var a := clampf(lt / 0.2, 0.0, 1.0) * clampf((ln.dur - lt) / 0.3, 0.0, 1.0)
-	var shown := full.substr(0, int(lt * 30.0))
-	var w := 820.0
-	var r := Rect2(s.x * 0.5 - w * 0.5, s.y - 210.0 + (1.0 - Pal.ease_out(clampf(lt / 0.25, 0.0, 1.0))) * 14.0, w, 64.0)
-	c.draw_rect(r, Color(0.02, 0.022, 0.026, 0.86 * a))
-	c.draw_rect(Rect2(r.position, Vector2(3, r.size.y)), (Pal.tint(Pal.AIR, a, 1.0) if term else Pal.heat(a, 1.0)))
-	var name: String = game.txt("tut_term") if term else game.txt("tut_liang")
-	_text(name, r.position + Vector2(18, 22), 12, Pal.ink(0.5 * a))
-	# the voice as a little waveform while the words come in
-	var typing := shown.length() < full.length()
-	for i in 14:
-		var hgt := 2.0 + (8.0 * absf(sin(t * 17.0 + i * 1.7)) * absf(sin(t * 5.3 + i)) if typing else 1.0)
-		c.draw_rect(Rect2(r.position.x + 18 + i * 4.0, r.position.y + 44 - hgt * 0.5, 2, hgt), Pal.ink(0.35 * a))
-	var col := Pal.tint(Pal.AIR, 0.95 * a, 1.1) if term else Pal.ink(0.95 * a)
-	_text(shown, r.position + Vector2(90, 44), 18, col)
-	if term and typing:
-		var cw := font.get_string_size(shown, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
-		c.draw_rect(Rect2(r.position.x + 92 + cw, r.position.y + 30, 9, 16), Pal.tint(Pal.AIR, a * (0.5 + 0.5 * sin(t * 20.0))))
-
-
 func _marker(s: Vector2) -> void:
 	var tut := game.tutorial
 	if tut.done:
@@ -264,7 +234,7 @@ func _choice(s: Vector2, k: float) -> void:
 	if ch.is_empty():
 		return
 	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.35 * k))
-	_text(tut.line_text(tut.step().get("in", [""])[0]), Vector2(s.x * 0.5, s.y * 0.5 - 40 + (1.0 - k) * 12.0), 22, Pal.ink(0.95 * k), font_l, 0)
+	_text(game.radio.text(game.radio.lines.get(tut.step().get("in", [""])[0], {})), Vector2(s.x * 0.5, s.y * 0.5 - 40 + (1.0 - k) * 12.0), 22, Pal.ink(0.95 * k), font_l, 0)
 	var m := c.get_local_mouse_position()
 	for i in 2:
 		var r := _choice_rect(i)

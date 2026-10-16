@@ -1,0 +1,42 @@
+{
+	"id": "e07c",
+	"name": "E-07 AUX MODULE",
+	"length": 6.0,
+	"value": {"metal":600.0,"total":3600.0},
+	"clamps": [[18.6,1.8],[23.4,1.8]],
+	"labels": {"E-07":"AUX"},
+	"room_names": {},
+	"ctrls_cfg": {},
+	"blueprint": {"hide":["IP-E7"]},
+	"exam": {"hint":["拖之前，看看还有什么线连着它。","Before you pull, look at what still runs to it."],"problem":"lines","target":"E-07"},
+	"procedures": {
+		"E-07": [
+			{"do":"free","piece":"E-07"},
+			{"do":"deliver","piece":"E-07","zone":"equip"}
+		]
+	},
+	"pieces": [
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"EX-FL","kind":"hull","mass":3.36,"poly":[[18.0,1.4],[24.0,1.4],[24.0,1.8],[18.0,1.8]],"rig":true,"tag":"EX-FL"},
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"EX-LW","kind":"hull","mass":0.84,"poly":[[18.0,-0.6],[18.3,-0.6],[18.3,1.4],[18.0,1.4]],"rig":true,"tag":"EX-LW"},
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"EX-RW","kind":"hull","mass":0.84,"poly":[[23.7,-0.6],[24.0,-0.6],[24.0,1.4],[23.7,1.4]],"rig":true,"tag":"EX-RW"},
+		{"art":"aux","art_size":[1.6,1.0],"art_xf":[1.0,0.0,0.0,1.0,20.1999994913737,0.400000015894572],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"E-07","kind":"equip","mandatory":true,"mass":0.8,"name_key":"p_e07","poly":[[20.2,0.4],[21.8,0.4],[21.8,1.4],[20.2,1.4]],"tag":"E-07","value":3000.0},
+		{"art":"module","art_size":[0.2,0.6],"art_xf":[1.0,0.0,0.0,1.0,18.3000005086263,0.200000007947286],"cut_speed":240.0,"density":1.0,"key":"SK-E7","kind":"fixture","mass":0.05,"name_key":"p_e07_socket","poly":[[18.3,0.2],[18.5,0.2],[18.5,0.8],[18.3,0.8]],"rig":true,"tag":"SK-E7"},
+		{"art":"module","art_size":[0.45,0.8],"art_xf":[1.0,0.0,0.0,1.0,23.25,0.200000007947286],"cut_speed":240.0,"density":1.0,"key":"MAN-E7","kind":"fixture","mass":0.1,"name_key":"p_ts_manifold","poly":[[23.25,0.2],[23.7,0.2],[23.7,1.0],[23.25,1.0]],"rig":true,"tag":"MAN-E7"}
+	],
+	"joints": [
+		{"a":"EX-LW","at":[18.15,1.42],"b":"EX-FL","type":"weld"},
+		{"a":"EX-RW","at":[23.85,1.42],"b":"EX-FL","type":"weld"},
+		{"a":"EX-FL","at":[18.6,1.75],"b":null,"tag":"CL-01","type":"clamp"},
+		{"a":"EX-FL","at":[23.4,1.75],"b":null,"tag":"CL-02","type":"clamp"},
+		{"a":"E-07","at":[20.4,1.38],"b":"EX-FL","type":"bolt"},
+		{"a":"E-07","at":[21.6,1.38],"b":"EX-FL","type":"bolt"},
+		{"a":"SK-E7","at":[18.32,0.5],"b":"EX-LW","type":"weld"},
+		{"a":"MAN-E7","at":[23.68,0.6],"b":"EX-RW","type":"weld"}
+	],
+	"lines": [
+		{"a":"E-07","b":"MAN-E7","id":"p-e","kind":"pipe","net":"none","pa":[21.75,0.55],"path":[[21.75,0.55],[22.6,0.55],[22.6,0.6],[23.25,0.6]],"pb":[23.25,0.6]},
+		{"a":"E-07","b":"SK-E7","id":"c-x","kind":"cable","net":"power","pa":[20.25,0.55],"path":[[20.25,0.55],[19.4,0.55],[19.4,0.5],[18.5,0.5]],"pb":[18.5,0.5]}
+	],
+	"ctrls": [],
+	"rooms": []
+}

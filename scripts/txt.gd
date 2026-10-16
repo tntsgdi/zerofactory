@@ -7,9 +7,138 @@ static var assist := true
 static var certified := false     # passed the training course (or skipped it)
 static var cert_kind := ""        # "full" | "skipped"
 static var exam_grade := ""       # best apprentice assessment: A B C
+static var hint_tier := "standard"   # guided | standard | hardcore
+static var clues: Array = []          # story clues filed in the company archive
+static var vol_master := 1.0
+static var vol_music := 0.8
+static var vol_sfx := 0.9
+static var quality := "high"          # high | low (no glow, no anti-aliasing)
+static var cfg_path := CFG            # tests point this at their own file
+static var test_zh := true            # the language a test runs in
+static var chapter_done := false      # chapter one seen to the end
+const TIERS := ["guided", "standard", "hardcore"]
 const CFG := "user://zeropower_settings.cfg"
 
 const S := {
+	# settings
+	"m_settings": ["设置", "SETTINGS"],
+	"s_title": ["设置", "SETTINGS"],
+	"s_vol_master": ["主音量", "MASTER VOLUME"],
+	"s_vol_music": ["音乐", "MUSIC"],
+	"s_vol_sfx": ["音效", "SOUND EFFECTS"],
+	"s_quality": ["画质", "PICTURE"],
+	"s_q_high": ["高", "HIGH"],
+	"s_q_low": ["低", "LOW"],
+	"s_lang": ["语言", "LANGUAGE"],
+	"s_back": ["返回", "BACK"],
+	"s_keys": ["↑↓ 选择 · ←→ 调整 · Esc 返回", "↑↓ SELECT · ←→ ADJUST · ESC BACK"],
+	# apprentice assessment
+	"p_e07": ["辅助设备 E-07", "AUX UNIT E-07"],
+	"p_e07_lid": ["设备舱盖板", "BAY LID"],
+	"p_e07_jb": ["接线盒", "JUNCTION BOX"],
+	"p_e07_socket": ["墙上插座", "WALL SOCKET"],
+	"p_e07_bracket": ["支架", "BRACKET"],
+	"p_e07_panel": ["检修面板", "INSPECTION PANEL"],
+	"room_EX": ["E-07 设备舱", "E-07 BAY"],
+	"ex_goal": ["考核目标：完整回收设备 E-07", "OBJECTIVE: RECOVER UNIT E-07 WHOLE"],
+	"ex_known": ["已知条件：无有效现场检测记录", "KNOWN: NO VALID SITE READINGS"],
+	"ex_q": ["Q  求提示（评级会记一笔）", "Q  HINT (IT GOES ON THE GRADE)"],
+	"ex_hints": ["已用提示 %d 次", "HINTS USED: %d"],
+	"ex_l1": ["这是最后一个练习。我不提示你该怎么拆，自己检查。", "Last exercise. I won't tell you how to take it apart. Check it yourself."],
+	"ex_l2": ["放心，训练场出不了大事。", "Relax, nothing big can go wrong on the training rig."],
+	"ex_l3": ["不过设备拆坏了，成绩就会很难看。", "But break the unit and your grade will look ugly."],
+	"ex_hint_cost": ["想要提示？可以。不过最后的评级会记一笔。", "Want a hint? Fine. It goes on the grade."],
+	"ex_free": ["好，继续送回收口。", "Good. Now into the bay."],
+	"ex_broken": ["设备已经损坏了。把剩下的部分回收吧，至少把活干完。", "The unit's damaged. Recover what's left — at least finish the job."],
+	"ex_a": ["不错。看来你确实知道自己在干什么了。", "Not bad. Looks like you do know what you're doing."],
+	"ex_bc": ["能拆完就行。后面还有得练。", "Getting it done is what counts. Plenty of practice ahead."],
+	"ex_done": ["考核完成", "ASSESSMENT COMPLETE"],
+	"ex_incomplete": ["考核未完成", "ASSESSMENT INCOMPLETE"],
+	"ex_g_A": ["独立完成 · 安全回收 · 设备完整", "UNAIDED · SAFE · INTACT"],
+	"ex_g_B": ["已回收 · 用过提示或有轻微损坏", "RECOVERED · WITH A HINT OR LIGHT DAMAGE"],
+	"ex_g_C": ["已拆下 · 设备严重损坏", "REMOVED · BADLY DAMAGED"],
+	"ex_g_none": ["可以重新考核，也可以直接接合同", "Take it again, or go straight to the contract"],
+	"ex_review": ["事故复盘", "INCIDENT REVIEW"],
+	"ex_clean": ["没有事故。", "No incidents."],
+	"ex_retake": ["重新考核", "TAKE IT AGAIN"],
+	"m_abandon": ["放弃考核", "ABANDON ASSESSMENT"],
+	"rv_w_pressure": ["打开了还带压的舱室。", "Opened a compartment that still held pressure."],
+	"rv_y_pressure": ["依据不对：动手前没有在连通舱室的测点测到压力，也没有先抽空。", "The call: no pressure reading on a port that reaches the room, no draining, before opening it."],
+	"rv_w_power": ["在带电时拆了电气连接。", "Undid an electrical connection while it was live."],
+	"rv_y_power": ["设备看起来停着不代表断电：先断开储能、放电，再在测点测到 0 V。", "Looking stopped is not off: isolate the storage, bleed it, then read 0 V at a test point."],
+	"rv_w_tied": ["拖动时还有连接没解开，被硬扯断了（%s）。", "Pulled while something still held it; it tore (%s)."],
+	"rv_y_tied": ["拖之前先用测量工具看它有几处固定、几条线，全部解开再拉。", "Before pulling, inspect it for fixings and lines, and undo every one."],
+	"rv_w_tied_lines": ["拖动时管线或电缆还连着，被硬扯断了（%s）。", "Pulled with a pipe or cable still on; it tore (%s)."],
+	"rv_y_tied_lines": ["固定件、管道和电缆是各自独立的连接：每一条都要先解开。", "Fixings, pipes and cables are separate connections: undo each one first."],
+	"rv_w_tied_hidden": ["拖动时检修面板后面还有一处固定，被硬扯断了（%s）。", "Pulled with a fixing still on behind the inspection panel; it tore (%s)."],
+	"rv_y_tied_hidden": ["测量工具报的固定数比看得见的多：先拆检修面板，找到藏着的那一处。", "The inspection counted more fixings than you could see: take the panel off and find the hidden one."],
+	"rv_w_tank": ["储气罐超压爆了。", "A gas bottle burst."],
+	"rv_y_tank": ["舱抽空了不代表罐子空了：罐子要单独接软管。", "An empty room doesn't mean empty bottles: hose them separately."],
+	"rv_w_drain": ["管路里的液体漏了出来。", "Fluid got out of a line."],
+	"rv_y_drain": ["拆管接头之前先抽空、降温。", "Drain and cool a line before undoing it."],
+	"rv_w_cut": ["激光切到了设备本体（%s）。", "The laser went into the unit itself (%s)."],
+	"rv_y_cut": ["能拆就别切：先找固定件和连接。", "Undo before you cut: find the fixings and connections first."],
+	"rv_w_impact": ["零件撞得太猛，损坏了（%s）。", "A piece hit something too hard (%s)."],
+	"rv_y_impact": ["拖运时放慢，提前减速。", "Haul slower and brake early."],
+	"rv_w_hazard": ["危险品进了熔炉或起了火。", "Something hazardous went into the furnace, or caught fire."],
+	"rv_y_hazard": ["看清去向：有残留的送危险品回收口。", "Check where it goes: anything with residue goes to the hazmat mouth."],
+	"rv_w_hint": ["用过 %s 次提示。", "Used %s hint(s)."],
+	"rv_y_hint": ["提示会记入评级，最高 B。", "Hints go on the grade: B at best."],
+	# story
+	"st_skip": ["任意键跳过", "ANY KEY TO SKIP"],
+	"st_to_title": ["任意键返回标题", "ANY KEY: TITLE"],
+	"st_found": ["物件 %d / %d", "FOUND %d / %d"],
+	"st_go_on": ["任意键继续   ·   R  重新拆一艘", "ANY KEY: CONTINUE   ·   R  ANOTHER HERON"],
+	"end_warn": ["梁工：确认要结束？剩下的结构会按废料处理，收益比你自己拆低。", "LIANG: You sure? What's left goes as scrap — less than you'd get taking it apart."],
+	# hint tiers
+	"tier_label": ["提示档位", "HINTS"],
+	"tier_guided": ["引导", "GUIDED"],
+	"tier_standard": ["标准（推荐）", "STANDARD (RECOMMENDED)"],
+	"tier_hardcore": ["硬核", "HARDCORE"],
+	"tier_desc_guided": ["已知危险会给出具体的检查建议", "Concrete checks for known dangers"],
+	"tier_desc_standard": ["只提醒还有未处理的系统，不说怎么处理", "Only says what is still unresolved"],
+	"tier_desc_hardcore": ["只有仪器读数和真实报警", "Instruments and real alarms only"],
+	"tier_rule": ["三档用同一套模拟：只改提示，不改船、读数、价值和事故", "Same simulation in all three: only the hints differ"],
+	"m_tier": ["提示：%s", "HINTS: %s"],
+	"tier_now": ["提示档位：%s", "HINTS: %s"],
+	"as_p_g": ["%s 压力未验证。先在 %s 测一下。", "%s pressure not verified. Measure at %s first."],
+	"as_p_g_dl": ["%s 压力未验证。%s 和舱室之间隔着阀门 %s，先开阀再测。", "%s pressure not verified. Valve %s sits between %s and the room — open it, then measure."],
+	"as_p_g_known": ["%s 里还有 %d kPa，先接软管抽空。", "%s still holds %d kPa. Hose it down first."],
+	"as_p_g_none": ["%s 压力未验证，先找个能测的地方。", "%s pressure not verified. Find somewhere to measure it."],
+	"as_p_s": ["%s 压力：未验证。", "%s PRESSURE: UNVERIFIED."],
+	"as_v_g": ["%s 可能还带电。先断开电源、放电，再测到 0 V。", "%s may still be live. Isolate, bleed, measure 0 V first."],
+	"as_v_s": ["%s 电力状态：未验证。", "%s POWER: UNVERIFIED."],
+	"as_c_g": ["%s 还连着 %d 处固定、%d 条管线或电缆。先解开。", "%s is still held by %d fixings and %d lines. Undo them first."],
+	"as_c_s": ["%s 还有连接未解除。", "%s: CONNECTIONS REMAIN."],
+	"as_f_g": ["管里还有液体：先用 %s 抽空再拆。", "Still fluid in that line: drain it at %s first."],
+	"as_f_g_np": ["管里还有液体：先抽空再拆。", "Still fluid in that line: drain it first."],
+	"as_f_s": ["%s 管路状态：未处理。", "%s LINE: UNRESOLVED."],
+	"as_t_g": ["管路还很烫：热源停下来以后要等它降温。", "That line is hot: stop the heat source and let it cool."],
+	"as_t_s": ["管路温度：未处理。", "LINE TEMPERATURE: UNRESOLVED."],
+	"as_h_g": ["%s 里还有危险残留，送危险品回收口。", "%s still holds hazardous contents — hazmat mouth."],
+	"as_h_s": ["%s 的去向再确认一下。", "%s: CHECK WHERE IT GOES."],
+	"as_cl_g": ["附近有推进剂云团，别在里面开激光。", "Propellant in the air here — keep the laser out of it."],
+	"as_cl_s": ["附近有可燃气体。", "FLAMMABLE GAS NEARBY."],
+	"as_port_g": ["看看这接口接到哪儿，别只盯着表上的数字。", "Check what this port is connected to, not just the number."],
+	"rc_title": ["训练回想", "FROM TRAINING"],
+	"rc_l": ["和 TS-1 第 %d 课一样", "SAME AS TS-1 LESSON %d"],
+	"notes": ["笔记", "NOTES"],
+	"rc_s_path": ["测量通路", "WHAT THE GAUGE SEES"],
+	"rc_s_backup": ["备用电源", "BACKUP POWER"],
+	"rc_s_blow": ["带压舱室", "PRESSURISED ROOM"],
+	"rc_s_tank": ["储气罐", "GAS BOTTLES"],
+	"rc_s_hot": ["热源", "HEAT SOURCE"],
+	"rc_s_guard": ["护板", "GUARD PLATE"],
+	"rc_s_tied": ["连接", "CONNECTIONS"],
+	"rc_s_heavy": ["超重", "OVERWEIGHT"],
+	"rc_v02": ["还记得训练里的 V-02 吗。", "Remember V-02 in training."],
+	"rc_volts": ["面板说停了，测点不这么说。和训练时一样。", "The panel says stopped. The test point disagrees. Like in training."],
+	"rc_blow": ["……还好不是人。", "...Good thing nobody was in there."],
+	"rc_tank": ["舱抽空了，罐子可没有。", "The room's empty. The bottles aren't."],
+	"rc_hot": ["热源还在转，它就凉不下来。", "While the heat source runs, it won't cool down."],
+	"rc_guard": ["护板变形了，拆掉它再接管。", "The guard's bent. Take it off, then connect."],
+	"rc_pull": ["连着呢，和训练那台泵一样。", "Still connected — just like that pump in training."],
+	"rc_heavy": ["超重。和训练那根梁一样，想办法分开。", "Overweight. Like that beam in training — split it."],
 	# training course
 	"tut_course": ["训练 · TS-1 训练舱段", "TRAINING · TS-1 SECTION"],
 	"tut_lesson": ["第 %d 课", "LESSON %d"],
@@ -134,11 +263,11 @@ const S := {
 	"inst_fluid": ["流体检测", "FLUID GAUGE"],
 	"inst_temp": ["接触测温", "CONTACT THERMOMETER"],
 	"inst_inspect": ["目视 / 接触检查", "VISUAL / CONTACT CHECK"],
-	"j_bolt": ["螺栓", "BOLTS"],
-	"j_weld": ["焊缝", "WELDS"],
-	"j_lock": ["锁扣", "LOCKS"],
-	"j_clamp": ["夹具", "CLAMPS"],
-	"j_line": ["线缆/管线", "LINES"],
+	"j_bolt": ["螺栓", "BOLT(S)"],
+	"j_weld": ["焊缝", "WELD(S)"],
+	"j_lock": ["锁扣", "LOCK(S)"],
+	"j_clamp": ["夹具", "CLAMP(S)"],
+	"j_line": ["线缆/管线", "LINE(S)"],
 	"j_none": ["无固定", "LOOSE"],
 	"stale": ["已过期", "STALE"],
 	"read_at": ["测点", "AT"],
@@ -199,7 +328,7 @@ const S := {
 	"k_equip": ["设备残骸", "WRECKED EQUIPMENT"],
 	"k_fixture": ["附件", "FITTING"],
 	# hud
-	"contract": ["拆解合同 #001", "SALVAGE CONTRACT #001"],
+	"contract": ["拆解合同", "SALVAGE CONTRACT"],
 	"ship": ["GR-7「灰鹭号」中型货运船 · 42 m", "GR-7 GREY HERON · MEDIUM FREIGHTER · 42 m"],
 	"must": ["强制回收", "MUST RECOVER"],
 	"rate": ["回收率", "RECOVERY"],
@@ -210,7 +339,7 @@ const S := {
 	"blueprint": ["出厂图纸 · 仅代表原始设计", "FACTORY DRAWING · ORIGINAL DESIGN ONLY"],
 	"keys": ["WASD 移动 · Shift 冲刺 · Space 刹停 · F 飞行稳定 · 1–5 工具 · Tab 图纸 · C 合同 · Esc 菜单", "WASD MOVE · SHIFT BURN · SPACE BRAKE · F ASSIST · 1–5 TOOLS · TAB DRAWING · C CONTRACT · ESC MENU"],
 	# contract card
-	"c_title": ["SALVAGE CONTRACT #001 · 未开工", "SALVAGE CONTRACT #001 · NOT STARTED"],
+	"c_title": ["SALVAGE CONTRACT GR-001 · 未开工", "SALVAGE CONTRACT GR-001 · NOT STARTED"],
 	"c_req": ["合同要求", "REQUIREMENTS"],
 	"c_req1": ["不发生重大船坞事故", "NO MAJOR DOCK ACCIDENT"],
 	"c_req2": ["强制回收：黑匣子 BB-01、主电源模块 G-01（完整送设备回收）", "MUST RECOVER: BB-01 RECORDER, G-01 POWER MODULE (WHOLE, TO EQUIPMENT BAY)"],
@@ -243,7 +372,7 @@ const S := {
 	# ending
 	"e_done": ["GR-7 DISASSEMBLY COMPLETE", "GR-7 DISASSEMBLY COMPLETE"],
 	"e_early": ["合同提前结束", "CONTRACT CLOSED EARLY"],
-	"e_contract": ["拆解合同 #001", "SALVAGE CONTRACT #001"],
+	"e_contract": ["拆解合同", "SALVAGE CONTRACT"],
 	"e_rate": ["舰体有效回收率", "EFFECTIVE RECOVERY"],
 	"e_equip": ["设备完整回收", "EQUIPMENT RECOVERED WHOLE"],
 	"e_metal": ["金属与零件", "METAL & PARTS"],
@@ -266,13 +395,13 @@ const S := {
 	"t_new": ["接下合同", "TAKE THE CONTRACT"],
 	"t_continue": ["继续拆解", "CONTINUE"],
 	"t_quit": ["退出", "QUIT"],
-	"t_note": ["拆解合同 #001 · GR-7 灰鹭号", "CONTRACT #001 · GR-7 GREY HERON"],
+	"t_note": ["拆解合同 GR-001 · GR-7 灰鹭号", "CONTRACT GR-001 · GR-7 GREY HERON"],
 	# hints (first time each)
 	"hint_start": ["先别急着切。用 1 测量工具点外壳上的测压口和测点，看看这艘船现在的真实状态。", "Don't cut yet. Take tool 1 to the ports and test points on the hull — find out what this ship is really like now."],
-	"hint_dead_leg": ["读数来自测压口实际连通的那一段。按 Tab 看图纸：P-C01 和货舱之间还有一个阀门 V-C01。", "A gauge reads whatever its port is connected to. Press Tab: there is a valve, V-C01, between P-C01 and the hold."],
-	"hint_dead_leg_hose": ["V-C01 关着，软管只能抽到阀门外侧那一小段空管。", "With V-C01 shut the hose only reaches the empty stub outside the valve."],
+	"hint_dead_leg": ["读数来自测压口实际连通的那一段。按 Tab 看图纸：测压口和舱室之间可能还隔着阀门。", "A gauge reads whatever its port is connected to. Press Tab: there may be a valve between the port and the room."],
+	"hint_dead_leg_hose": ["阀门关着，软管只能抽到阀门外侧那一小段空管。", "With the valve shut the hose only reaches the empty stub outside it."],
 	"hint_not_off": ["控制台显示的是指令，不是实测：母线仍然有电。", "The panel shows what was commanded, not what is true: the bus is still live."],
-	"hint_remote": ["指令已发出。它真的停了吗？用测量工具去 E-D01 验证。", "Command sent. Did it actually stop? Verify at E-D01."],
+	"hint_remote": ["指令已发出。它真的停了吗？用测量工具去测试点验证。", "Command sent. Did it actually stop? Verify at a test point."],
 	"hint_measured": ["读数会标出仪器、测点和时间；系统一变化，旧读数就会变灰过期。", "Readings carry instrument, point and time; when the system changes they turn grey and stale."],
 	"hint_equip_cut": ["激光遇到设备会停下。切进去设备就成了废料——想完整回收，用 4 维护工具拆它的固定件。", "The laser stops at equipment. Cutting into it turns it to scrap — use tool 4 on its fixings to take it out whole."],
 	"hint_arc": ["带电部件一碰就是电弧。断开电源、放掉电容，再用电气检测仪确认 0 V。", "Live parts arc. Isolate the sources, bleed the capacitor, then confirm 0 V with the tester."],
@@ -285,11 +414,11 @@ const S := {
 	"hint_torn": ["硬扯会扯断锁扣和线缆，设备也跟着受损。下次先用 4 解开。", "Tearing breaks locks and lines and hurts the equipment. Undo them with 4 first."],
 	"hint_pipe_full": ["管里还有流体。先关阀、用 5 抽空。", "Still full. Close the valves and drain it with tool 5."],
 	"hint_pipe_hot": ["冷却回路很烫——发电机还在运转时它不会凉下来。", "The coolant loop is hot — it won't cool while the generator keeps running."],
-	"hint_no_power": ["舱门电机没电。船坞辅助电源 PWR-EXT 在 D 舱顶部外侧。", "No power for the door motors. Dock aux socket PWR-EXT is on the roof above D."],
-	"hint_hatch_jam": ["货舱门变形卡住了，先用 4 解除卡滞（HATCH-JAM）。", "The hatch is bent and jammed — clear HATCH-JAM with tool 4 first."],
+	"hint_no_power": ["舱门电机没电。看看船坞有没有外接辅助电源的插座。", "No power for the door motors. Look for a dock aux power socket."],
+	"hint_hatch_jam": ["舱门变形卡住了，先用 4 解除卡滞。", "The hatch is bent and jammed — clear the jam with tool 4 first."],
 	"hint_hose": ["软管在后台抽，不用守着。按 5 可以切换回收 / 排放。", "The hose works in the background. Press 5 again to switch recover / vent."],
 	"hint_blowout": ["带压舱室被切开会爆发性失压：货物被推撞，气体收益也没了。", "Cutting into a pressurised room blows it out: cargo gets thrown and the gas is lost."],
-	"hint_discharge_refused": ["发电机或蓄电池还在给母线供电，先断开 K-G 和 K-B。", "The generator or battery still feeds the bus — open K-G and K-B first."],
+	"hint_discharge_refused": ["发电机或蓄电池还在给母线供电，先断开它们的开关。", "A generator or battery still feeds the bus — open their switches first."],
 	"hint_free_body": ["零件脱离了。用 3 抓住它，拖或甩进对应的回收口。", "It's free. Grab it with 3 and haul or fling it into the right mouth."],
 	"hint_impact": ["撞击会让设备折价。慢一点，或者用 Space 刹停。", "Impacts cost value. Slow down — Space brakes."],
 	"hint_field": ["泊位上方和右侧是开放的。边缘有牵引场，会把漂出去的东西（包括你）轻轻拉回来。", "The berth is open above and to the right. A tractor field at the edge eases anything drifting out — you included — back in."],
@@ -326,16 +455,23 @@ static func piece_name(p) -> String:
 static func load_settings(testing: bool) -> void:
 	zh = OS.get_locale_language() == "zh"
 	if testing:
-		zh = true
+		zh = test_zh
 		return
 	var cf := ConfigFile.new()
-	if cf.load(CFG) == OK:
+	if cf.load(cfg_path) == OK:
 		zh = cf.get_value("ui", "zh", zh)
 		hints = cf.get_value("ui", "hints", true)
 		assist = cf.get_value("ui", "assist", true)
 		certified = cf.get_value("career", "certified", false)
 		cert_kind = cf.get_value("career", "cert_kind", "")
 		exam_grade = cf.get_value("career", "exam_grade", "")
+		hint_tier = cf.get_value("ui", "hint_tier", "standard")
+		clues = cf.get_value("career", "clues", [])
+		chapter_done = cf.get_value("career", "chapter_done", false)
+		vol_master = cf.get_value("audio", "master", 1.0)
+		vol_music = cf.get_value("audio", "music", 0.8)
+		vol_sfx = cf.get_value("audio", "sfx", 0.9)
+		quality = cf.get_value("video", "quality", "high")
 
 
 static func save_settings(testing: bool) -> void:
@@ -348,4 +484,11 @@ static func save_settings(testing: bool) -> void:
 	cf.set_value("career", "certified", certified)
 	cf.set_value("career", "cert_kind", cert_kind)
 	cf.set_value("career", "exam_grade", exam_grade)
-	cf.save(CFG)
+	cf.set_value("ui", "hint_tier", hint_tier)
+	cf.set_value("career", "clues", clues)
+	cf.set_value("career", "chapter_done", chapter_done)
+	cf.set_value("audio", "master", vol_master)
+	cf.set_value("audio", "music", vol_music)
+	cf.set_value("audio", "sfx", vol_sfx)
+	cf.set_value("video", "quality", quality)
+	cf.save(cfg_path)

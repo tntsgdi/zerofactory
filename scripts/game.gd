@@ -25,6 +25,11 @@ var ship: Dictionary = {}
 static var start_ship := ""  # the title screen picks the next ship (training, exam, contract)
 var training := false        # the ship file is a training course, not a contract
 var tutorial: Tutorial
+var assist: Assist
+var story: Story
+var exam: Exam
+var settings_panel: SettingsPanel
+var radio := Radio.new()      # Liang and the berth terminal
 var player_moved := false
 var warp := false            # time runs x4 while the player holds =
 const WARP := 4.0
@@ -98,9 +103,12 @@ func _ready() -> void:
 	if start_ship != "":
 		ship_id = start_ship
 		start_ship = ""
+	# the assessment draws one of its four problems
+	if ship_id == "exam":
+		ship_id = Exam.pick()
 	var data := {}
 	if SaveGame.load_requested and (not testing or SaveGame.allow_test):
-		data = SaveGame.read(SaveGame.train_path if Ship.load_data(ship_id).get("training", false) else "")
+		data = SaveGame.read(SaveGame.file_for_ship(Ship.load_data(ship_id)))
 	SaveGame.load_requested = false
 	if not data.is_empty():
 		ship_id = data.get("ship", "gr7")
@@ -144,6 +152,7 @@ func _ready() -> void:
 	env.glow_hdr_threshold = 1.1
 	env.glow_hdr_scale = 2.0
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+	Settings.env = env
 	for lv in 7:
 		env.set_glow_level(lv, [0.0, 1.0, 1.0, 0.8, 0.55, 0.3, 0.0][lv])
 	we.environment = env
@@ -155,9 +164,31 @@ func _ready() -> void:
 	sfx = Sfx.new()
 	sfx.game = self
 	add_child(sfx)
+	radio.sfx = sfx
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
+	if ship.has("exam"):
+		exam = Exam.new()
+		exam.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(exam)
+		exam.setup(self)
+		var eh := ExamHud.new()
+		eh.game = self
+		add_child(eh)
+	if not training and exam == null:
+		assist = Assist.new()
+		assist.game = self
+		assist.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(assist)
+	if ship.has("story"):
+		story = Story.new()
+		story.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(story)
+		story.setup(self)
+		var sh := StoryHud.new()
+		sh.game = self
+		add_child(sh)
 	if training:
 		tutorial = Tutorial.new()
 		tutorial.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -168,6 +199,11 @@ func _ready() -> void:
 		add_child(th)
 	for n in [dock, world, sys, fx, blueprint, drone, tools]:
 		n.process_mode = Node.PROCESS_MODE_PAUSABLE
+	# last child: it sees input first while open
+	settings_panel = SettingsPanel.new()
+	settings_panel.testing = testing
+	add_child(settings_panel)
+	Settings.apply_video(get_viewport())
 	world.position.x = ship_offset
 	cam_pos = Vector2(21.0 * 48.0, -0.5 * 48.0)
 	zoom_now = 0.62
@@ -177,6 +213,8 @@ func _ready() -> void:
 		SaveGame.apply_late(self, data)
 		if tutorial != null and data.has("tutorial"):
 			tutorial.load_state(data.tutorial)
+		if story != null and data.has("story"):
+			story.load_state(data.story)
 		if SaveGame.recovered:
 			hud.show_hint(txt("save_recovered"))
 		world.position.x = 0.0
@@ -185,8 +223,11 @@ func _ready() -> void:
 		drone.spawn_t = 0.0
 		cam_pos = drone.global_position
 		zoom_now = CAM_ZOOM
-	elif bot != null and bot.get("skip_intro", false):
-		_end_intro()
+	else:
+		if story != null:
+			story.on_arrive()
+		if bot != null and bot.get("skip_intro", false):
+			_end_intro()
 
 
 func _is_test() -> bool:
@@ -217,6 +258,17 @@ func all_mandatory_ok() -> bool:
 		if not mandatory_ok.get(it[0], false):
 			return false
 	return true
+
+
+func set_tier(tr: String) -> void:
+	Txt.hint_tier = tr
+	Txt.save_settings(testing)
+	sfx.play("tool")
+
+
+func cycle_tier() -> void:
+	set_tier(Txt.TIERS[(Txt.TIERS.find(Txt.hint_tier) + 1) % Txt.TIERS.size()])
+	say("tier_now", drone.global_position + Vector2(0, -44), txt("tier_" + Txt.hint_tier))
 
 
 func room_name(room: String) -> String:
@@ -255,6 +307,8 @@ func _process(dt: float) -> void:
 		"ending":
 			_ending(rdt)
 	fx.step(dt)
+	if not menu_open:
+		radio.step(rdt, tools.cutting or (tools.held_piece != null and tools.tether_force > 0.2))
 	_age_messages(rdt)
 	if hitstop_t > 0.0:
 		hitstop_t -= rdt
@@ -313,7 +367,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_end_intro()
 			return
 		if state == "ending":
-			hud.ending_key(k)
+			if exam != null:
+				if exam.result_t > 1.0 and k in [KEY_1, KEY_2]:
+					exam_choice(k - KEY_1)
+				return
+			if story == null or not story.ending_key(k):
+				hud.ending_key(k)
 			return
 		if k == KEY_ESCAPE:
 			if contract_open:
@@ -326,6 +385,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 		if contract_open:
 			if k in [KEY_SPACE, KEY_ENTER]:
 				close_contract()
+			elif k in [KEY_1, KEY_2, KEY_3]:
+				set_tier(Txt.TIERS[k - KEY_1])
+			return
+		if exam != null and k == KEY_Q:
+			exam.request_hint()
 			return
 		if tutorial != null:
 			if tutorial.choice_open() and k in [KEY_1, KEY_2]:
@@ -352,9 +416,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 				sfx.play("switch")
 			KEY_C: open_contract()
 			KEY_H:
-				hints_on = not hints_on
-				Txt.hints = hints_on
-				Txt.save_settings(testing)
+				if training:
+					hints_on = not hints_on
+				else:
+					cycle_tier()
 	elif ev is InputEventMouseButton and ev.pressed:
 		if state == "intro":
 			_end_intro()
@@ -387,6 +452,8 @@ func close_contract() -> void:
 	hud.contract_changed()
 	sfx.play("ok")
 	hint("start")
+	if story != null:
+		story.on_start()
 
 
 # ---------------------------------------------------------------- camera
@@ -476,7 +543,9 @@ func _end_intro() -> void:
 	zoom_override = -1.0
 	state = "play"
 	state_t = 0.0
-	if (bot == null or not bot.get("skip_contract", false)) and not training:
+	if exam != null:
+		exam.on_start()
+	elif (bot == null or not bot.get("skip_contract", false)) and not training:
 		open_contract()
 
 
@@ -505,7 +574,10 @@ func finish_contract(early: bool) -> void:
 		slowmo = 0.5
 	cam_override = Vector2(21.0 * 48.0, -0.2 * 48.0)
 	zoom_override = 0.6
-	hud.start_ending(early)
+	if story != null and story.wants_epilogue():
+		story.start_epilogue(early)
+	else:
+		hud.start_ending(early)
 	sfx.play("end")
 	if not testing:
 		SaveGame.clear()
@@ -530,6 +602,18 @@ func after_training(where: String) -> void:
 	start_ship = "exam" if where == "exam" else "gr7"
 	SaveGame.load_requested = false
 	get_tree().reload_current_scene()
+
+
+# after the assessment: 0 take it again, 1 on to the first contract
+func exam_choice(i: int) -> void:
+	if i == 0:
+		Engine.time_scale = 1.0
+		get_tree().paused = false
+		start_ship = "exam"
+		SaveGame.load_requested = false
+		get_tree().reload_current_scene()
+	else:
+		after_training("contract")
 
 
 func skip_training() -> void:
@@ -564,11 +648,13 @@ func net() -> float:
 
 func incident(kind: String, detail: String = "") -> void:
 	incidents.append([snappedf(playtime, 0.1), kind, detail])
+	if assist != null:
+		assist.on_incident(kind)
 
 
 func lose(key: String, amount: float, at: Vector2) -> void:
 	# the training rig is insured: a mistake costs a tenth
-	if training:
+	if training or exam != null:
 		amount *= 0.1
 	losses += amount
 	loss_lines.append([key, amount])
@@ -655,6 +741,8 @@ func on_swallowed(b, zone: String) -> void:
 			names.append(p.tag)
 		if zone == "equip" and p.intact and p.cls == "equip" and p.mandatory:
 			mandatory_ok[p.tag] = true
+		if story != null and p.intact:
+			story.on_delivered(p, zone)
 		if zone == "metal" and sys.dest_of(p) == "hazard":
 			boom = true
 		# whatever it held goes with it
@@ -669,6 +757,8 @@ func on_swallowed(b, zone: String) -> void:
 		say("equip_as_scrap", at)
 	if tutorial != null:
 		tutorial.on_recovered(b, zone)
+	if exam != null:
+		exam.on_delivered(b, zone)
 	gain("equip" if zone == "equip" else ("hazard" if zone == "hazard" else "metal"), v, at, label)
 	var col := Pal.heat(1.0, 2.2) if zone == "metal" else (Pal.tint(Pal.FLUID, 0.9, 1.4) if zone == "hazard" else Pal.ink(0.9, 1.5))
 	fx.flash(Dock.zpos(zone), 140.0, 0.5, col)
@@ -714,7 +804,7 @@ func on_debris_in(value: float, at: Vector2) -> void:
 
 
 func _check_done() -> void:
-	if state != "play" or training:
+	if state != "play" or training or exam != null:
 		return
 	for id in world.order:
 		if not world.pieces[id].gone:
@@ -1062,7 +1152,13 @@ func on_grab(p) -> void:
 
 
 func on_tear(p, weak: Array, lines_held: Array, at: Vector2) -> void:
-	incident("torn", p.tag)
+	# what held it: a fixing behind a cover, or lines (the accident review reads this)
+	var held := ""
+	if weak.any(func(j): return world.joint_covered(j)):
+		held = " hidden"
+	elif not lines_held.is_empty():
+		held = " lines"
+	incident("torn", p.tag + held)
 	var dmg := 0.0
 	for j in weak:
 		world.kill_joint(j)
@@ -1106,6 +1202,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "volts", c.id, "inst_volts", {"ctrl": c, "volts_fn": _ctrl_volts_fn(c)})
 						if sys.remote_sent and sys.bus_live:
 							hint("not_off")
+							if story != null:
+								story.event("fake_off")
 					_:
 						if sys.fluid_at_port(c.id) != "":
 							sys.measure(c.id, "fluid", c.id, "inst_fluid", {"ctrl": c, "fluid_fn": func(): return sys.port_level(c.id)})
@@ -1123,6 +1221,8 @@ func do_measure(tg: Dictionary) -> void:
 			var local: Vector2 = world.frame(p).affine_inverse() * tg.pos
 			var label: String = p.tag if p.tag != "" else Txt.piece_name(p)
 			sys.measure(key, "temp", label, "inst_inspect", {"piece": p, "local": local, "inspect": _inspect_text(p), "temp_fn": func(): return p.temp})
+			if story != null:
+				story.on_inspect(p)
 			if sys.electric_piece(p):
 				sys.measure(key + "/V", "volts", label, "inst_volts", {"piece": p, "local": local + Vector2(0, 16), "volts_fn": func(): return sys.piece_volts(p)})
 	sfx.play("measure")
@@ -1352,6 +1452,8 @@ func do_hose(tg: Dictionary) -> void:
 
 func on_reveal(room: String, from: Vector2) -> void:
 	reveal_count += 1
+	if assist != null:
+		assist.on_reveal(room)
 	if state == "play":
 		sfx.play("reveal", from)
 		say("room_open", from, room_name(room))
@@ -1450,10 +1552,24 @@ func _age_messages(dt: float) -> void:
 		feed.pop_back()
 
 
+# how the controls work: these stay on in the standard tier
+const UI_HINTS := ["field", "hose", "measured", "drone_lost", "free_body"]
+var hint_log: Array = []
+
+
+# One-off explanations. Guided: all of them. Standard: only how the controls
+# work (never how to solve the ship). Hardcore: none. The training course has
+# Liang instead.
 func hint(key: String) -> void:
-	# in the training course Liang does the explaining
-	if training or not hints_on or hints_seen.has(key):
+	if training or exam != null or hints_seen.has(key):
 		return
-	if Txt.has("hint_" + key):
-		hints_seen[key] = true
-		hud.show_hint(txt("hint_" + key))
+	var tr := Txt.hint_tier
+	if tr == "hardcore" or (tr == "standard" and not key in UI_HINTS):
+		return
+	var own: Array = ship.get("hints", {}).get(key, [])
+	var text: String = (own[0] if Txt.zh else own[1]) if own.size() == 2 else (txt("hint_" + key) if Txt.has("hint_" + key) else "")
+	if text == "":
+		return
+	hints_seen[key] = true
+	hint_log.append([key, tr])
+	hud.show_hint(text)

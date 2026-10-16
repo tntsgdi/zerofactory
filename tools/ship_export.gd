@@ -1,6 +1,6 @@
 extends SceneTree
 # Runs a ship's authoring script and writes the ship file the game builds from.
-# godot --headless --path . -s tools/ship_export.gd -- gr7|ts1
+# godot --headless --path . -s tools/ship_export.gd -- gr7|ts1|e07a|e07b|e07c|e07d
 #
 # A ship file (ships/<id>.json) is plain data in metres:
 #   pieces  [{key, kind, poly, ...}]       structure and equipment
@@ -11,13 +11,17 @@ extends SceneTree
 # plus the meta() sections of the authoring script (gas, power, fluids,
 # per-control settings, contract value, the factory drawing).
 
-const AUTHORS := {"gr7": "res://tools/authoring/gr7_author.gd", "ts1": "res://tools/authoring/ts1_author.gd"}
+const AUTHORS := {"gr7": "res://tools/authoring/gr7_author.gd", "ts1": "res://tools/authoring/ts1_author.gd",
+	"e07a": "res://tools/authoring/e07_author.gd", "e07b": "res://tools/authoring/e07_author.gd",
+	"e07c": "res://tools/authoring/e07_author.gd", "e07d": "res://tools/authoring/e07_author.gd"}
 
 
 func _initialize() -> void:
 	var a := OS.get_cmdline_user_args()
 	var id: String = a[0] if a.size() > 0 else "gr7"
 	var author = load(AUTHORS[id])
+	if id.begins_with("e07"):
+		author.variant = id.substr(3)
 	var w := World.new()
 	author.build(w)
 	var d: Dictionary = author.meta()

@@ -1,6 +1,7 @@
 {
 	"id": "gr7",
 	"name": "GR-7 GREY HERON",
+	"contract": "GR-001",
 	"length": 42.0,
 	"value": {"metal":12000.0,"total":120000.0},
 	"clamps": [[7.0,4.0],[15.8,4.0],[23.4,4.0],[28.6,4.0]],
@@ -67,6 +68,7 @@
 		"E-D02": {"target":"CAP-01"}
 	},
 	"labels": {"C-01":"IND. METAL","C-02":"PRECISION","C-03":"ELECTRONIC","G-01":"FUEL CELL","T-F01":"PROP","TK-B1":"O₂","TK-B2":"N₂"},
+	"hints": {"dead_leg":["读数来自测压口实际连通的那一段。按 Tab 看图纸：P-C01 和货舱之间还有一个阀门 V-C01。","A gauge reads whatever its port is connected to. Press Tab: there is a valve, V-C01, between P-C01 and the hold."],"dead_leg_hose":["V-C01 关着，软管只能抽到阀门外侧那一小段空管。","With V-C01 shut the hose only reaches the empty stub outside the valve."],"discharge_refused":["发电机或蓄电池还在给母线供电，先断开 K-G 和 K-B。","The generator or battery still feeds the bus — open K-G and K-B first."],"hatch_jam":["货舱门变形卡住了，先用 4 解除卡滞（HATCH-JAM）。","The hatch is bent and jammed — clear HATCH-JAM with tool 4 first."],"no_power":["舱门电机没电。船坞辅助电源 PWR-EXT 在 D 舱顶部外侧。","No power for the door motors. Dock aux socket PWR-EXT is on the roof above D."],"remote":["指令已发出。它真的停了吗？用测量工具去 E-D01 验证。","Command sent. Did it actually stop? Verify at E-D01."]},
 	"procedures": {
 		"G-01": [
 			{"ctrl":"GAS-D","do":"hose"},
@@ -96,6 +98,44 @@
 			{"do":"free","piece":"BB-01"},
 			{"do":"deliver","piece":"BB-01","zone":"equip"}
 		]
+	},
+	"story": {
+		"contract": "GR-001",
+		"arrive": [["好了，真家伙来了。","Right. Here's the real thing."],["灰鹭级货船，四十二米。前些天出了点事故，船主决定直接报废。","Heron-class freighter, forty-two metres. Had an accident a few days back; the owner's scrapping her."],["送过来的资料不全，尾部肯定有问题，别的还不好说。","The paperwork's incomplete. The stern's definitely bad. The rest, who knows."]],
+		"start": [["这单不像训练舱那么简单。","This one's not like the training rig."],["里面还有没有气，哪里通着电，管道里剩下什么，都得自己查。","Gas, power, whatever's left in the pipes — you check all of it yourself."],["我会在无线电里待着。有问题可以问，但怎么拆还是你决定。","I'll stay on the radio. Ask if you need to. How you take her apart is your call."],["开始吧。","Go on, then."]],
+		"banner": [["CONTRACT GR-001 — ACTIVE","目标：开始现场检查"],["CONTRACT GR-001 — ACTIVE","OBJECTIVE: BEGIN SITE SURVEY"]],
+		"lines": {
+			"fake_off": {"en":"The log says stopped. People write logs.","hint":true,"zh":"记录说停了。记录是人写的。"}
+		},
+		"inspect": [
+			{"id":"note","piece":"CON-A","room":"A","text":["「别急着记事故，先记发生了什么。——I. M.」","\"Don't log the accident yet. Log what happened. —I. M.\""],"title":["控制台上的便签","NOTE ON THE CONSOLE"]},
+			{"id":"nav","piece":"NAV-01","room":"A","text":["「最后航线：坐标 …… 未命名。预计到达：取消。」","\"LAST ROUTE: COORDINATES ... UNNAMED. ETA: CANCELLED.\""],"title":["导航电脑 NAV-01","NAV COMPUTER NAV-01"]},
+			{"id":"postcard","piece":"BUNK-B","room":"B","text":["「回家前最后一单。——路」","\"Last job before home. —Lu\""],"title":["铺位上的明信片","POSTCARD ON THE BUNK"]},
+			{"id":"seal","piece":"C-02","room":"C","text":["「CHARON · KX-0 · 不得开封。」","\"CHARON · KX-0 · DO NOT OPEN.\""],"title":["C-02 的封签","SEAL ON C-02"]},
+			{"id":"manifest","piece":"C-03","room":"C","text":["「C-02：精密机械」被划掉，重写为「KX-0」。","\"C-02: PRECISION MACHINERY\" struck out, rewritten as \"KX-0\"."],"title":["货单（钳在 C-03 门上）","MANIFEST (CLIPPED TO C-03)"]},
+			{"id":"steps","piece":"G-01","room":"D","text":["「1 断 K-G · 2 断 K-B · 3 主控停机 失败→本地手柄 · 4 放电容。——韩」","\"1 OPEN K-G · 2 OPEN K-B · 3 REMOTE STOP failed → LOCAL HANDLE · 4 BLEED CAP. —Han\""],"title":["G-01 上的手写步骤","HANDWRITTEN STEPS ON G-01"]},
+			{"id":"scratch","piece":"TCAB","room":"E","text":["一道新鲜的金属划痕，从工具柜一路划到舱门。","A fresh scratch in the metal, from the tool cabinet all the way to the door."],"title":["工具柜上的划痕","SCRATCH ON THE TOOL CABINET"]}
+		],
+		"who": {"alarm":["警报","ALARM"],"han":["韩彻","HAN CHE"],"lu":["小路（远处）","LU (DISTANT)"],"moran":["莫兰","MORAN"],"unknown":["未知船员","UNKNOWN CREW"]},
+		"recorder": {
+			"piece": "BB-01",
+			"card": ["FLIGHT RECORDER RECOVERED","DATA INTEGRITY: 67%","ARCHIVED TRANSMISSION AVAILABLE"],
+			"before": [["黑匣子到了？","The recorder's in?"],["行，这东西合同里专门点名要回收。顺手看看有没有完整的数据记录。","Good — the contract names it. Let's see if there's anything left on it."]],
+			"fragment": [["T−00:46","unknown","……主推进系统已经关闭。","...Main propulsion is shut down."],["T−00:45","unknown","等一下，为什么控制台还显示有推力？确认一下尾部传感器……","Wait — why does the console still show thrust? Check the aft sensors..."]],
+			"after": [["奇怪。事故报告上说的是冷却系统故障。","Odd. The accident report says cooling failure."],["可能是当时的记录乱了，先存档吧。这不是咱们这份合同要查的事。","Probably the log got scrambled. File it. Not what this contract's about."]],
+			"clue": {"id":"gr7_fdr","title":["灰鹭号飞行记录异常","GREY HERON: FLIGHT RECORD ANOMALY"]}
+		},
+		"epilogue": {
+			"card": ["解密完成 · DATA INTEGRITY 100%","DECRYPTED · DATA INTEGRITY 100%"],
+			"recording": [["T−00:52","han","冷却回路压力掉了。E 舱在漏。","Coolant loop pressure's dropping. E is leaking."],["T−00:47","moran","推进停机。所有人到 B 舱。","Shut down propulsion. Everyone to B."],["T−00:46","han","……主推进系统已经关闭。","...Main propulsion is shut down."],["T−00:45","han","等一下，为什么控制台还显示有推力？确认一下尾部传感器……","Wait — why does the console still show thrust? Check the aft sensors..."],["T−00:40","han","主电源说停了。……我不信，母线还有四百伏。","Main power says it's stopped. ...I don't buy it. The bus still has four hundred volts."],["T−00:33","moran","韩彻，回来。","Han, come back."],["T−00:30","han","给我两分钟。我去拉本地手柄。","Give me two minutes. I'm going for the local handle."],["T−00:18","alarm","维修舱失压。","MAINTENANCE BAY DECOMPRESSION.","burst"],["T−00:14","moran","……韩彻？","...Han?"],["T−00:09","han","没事，门关上了。手柄卡住了，停不了。","I'm fine, the door held. The handle's jammed. It won't stop."],["T−00:05","han","让下一个人来吧。告诉他——别信面板。","Let the next one do it. Tell them — don't trust the panel."],["T−00:02","moran","全员撤离。记录：主电源未确认断开。","All hands, abandon ship. Log: main power not confirmed isolated."],["T+00:00","lu","韩工出来了！","Han's out!"]],
+			"grade": {"1":[["今天赔掉的东西不少。","We lost a fair bit today."],["好在船坞还在，设备也还在。先看看事故记录，下次别再犯同样的问题。","Still, the berth's here and so's the kit. Read the incident log. Don't do the same thing twice."]],"2":[["还行。大件都收回来了，损失也不算大。","Not bad. The big pieces came back, and the losses weren't much."],["以后熟练了，速度还能提上来。","You'll get faster with practice."]],"3":[["第一次接正式合同就做到这个程度，挺少见的。","That's rare, for a first real contract."],["老板看了应该高兴。就是别指望他给你涨工资。","The boss'll be pleased. Don't expect a raise."]]},
+			"echo": ["他说别信面板。你没信。","He said don't trust the panel. You didn't."],
+			"echo_arc": ["他说别信面板。下次记住。","He said don't trust the panel. Remember that next time."],
+			"closing": [["行，第一天算是干完了。","Right. That's day one."],["市场上还有几份单子。接下来拆哪艘，你自己挑。","There are a few jobs on the market. Which one's next is up to you."]],
+			"terminal": [["合同市场已开放。","CONTRACT MARKET OPEN."],["设备采购权限已开放。","EQUIPMENT PURCHASING ENABLED."],["公司生涯记录已更新。","CAREER RECORD UPDATED."]],
+			"chapter": [["第一章 — 废弃船坞","CHAPTER ONE — THE SCRAP BERTH"],"FIRST SHIFT COMPLETED"],
+			"next": {"from":"CHARON-DISPATCH","id":"#002 GR-9","name":["白鹭号","WHITE EGRET"],"rows":[["灰鹭号的姐妹船","Sister ship of the Grey Heron"],["失联 41 天后被拖回","Towed in after 41 days missing"],["货单：KX-0，同批次。","Manifest: KX-0, same batch."]],"tbc":["未完待续 · 零压拆船厂","TO BE CONTINUED · ZERO PRESSURE"]}
+		}
 	},
 	"blueprint": {
 		"hide": ["LAMP-A","LAMP-B","LAMP-C","LAMP-D","CTRL-D","COV-A","GUARD-F"],

@@ -23,8 +23,9 @@ var ending_level := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	sfx_bus = _bus("SFX", -3.0)
-	music_bus = _bus("Music", -5.0)
+	sfx_bus = _bus("SFX", Settings.SFX_DB)
+	music_bus = _bus("Music", Settings.MUSIC_DB)
+	Settings.apply_audio()
 	var dir := DirAccess.open("res://assets/audio")
 	if dir != null:
 		for f in dir.get_files():
@@ -126,8 +127,9 @@ func _process(dt: float) -> void:
 			hum = maxf(hum, clampf(1.0 - d / (10.0 * 48.0), 0.0, 1.0) * 0.5)
 	want["hum_loop"] = hum if playing else 0.0
 	want["tether_loop"] = (0.25 + 0.5 * game.tools.tether_force) if playing and game.tools.held_piece != null else 0.0
-	var ending: bool = game.state == "ending" and ending_player != null
-	want["ambience"] = 0.0 if ending else (0.85 if game.state != "intro" else 0.6)
+	var hush: bool = game.story != null and game.story.hush()
+	var ending: bool = game.state == "ending" and ending_player != null and not hush
+	want["ambience"] = 0.0 if ending or hush else (0.85 if game.state != "intro" else 0.6)
 	if ending:
 		if not ending_player.playing and ending_level == 0.0:
 			ending_player.play()

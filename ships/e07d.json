@@ -1,0 +1,43 @@
+{
+	"id": "e07d",
+	"name": "E-07 AUX MODULE",
+	"length": 6.0,
+	"value": {"metal":600.0,"total":3600.0},
+	"clamps": [[18.6,1.8],[23.4,1.8]],
+	"labels": {"E-07":"AUX"},
+	"room_names": {},
+	"ctrls_cfg": {},
+	"blueprint": {"hide":["IP-E7"]},
+	"exam": {"hint":["用测量工具看看它有几处固定，再数数你看得见几颗。","Inspect it: count the fixings it reports, then the ones you can see."],"problem":"hidden","target":"E-07"},
+	"procedures": {
+		"E-07": [
+			{"do":"free","piece":"IP-E7"},
+			{"do":"deliver","piece":"IP-E7","zone":"metal"},
+			{"do":"free","piece":"E-07"},
+			{"do":"deliver","piece":"E-07","zone":"equip"}
+		]
+	},
+	"pieces": [
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"EX-FL","kind":"hull","mass":3.36,"poly":[[18.0,1.4],[24.0,1.4],[24.0,1.8],[18.0,1.8]],"rig":true,"tag":"EX-FL"},
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"EX-LW","kind":"hull","mass":0.84,"poly":[[18.0,-0.6],[18.3,-0.6],[18.3,1.4],[18.0,1.4]],"rig":true,"tag":"EX-LW"},
+		{"barrier":true,"cut_speed":230.0,"density":1.4,"key":"EX-RW","kind":"hull","mass":0.84,"poly":[[23.7,-0.6],[24.0,-0.6],[24.0,1.4],[23.7,1.4]],"rig":true,"tag":"EX-RW"},
+		{"art":"aux","art_size":[1.6,1.0],"art_xf":[1.0,0.0,0.0,1.0,20.1999994913737,0.400000015894572],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"E-07","kind":"equip","mandatory":true,"mass":0.8,"name_key":"p_e07","poly":[[20.2,0.4],[21.8,0.4],[21.8,1.4],[20.2,1.4]],"tag":"E-07","value":3000.0},
+		{"cut_speed":220.0,"density":0.8,"key":"BR-E7","kind":"bracket","mass":0.192,"name_key":"p_e07_bracket","poly":[[21.8,0.6],[22.1,0.6],[22.1,1.4],[21.8,1.4]],"rig":true,"tag":"BR-E7"},
+		{"art":"cover","art_size":[0.42,0.6],"art_xf":[1.0,0.0,0.0,1.0,21.5500005086263,0.599999984105428],"cut_speed":260.0,"density":0.4,"key":"IP-E7","kind":"fixture","mass":0.12,"name_key":"p_e07_panel","poly":[[21.55,0.6],[21.97,0.6],[21.97,1.2],[21.55,1.2]],"tag":"IP-E7"}
+	],
+	"joints": [
+		{"a":"EX-LW","at":[18.15,1.42],"b":"EX-FL","type":"weld"},
+		{"a":"EX-RW","at":[23.85,1.42],"b":"EX-FL","type":"weld"},
+		{"a":"EX-FL","at":[18.6,1.75],"b":null,"tag":"CL-01","type":"clamp"},
+		{"a":"EX-FL","at":[23.4,1.75],"b":null,"tag":"CL-02","type":"clamp"},
+		{"a":"E-07","at":[20.4,1.38],"b":"EX-FL","type":"bolt"},
+		{"a":"E-07","at":[21.6,1.38],"b":"EX-FL","type":"bolt"},
+		{"a":"BR-E7","at":[21.95,1.42],"b":"EX-FL","type":"weld"},
+		{"a":"E-07","at":[21.76,0.9],"b":"BR-E7","type":"lock"},
+		{"a":"IP-E7","at":[21.9,0.66],"b":"BR-E7","type":"bolt"},
+		{"a":"IP-E7","at":[21.9,1.14],"b":"BR-E7","type":"bolt"}
+	],
+	"lines": [],
+	"ctrls": [],
+	"rooms": []
+}

@@ -27,7 +27,7 @@ func _initialize() -> void:
 		if a.begins_with("break="):
 			breaks.append(a.substr(6))
 		elif a == "all":
-			ids = ["gr7", "ts1"]
+			ids = ["gr7", "ts1", "e07a", "e07b", "e07c", "e07d"]
 		else:
 			ids.append(a)
 	if ids.is_empty():

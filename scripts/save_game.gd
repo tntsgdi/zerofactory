@@ -24,7 +24,16 @@ static func exists(file: String = "") -> bool:
 
 
 static func file_for(g) -> String:
-	return train_path if g.training else path
+	return file_for_ship(g.ship)
+
+
+# the training course and the assessment keep their own files, next to the contract's
+static func file_for_ship(d: Dictionary) -> String:
+	if d.get("training", false):
+		return train_path
+	if d.has("exam"):
+		return path.get_basename() + "_exam.json"
+	return path
 
 
 static func _v2(v: Vector2) -> Array:
@@ -151,6 +160,8 @@ static func save(g) -> void:
 	}
 	if g.tutorial != null:
 		d.tutorial = g.tutorial.save_state()
+	if g.story != null:
+		d.story = g.story.save_state()
 	write_file(file_for(g), d)
 
 

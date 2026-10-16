@@ -141,6 +141,12 @@ func _input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		if game.contract_open and card_t > 0.35:
+			var cr := _card_rect(size())
+			for ti in 3:
+				if _tier_rect(cr, ti).has_point(c.get_local_mouse_position()):
+					game.set_tier(Txt.TIERS[ti])
+					get_viewport().set_input_as_handled()
+					return
 			game.close_contract()
 			get_viewport().set_input_as_handled()
 			return
@@ -151,6 +157,8 @@ func _input(ev: InputEvent) -> void:
 		if ending:
 			if end_t < 4.0:
 				end_t = 9.0
+			elif game.story != null and game.story.phase == "settle":
+				game.story.ending_key(KEY_SPACE)
 			get_viewport().set_input_as_handled()
 			return
 		if game.state == "play" and _toolbar_rect().has_point(c.get_local_mouse_position()):
@@ -229,11 +237,11 @@ func _draw_hud() -> void:
 	if g.state == "intro":
 		_intro_overlay(s)
 		return
-	if not ending:
+	if not ending and g.state != "ending":
 		_world_tags()
 		_messages()
 		_cursor_label()
-		if not g.training:
+		if not g.training and g.exam == null:
 			_contract_panel()
 		_overweight()
 		if g.warp:
@@ -242,6 +250,7 @@ func _draw_hud() -> void:
 		_toolbar(s)
 		_drone_status(s)
 		_hint(s)
+		_radio_box(s)
 		_text(g.txt("keys"), Vector2(s.x * 0.5, s.y - 10.0), 12, Pal.ink(0.22), font, 0)
 	# hurt vignette
 	if hurt > 0.0:
@@ -258,9 +267,52 @@ func _draw_hud() -> void:
 	if menu_k.x > 0.01:
 		_menu(s)
 	if ending:
-		_settlement(s)
+		if g.story == null or g.story.phase in ["", "settle"]:
+			_settlement(s)
+		_radio_box(s)
+	elif g.exam != null and g.state == "ending":
+		_radio_box(s)
 	if flash > 0.0:
 		c.draw_rect(Rect2(Vector2.ZERO, s), Color(1, 1, 1, flash * flash * 0.8))
+
+
+# Liang on the radio (name, waveform, words typing in) or the berth terminal
+# (cyan, block cursor), bottom centre above the toolbar
+const RADIO_W := 700.0
+
+
+func _radio_box(s: Vector2) -> void:
+	var rd: Radio = game.radio
+	var ln: Dictionary = rd.now
+	if ln.is_empty():
+		return
+	var line: Dictionary = ln.line
+	var term: bool = line.get("who", "liang") == "term"
+	var full: String = rd.text(line)
+	var lt: float = ln.t
+	var a := clampf(lt / 0.2, 0.0, 1.0) * clampf((ln.dur - lt) / 0.3, 0.0, 1.0)
+	var shown := full.substr(0, int(lt * 30.0))
+	var w := 820.0
+	# a long line wraps to two; the box grows upwards
+	var two := _tw(full, 18) > RADIO_W
+	var h := 92.0 if two else 64.0
+	var r := Rect2(s.x * 0.5 - w * 0.5, s.y - 146.0 - h + (1.0 - Pal.ease_out(clampf(lt / 0.25, 0.0, 1.0))) * 14.0, w, h)
+	c.draw_rect(r, Color(0.02, 0.022, 0.026, 0.86 * a))
+	c.draw_rect(Rect2(r.position, Vector2(3, r.size.y)), (Pal.tint(Pal.AIR, a, 1.0) if term else Pal.heat(a, 1.0)))
+	_text(game.txt("tut_term") if term else game.txt("tut_liang"), r.position + Vector2(18, 22), 12, Pal.ink(0.5 * a), font)
+	# the voice as a little waveform while the words come in
+	var typing := shown.length() < full.length()
+	for i in 14:
+		var hgt := 2.0 + (8.0 * absf(sin(t * 17.0 + i * 1.7)) * absf(sin(t * 5.3 + i)) if typing else 1.0)
+		c.draw_rect(Rect2(r.position.x + 18 + i * 4.0, r.position.y + 44 - hgt * 0.5, 2, hgt), Pal.ink(0.35 * a))
+	var col := Pal.tint(Pal.AIR, 0.95 * a, 1.1) if term else Pal.ink(0.95 * a)
+	if two:
+		c.draw_multiline_string(font, r.position + Vector2(90, 40), shown, HORIZONTAL_ALIGNMENT_LEFT, RADIO_W, 18, 2, col)
+		return
+	_text(shown, r.position + Vector2(90, 44), 18, col, font)
+	if term and typing:
+		var cw := font.get_string_size(shown, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+		c.draw_rect(Rect2(r.position.x + 92 + cw, r.position.y + 30, 9, 16), Pal.tint(Pal.AIR, a * (0.5 + 0.5 * sin(t * 20.0))))
 
 
 # the grapple refuses a load over its rating, and says so in numbers
@@ -291,7 +343,7 @@ func _contract_panel() -> void:
 	var g = game
 	var x := 40.0
 	var y := 46.0
-	_text(g.txt("contract"), Vector2(x, y), 13, Pal.ink(0.45), font)
+	_text(g.txt("contract") + " " + g.ship.get("contract", ""), Vector2(x, y), 13, Pal.ink(0.45), font)
 	_text(g.ship.get("name", ""), Vector2(x, y + 24), 20, Pal.ink(0.92), font_b)
 	# mandatory items
 	var items: Array = g.mandatory_items()
@@ -323,6 +375,32 @@ func _contract_panel() -> void:
 		var mx: float = x + bw * mark / 100.0
 		c.draw_line(Vector2(mx, by + 9), Vector2(mx, by + 19), Pal.ink(0.5 if pct < mark else 0.9), 1.0)
 	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 12, Pal.ink(0.3), font)
+	if g.story != null and not g.story.items.is_empty():
+		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 12, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
+	_recall(x, by + 70)
+
+
+# training recall cards slide in, then fold into the notes under the contract
+func _recall(x: float, y: float) -> void:
+	var asst = game.assist
+	if asst == null:
+		return
+	var yy := y
+	for cd in asst.cards:
+		var e: float = cd[2]
+		var k := Pal.ease_out(clampf(e / 0.25, 0.0, 1.0)) * clampf((Assist.CARD_T - e) / 0.4, 0.0, 1.0)
+		var r := Rect2(x - (1.0 - k) * 40.0, yy, 300, 46)
+		c.draw_rect(r, Color(0.03, 0.032, 0.037, 0.9 * k))
+		c.draw_rect(Rect2(r.position, Vector2(3, r.size.y)), Pal.tint(Pal.AIR, k, 1.0))
+		_text(game.txt("rc_title") + " · " + game.txt("rc_l") % cd[0], r.position + Vector2(14, 18), 12, Pal.tint(Pal.AIR, 0.9 * k, 1.1), font)
+		_text(game.txt(cd[1]), r.position + Vector2(14, 37), 15, Pal.ink(0.92 * k), font_b)
+		yy += 54
+	if asst.notes.is_empty():
+		return
+	_text(game.txt("notes"), Vector2(x, yy + 10), 12, Pal.ink(0.35), font)
+	for i in asst.notes.size():
+		var n: Array = asst.notes[i]
+		_text("%s  ·  %s" % [game.txt(n[1]), game.txt("rc_l") % n[0]], Vector2(x, yy + 30 + i * 18), 12, Pal.ink(0.5), font)
 
 
 func _credits(s: Vector2) -> void:
@@ -420,7 +498,11 @@ func _hint(s: Vector2) -> void:
 	var lines := 1
 	if _tw(hint_text, 16) > 920.0:
 		lines = 2
-	var r := Rect2(s.x * 0.5 - w * 0.5, s.y - 160.0 - lines * 22.0 - (1.0 - Pal.ease_out(a)) * 10.0, w, 18.0 + lines * 22.0)
+	# above Liang's radio box while he is talking
+	var lift := 0.0
+	if not game.radio.now.is_empty():
+		lift = 104.0 if _tw(game.radio.text(game.radio.now.line), 18) > RADIO_W else 76.0
+	var r := Rect2(s.x * 0.5 - w * 0.5, s.y - 160.0 - lift - lines * 22.0 - (1.0 - Pal.ease_out(a)) * 10.0, w, 18.0 + lines * 22.0)
 	c.draw_rect(r, Color(0.03, 0.032, 0.037, 0.85 * a))
 	c.draw_rect(Rect2(r.position, Vector2(3, r.size.y)), Pal.heat(a, 1.0))
 	c.draw_multiline_string(font, r.position + Vector2(22, 26), hint_text, HORIZONTAL_ALIGNMENT_LEFT, w - 40.0, 16, lines, Pal.ink(0.88 * a))
@@ -465,6 +547,12 @@ func _world_tags() -> void:
 			val = sc
 		if r.has("inspect"):
 			val = r.inspect + "  ·  " + r.text
+			# a story piece: the tag opens into a small card
+			if g.story != null:
+				var it = g.story.item_for(r.piece)
+				if it != null and g.story.found.has(it.id):
+					rects.append(_story_card(sp, it, val, age))
+					continue
 		var off := Vector2(16, -26)
 		if key.ends_with("/T") or key.ends_with("/V"):
 			off = Vector2(16, -6)
@@ -505,6 +593,26 @@ func _world_tags() -> void:
 		_panel(box, 0.92)
 		for i in lines.size():
 			_text(lines[i], box.position + Vector2(10, 22 + i * 22), 13, Pal.ink(0.7) if i < 3 else Pal.heat(0.9, 1.0), font)
+
+
+func _story_card(sp: Vector2, it: Dictionary, info: String, age: float) -> Rect2:
+	var st: Story = game.story
+	var body: String = st.pair(it.text)
+	var w := 340.0
+	var bh: float = font_b.get_multiline_string_size(body, HORIZONTAL_ALIGNMENT_LEFT, w - 28, 15).y
+	var pos := sp + Vector2(18, -40 - bh)
+	var r := Rect2(pos, Vector2(w, bh + 56))
+	var pop := Pal.back(clampf(age / 0.25, 0.0, 1.0), 2.0)
+	c.draw_line(sp, pos + Vector2(0, r.size.y), Pal.tint(Pal.AIR, 0.4, 1.0), 1.0, true)
+	c.draw_circle(sp, 2.5, Pal.tint(Pal.AIR, 0.9, 1.1))
+	var rr := Rect2(r.position, Vector2(r.size.x * pop, r.size.y))
+	c.draw_rect(rr, Color(0.03, 0.032, 0.037, 0.92))
+	c.draw_rect(Rect2(rr.position, Vector2(2, rr.size.y)), Pal.tint(Pal.AIR, 0.9, 1.1))
+	if pop > 0.6:
+		_text(st.pair(it.title), pos + Vector2(14, 18), 12, Pal.tint(Pal.AIR, 0.75, 1.0), font)
+		c.draw_multiline_string(font_b, pos + Vector2(14, 40), body, HORIZONTAL_ALIGNMENT_LEFT, w - 28, 15, -1, Pal.ink(0.95))
+		_text(info, pos + Vector2(14, r.size.y - 8), 11, Pal.ink(0.35), font)
+	return r
 
 
 func _clock(sec: float) -> String:
@@ -588,13 +696,21 @@ func _ctrl_action(ctrl) -> String:
 
 # ---------------------------------------------------------------- contract card
 
+func _card_rect(s: Vector2) -> Rect2:
+	var k: float = clampf(card_k.x, 0.0, 1.2)
+	return Rect2(s.x * 0.5 - 450.0, s.y * 0.5 - 340.0 + (1.0 - k) * 60.0, 900.0, 680.0)
+
+
+func _tier_rect(r: Rect2, i: int) -> Rect2:
+	return Rect2(r.position.x + 48 + i * 270.0, r.end.y - 92.0, 256.0, 52.0)
+
+
 func _contract_card(s: Vector2) -> void:
 	var k: float = clampf(card_k.x, 0.0, 1.2)
 	var a := clampf(k, 0.0, 1.0)
 	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.55 * a))
 	var w := 900.0
-	var h := 640.0
-	var r := Rect2(s.x * 0.5 - w * 0.5, s.y * 0.5 - h * 0.5 + (1.0 - k) * 60.0, w, h)
+	var r := _card_rect(s)
 	_panel(r, 0.95 * a)
 	c.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Pal.heat(a, 1.0))
 	var g = game
@@ -642,27 +758,49 @@ func _contract_card(s: Vector2) -> void:
 			"gap":
 				y += row[2]
 		i += 1
+	# the hint tier: chosen here, the same ship in all three
+	var ty := r.end.y - 104.0
+	_text(g.txt("tier_label") + "  ·  1 / 2 / 3", Vector2(x, ty), 13, Pal.ink(0.45 * a), font)
+	var m := c.get_local_mouse_position()
+	for ti in 3:
+		var tid: String = Txt.TIERS[ti]
+		var br := _tier_rect(r, ti)
+		var on: bool = Txt.hint_tier == tid
+		c.draw_rect(br, Color(0.04, 0.042, 0.048, 0.9 * a))
+		c.draw_rect(br, Pal.ink((0.7 if on else (0.35 if br.has_point(m) else 0.16)) * a), false, 1.2)
+		if on:
+			c.draw_rect(Rect2(br.position.x, br.end.y - 2, br.size.x, 2), Pal.heat(a, 1.0))
+		_text(str(ti + 1) + "  " + g.txt("tier_" + tid), br.position + Vector2(14, 22), 15, Pal.ink((0.95 if on else 0.6) * a), font_b if on else font)
+		_text(g.txt("tier_desc_" + tid), br.position + Vector2(14, 42), 11, Pal.ink(0.4 * a), font)
+	_text(g.txt("tier_rule"), Vector2(x, r.end.y - 22), 12, Pal.ink(0.3 * a), font)
 	var pulse := 0.6 + 0.4 * sin(t * 3.0)
-	_text(g.txt("c_start"), Vector2(r.end.x - 48, r.end.y - 30), 16, Pal.ink(pulse * a), font_b, 1)
+	_text(g.txt("c_start"), Vector2(r.end.x - 48, r.end.y - 22), 16, Pal.ink(pulse * a), font_b, 1)
 
 
 # ---------------------------------------------------------------- pause menu
 
 func _menu_items() -> Array:
 	var g = game
+	if g.exam != null:
+		return [
+			["resume", g.txt("m_resume")],
+			["abandon", g.txt("m_abandon") if menu_confirm != 1 else g.txt("m_confirm")],
+			["settings", g.txt("m_settings")],
+			["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
+		]
 	if g.training:
 		return [
 			["resume", g.txt("m_resume")],
 			["skip", g.txt("m_skip") if menu_confirm != 1 else g.txt("m_confirm")],
-			["lang", g.txt("m_lang")],
+			["settings", g.txt("m_settings")],
 			["hints", g.txt("m_hints") if g.hints_on else g.txt("m_hints_off")],
 			["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
 		]
 	return [
 		["resume", g.txt("m_resume")],
 		["end", g.txt("m_end") if menu_confirm != 1 else g.txt("m_confirm")],
-		["lang", g.txt("m_lang")],
-		["hints", g.txt("m_hints") if g.hints_on else g.txt("m_hints_off")],
+		["settings", g.txt("m_settings")],
+		["hints", g.txt("m_tier") % g.txt("tier_" + Txt.hint_tier)],
 		["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
 	]
 
@@ -694,19 +832,27 @@ func _menu_click() -> void:
 				game.finish_contract(true)
 			else:
 				menu_confirm = 1
+		"abandon":
+			if menu_confirm == 1:
+				game.toggle_menu()
+				game.exam.abandon()
+			else:
+				menu_confirm = 1
 		"skip":
 			if menu_confirm == 1:
 				game.toggle_menu()
 				game.skip_training()
 			else:
 				menu_confirm = 1
-		"lang":
-			Txt.zh = not Txt.zh
-			Txt.save_settings(game.testing)
+		"settings":
+			game.settings_panel.open()
 		"hints":
-			game.hints_on = not game.hints_on
-			Txt.hints = game.hints_on
-			Txt.save_settings(game.testing)
+			if game.training:
+				game.hints_on = not game.hints_on
+				Txt.hints = game.hints_on
+				Txt.save_settings(game.testing)
+			else:
+				game.cycle_tier()
 		"title":
 			if menu_confirm == 4:
 				game.to_title()
@@ -727,6 +873,8 @@ func _menu(s: Vector2) -> void:
 			Pal.band(c, r, 0.12 * k)
 			c.draw_rect(Rect2(r.position.x + r.size.x * 0.5 - 40, r.end.y - 2, 80, 2), Pal.heat(k, 1.0))
 		_text(items[i][1], Vector2(r.get_center().x, r.position.y + 32), 20, Pal.ink((0.95 if i == menu_hover else 0.6) * k * rk), font, 0)
+	if menu_confirm == 1 and not game.training and game.exam == null:
+		_text(game.txt("end_warn"), Vector2(s.x * 0.5, _menu_rect(items.size()).position.y + 24), 14, Pal.heat(0.85 * k, 1.0), font, 0)
 
 
 # ---------------------------------------------------------------- settlement
@@ -741,7 +889,7 @@ func _settlement(s: Vector2) -> void:
 	var cx := s.x * 0.5
 	var y := s.y * 0.5 - 300.0
 	_text(g.txt("e_done") if not end_early else g.txt("e_early"), Vector2(cx, y), 20, Pal.ink(0.7 * a), font, 0)
-	_text(g.txt("e_contract") + " · " + (g.txt("e_must_ok") if g.all_mandatory_ok() else g.txt("e_must_no")), Vector2(cx, y + 30), 14, Pal.ink(0.45 * a), font, 0)
+	_text(g.txt("e_contract") + " " + g.ship.get("contract", "") + " · " + (g.txt("e_must_ok") if g.all_mandatory_ok() else g.txt("e_must_no")), Vector2(cx, y + 30), 14, Pal.ink(0.45 * a), font, 0)
 	# the big number rolls up
 	var rk := clampf((e - 0.3) / 1.1, 0.0, 1.0)
 	var pct: float = g.recovery_rate() * 100.0 * Pal.ease_out(rk)
@@ -772,7 +920,8 @@ func _settlement(s: Vector2) -> void:
 	if ge > 0.0:
 		_stamp(Vector2(cx + 330, y + 100), ge)
 		var pulse := 0.5 + 0.4 * sin(t * 3.0)
-		_text(g.txt("e_again"), Vector2(cx, s.y - 80), 16, Pal.ink(pulse), font_b, 0)
+		var go: String = g.txt("st_go_on") if g.story != null and g.story.wants_epilogue() else g.txt("e_again")
+		_text(go, Vector2(cx, s.y - 80), 16, Pal.ink(pulse), font_b, 0)
 
 
 func grade() -> int:
