@@ -349,7 +349,7 @@ func _retract_rig() -> void:
 # ---------------------------------------------------------------- help when stuck
 
 func _stuck() -> void:
-	if not lines_idle():
+	if not lines_idle() or not game.hints_on:
 		return
 	var st := step()
 	if hint_level == 0 and idle_t > STUCK_1:

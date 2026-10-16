@@ -106,10 +106,42 @@ func _dpath(path: PackedVector2Array, c: Color, w: float) -> void:
 		_dash(path[i], path[i + 1], c, w, 5.0)
 
 
+# Labels are drawn at their size on screen, whatever the zoom: rasterised at
+# native pixels and never stretched by the camera (stretching made them blur),
+# on a dark backing so they read over the hull lines.
+var _z := 1.0
+var _placed: Array = []      # label rects this frame, in screen-scale units
+
+
+# a point label: the first of a few spots beside the point that is still free
+func _point_label(at: Vector2, text: String, col: Color) -> void:
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 6.0
+	var base := at * _z
+	for off in [Vector2(8, -7), Vector2(8, 19), Vector2(8, -25), Vector2(8, 37), Vector2(-w - 8, -7), Vector2(-w - 8, 19)]:
+		var r := Rect2(base + off + Vector2(-3, -14), Vector2(w, 18))
+		if not _placed.any(func(q): return q.intersects(r)):
+			_placed.append(r)
+			_label(at, text, 14, col, off)
+			return
+	_label(at, text, 14, col, Vector2(8, -7))
+
+
+func _label(at: Vector2, text: String, size_px: int, col: Color, off: Vector2 = Vector2(4, -4)) -> void:
+	if text == "":
+		return
+	draw_set_transform(at, 0.0, Vector2.ONE / _z)
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+	draw_rect(Rect2(off + Vector2(-3, -size_px * 0.95), Vector2(w + 6, size_px * 1.25)), Color(0.02, 0.03, 0.05, 0.72 * k))
+	draw_string(font, off, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, col)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
 func _draw() -> void:
 	if k < 0.01:
 		return
 	var z: float = game.cam_zoom()
+	_z = z
+	_placed = []
 	var lw := 1.1 / z
 	var a := k
 	var col := Color(0.62, 0.86, 1.0, 0.75 * a)
@@ -119,19 +151,19 @@ func _draw() -> void:
 	draw_rect(Rect2(x0, -6.0 * 48.0, minf(sweep - x0, x1 - x0), 12.0 * 48.0), Color(0.02, 0.03, 0.05, 0.55 * a))
 	for r in rooms:
 		_dpoly(r[0], col, lw * 1.3)
-		draw_string(font, r[2], game.txt(r[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, int(14.0 / z * 1.2), col)
+		_label(r[2], game.txt(r[1]), 17, col, Vector2.ZERO)
 	for e in equip:
 		if Geom.bbox(e[0]).position.x > sweep:
 			continue
 		_dpoly(e[0], dim, lw)
-		draw_string(font, Geom.bbox(e[0]).position + Vector2(3, -3), e[1], HORIZONTAL_ALIGNMENT_LEFT, -1, int(10.0 / z * 1.2), dim)
+		_label(Geom.bbox(e[0]).position, e[1], 13, Color(0.62, 0.86, 1.0, 0.6 * a))
 	for r in runs:
 		var path: PackedVector2Array = r[0]
 		if path.is_empty() or path[0].x > sweep:
 			continue
 		_dpath(path, Color(0.62, 0.86, 1.0, (0.55 if r[2] == "pipe" else 0.4) * a), lw * (1.6 if r[2] == "pipe" else 1.0))
 		if r[1] != "":
-			draw_string(font, path[path.size() / 2] + Vector2(3, -3), r[1], HORIZONTAL_ALIGNMENT_LEFT, -1, int(9.0 / z * 1.2), dim)
+			_label(path[path.size() / 2], r[1], 12, Color(0.62, 0.86, 1.0, 0.55 * a))
 	for p in points:
 		var pos: Vector2 = p[0]
 		if pos.x > sweep:
@@ -147,5 +179,5 @@ func _draw() -> void:
 			_:
 				draw_rect(Rect2(pos - Vector2(s, s) * 0.7, Vector2(s, s) * 1.4), col, false, lw)
 		if p[1] != "":
-			draw_string(font, pos + Vector2(7.0 / z, -6.0 / z), p[1], HORIZONTAL_ALIGNMENT_LEFT, -1, int(11.0 / z * 1.2), col)
-	draw_string(font, Vector2(x0 + 2.0 * 48.0, y_top - 1.2 * 48.0), game.ship.get("name", "") + "  ·  " + game.txt("blueprint"), HORIZONTAL_ALIGNMENT_LEFT, -1, int(15.0 / z * 1.2), col)
+			_point_label(pos, p[1], Color(0.62, 0.86, 1.0, 0.9 * a))
+	_label(Vector2(x0 + 2.0 * 48.0, y_top - 1.2 * 48.0), game.ship.get("name", "") + "  ·  " + game.txt("blueprint"), 18, col, Vector2.ZERO)

@@ -151,8 +151,8 @@ func _input(ev: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if game.menu_open:
-			_menu_click()
 			get_viewport().set_input_as_handled()
+			_menu_click()
 			return
 		if ending:
 			if end_t < 4.0:
@@ -848,9 +848,7 @@ func _menu_click() -> void:
 			game.settings_panel.open()
 		"hints":
 			if game.training:
-				game.hints_on = not game.hints_on
-				Txt.hints = game.hints_on
-				Txt.save_settings(game.testing)
+				game.toggle_hints()
 			else:
 				game.cycle_tier()
 		"title":

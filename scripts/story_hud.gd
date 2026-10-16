@@ -34,8 +34,8 @@ func _input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		if game.state == "ending" and game.story.phase in ["recording", "closing", "chapter", "next"]:
-			game.story.ending_key(KEY_SPACE)
 			get_viewport().set_input_as_handled()
+			game.story.ending_key(KEY_SPACE)
 
 
 func _process(dt: float) -> void:

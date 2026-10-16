@@ -77,8 +77,8 @@ func _input(ev: InputEvent) -> void:
 		if game.tutorial.done and stamp_t > 1.2:
 			for i in 2:
 				if _choice_rect(i).has_point(m):
-					game.after_training("exam" if i == 0 else "contract")
 					get_viewport().set_input_as_handled()
+					game.after_training("exam" if i == 0 else "contract")
 					return
 
 

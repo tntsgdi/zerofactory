@@ -599,7 +599,8 @@ static func story() -> Dictionary:
 			],
 			"fragment": [
 				["T−00:46", "unknown", "……主推进系统已经关闭。", "...Main propulsion is shut down."],
-				["T−00:45", "unknown", "等一下，为什么控制台还显示有推力？确认一下尾部传感器……", "Wait — why does the console still show thrust? Check the aft sensors..."],
+				["T−00:45", "unknown", "等一下，为什么控制台还显示有推力？", "Wait — why does the console still show thrust?"],
+				["T−00:45", "unknown", "确认一下尾部传感器……", "Check the aft sensors..."],
 			],
 			"after": [
 				["奇怪。事故报告上说的是冷却系统故障。", "Odd. The accident report says cooling failure."],
@@ -613,7 +614,8 @@ static func story() -> Dictionary:
 				["T−00:52", "han", "冷却回路压力掉了。E 舱在漏。", "Coolant loop pressure's dropping. E is leaking."],
 				["T−00:47", "moran", "推进停机。所有人到 B 舱。", "Shut down propulsion. Everyone to B."],
 				["T−00:46", "han", "……主推进系统已经关闭。", "...Main propulsion is shut down."],
-				["T−00:45", "han", "等一下，为什么控制台还显示有推力？确认一下尾部传感器……", "Wait — why does the console still show thrust? Check the aft sensors..."],
+				["T−00:45", "han", "等一下，为什么控制台还显示有推力？", "Wait — why does the console still show thrust?"],
+				["T−00:45", "han", "确认一下尾部传感器……", "Check the aft sensors..."],
 				["T−00:40", "han", "主电源说停了。……我不信，母线还有四百伏。", "Main power says it's stopped. ...I don't buy it. The bus still has four hundred volts."],
 				["T−00:33", "moran", "韩彻，回来。", "Han, come back."],
 				["T−00:30", "han", "给我两分钟。我去拉本地手柄。", "Give me two minutes. I'm going for the local handle."],

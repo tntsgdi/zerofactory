@@ -34,8 +34,8 @@ func _input(ev: InputEvent) -> void:
 		var m := c.get_local_mouse_position()
 		for i in 2:
 			if _button(c.size, i).has_point(m):
-				game.exam_choice(i)
 				get_viewport().set_input_as_handled()
+				game.exam_choice(i)
 				return
 
 

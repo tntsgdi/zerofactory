@@ -266,6 +266,16 @@ func set_tier(tr: String) -> void:
 	sfx.play("tool")
 
 
+# the training course: Liang's automatic help when you're stuck, on or off
+# (Q still asks for it either way)
+func toggle_hints() -> void:
+	hints_on = not hints_on
+	Txt.hints = hints_on
+	Txt.save_settings(testing)
+	say("hints_auto_on" if hints_on else "hints_auto_off", drone.global_position + Vector2(0, -44))
+	sfx.play("switch")
+
+
 func cycle_tier() -> void:
 	set_tier(Txt.TIERS[(Txt.TIERS.find(Txt.hint_tier) + 1) % Txt.TIERS.size()])
 	say("tier_now", drone.global_position + Vector2(0, -44), txt("tier_" + Txt.hint_tier))
@@ -417,7 +427,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_C: open_contract()
 			KEY_H:
 				if training:
-					hints_on = not hints_on
+					toggle_hints()
 				else:
 					cycle_tier()
 	elif ev is InputEventMouseButton and ev.pressed:

@@ -33,7 +33,7 @@ line("T01_found", "term", "设备 P-001 已识别。", "ITEM P-001 IDENTIFIED.")
 line("T01_tab", "liang", "现在打开工程图。", "Now open the drawing.")
 line("T01_bp1", "liang", "图纸是设计的时候画的，船是后来撞坏的。两边不一定对得上。", "The drawing was made at design time. The ship got wrecked later. They won't always agree.")
 line("T01_bp2", "liang", "先用它找东西，至于东西现在是什么样，你自己检查。", "Use it to find things. What state they're in now — you check that yourself.")
-line("T01_h1", "liang", "面板就在舱段左侧。先把镜头拉近。", "The panel is on the left end of the section. Zoom in first.")
+line("T01_h1", "liang", "面板就在舱段左侧。先把摄像头拉近。", "The panel is on the left end of the section. Zoom in first.")
 
 # ---------------------------------------------------------------- TUT_02 first scrap
 line("T02_in1", "liang", "这块盖板已经检查过了，没有压力，也没接电。", "That cover's been checked. No pressure behind it, no power.")

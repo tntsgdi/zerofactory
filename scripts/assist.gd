@@ -123,7 +123,7 @@ func _rules() -> void:
 			v = maxf(v, game._cut_cable_volts(hv.line))
 		if v > 30.0:
 			var name: String = target.tag if target.tag != "" else Txt.piece_name(target)
-			_warn("volts:" + name, _f("as_v_g", [name]), _f("as_v_s", [name]))
+			_warn("volts:" + name, _f("as_v_g", [name]), _f("as_v_s"))
 	# 3. pipes that are full or hot
 	if tool == 4 and hv.get("kind", "") == "connector" and hv.line.kind == "pipe":
 		var l = hv.line
@@ -142,7 +142,7 @@ func _rules() -> void:
 		var nl: int = w.lines_of(hp).size()
 		if fixed + nl > 0:
 			var nm: String = hp.tag if hp.tag != "" else Txt.piece_name(hp)
-			_warn("tied:" + nm, _f("as_c_g", [nm, fixed, nl]), _f("as_c_s", [nm]))
+			_warn("tied:" + nm, _f("as_c_g"), _f("as_c_s", [nm]))
 		_recall(5, "rc_s_tied", "rc_pull")
 	# 5. something dangerous on its way into the furnace
 	if hp != null and hp.body != null and is_instance_valid(hp.body):
@@ -201,7 +201,7 @@ func _pressure_warning(room: String) -> void:
 			g = _f("as_p_g_dl", [rname, leg[0], leg[1]])
 		else:
 			g = _f("as_p_g_none", [rname])
-	_warn("p:" + room, g, _f("as_p_s", [rname]))
+	_warn("p:" + room, g, _f("as_p_s"))
 
 
 # rooms on either side of a wall piece (sampled just off its middle)
