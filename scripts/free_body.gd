@@ -116,7 +116,7 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 	# apart): a teleport (a load, a test placing it) jumps metres at once
 	var moved := _last.distance_to(here) if _last != Vector2.INF else 0.0
 	var could := maxf(state.linear_velocity.length() * state.step * 2.0, TELEPORT)
-	if capture == null and moved > 0.5 and moved < could:
+	if capture == null and moved > 2.0 and moved < could:
 		var q := PhysicsRayQueryParameters2D.create(_last, here, World.STATIC_LAYER)
 		var hit: Dictionary = state.get_space_state().intersect_ray(q)
 		if not hit.is_empty():
