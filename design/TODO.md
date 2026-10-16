@@ -52,3 +52,5 @@
   - [ ] 用户想通过 GitHub 把项目给写作 AI 看：仓库 tntsg1/ZEROPRESSURE 实际是 PUBLIC，推送前等用户确认
 - [ ] 2026-10-16 用户：阶段二改到云端会话做（用云端额度，本地周额度快用完）。本地已完成并推送：2.1 半成品（scripts/career.gd 生涯存档、market.gd 报价、terminal.gd + scenes/terminal.tscn 终端、copy.gd + data/copy.json 文案表），尚未接进 title/game 流程
   - [x] 2026-10-16 云端：2.1 接线完成（标题继续生涯 / 新生涯、GR-001 后进终端、终端接单开局、结算接生涯、旧合同存档平滑接上），tests/career_run.gd PASS
+- [ ] 2026-10-16 2.9 成长曲线验收未过（教程 72.9% / 第 1 单 69.5% / 第 5 单 69.3% / 第 10 单 69.8%），待用户定：验收挪到阶段三自动化之后，还是阶段二补减少重复操作的内容
+- [x] 2026-10-16 修：导出的 exe 没有音效（DirAccess 在导出包里只看到 .ogg.import），改用 ResourceLoader.list_directory；开发者模式（F12）加字
