@@ -11,11 +11,18 @@ var job := {}
 
 func _initialize() -> void:
 	var careless := false
+	var stars := 1
+	var seed := -1
 	for a in OS.get_cmdline_user_args():
 		if a == "careless":
 			careless = true
 		elif a.begins_with("seed="):
-			pass
+			seed = int(a.substr(5))
+		elif a.begins_with("stars="):
+			stars = int(a.substr(6))
+	if seed >= 0:
+		job = Market.offer_for(seed, {"rep": 20, "done": 1}, stars)
+		print("contract ", job)
 	Game.contract = job
 	var scene: Node = load("res://scenes/main.tscn").instantiate()
 	scene.bot = {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "lmb": false, "move": Vector2.ZERO}
