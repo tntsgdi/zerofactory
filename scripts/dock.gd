@@ -23,11 +23,21 @@ const ARM_X1 := 27.5
 const BOUNDS := Rect2(-6.8, -15.0, 63.0, 24.0)
 const FIELD := 3.4
 const CATCH := 1.3
+# the furnace reaches further for scrap that has been let go (aim and throw):
+# whole equipment, hazards and whatever the grapple still holds only feel the
+# small field. Along the bottom of the berth runs a scrap trough: scrap that
+# drops into it rides a conveyor to the furnace (design/体验打磨定案.md §6)
+const SCRAP_FIELD := 7.0
+const TROUGH_Y := 8.2               # m: the trough's lip; below it a body is in the trough
+const TROUGH_X0 := 5.5
+const TROUGH_X1 := 40.5             # stops short of the hazard mouth
+const CONVEY := 7.0                 # m/s along the trough
 
 var game: Game
 var world: World
 var zone_state := {}       # id -> {"glow": float, "busy": float, "reject": float, "eat": float}
 var swallowing: Array = [] # [body, zone, t, start_pos, start_rot]
+var conveying: Array = []  # bodies riding the trough to the furnace
 var debris: Array = []     # [pos, vel, t, poly, rot, spin, value, trail]
 var hoses := {}            # port id -> {"pts": [], "prev": [], "mast": Vector2, "t": float}
 var clamps: Array = []     # Vector2 in metres: where each dock clamp grips the ship (from the ship file)
@@ -126,6 +136,17 @@ func _physics_process(dt: float) -> void:
 			continue
 		b.rejected_t = maxf(0.0, b.rejected_t - dt)
 		var com: Vector2 = b.global_transform * b.center_of_mass
+		var held: bool = game.tools.held_body == b
+		var scrap := is_scrap(b)
+		# into the trough: scrap rides it to the furnace; anything else is lifted back out
+		if not held and in_trough(com):
+			if scrap:
+				_start_convey(b)
+				continue
+			if b.rejected_t <= 0.0:
+				b.rejected_t = 1.5
+				b.apply_central_impulse(Vector2(0, -260.0) * b.mass)
+				game.say("trough_only_scrap", com)
 		# the tractor field eases strays back in over the open edges
 		var pull := field_pull(com)
 		if pull != Vector2.ZERO:
@@ -135,10 +156,11 @@ func _physics_process(dt: float) -> void:
 			var zp := zpos(id)
 			var d := zp - com
 			var dist := d.length()
-			if dist > FIELD * Geom.M or b.rejected_t > 0.0:
+			var reach := SCRAP_FIELD if id == "metal" and scrap and not held else FIELD
+			if dist > reach * Geom.M or b.rejected_t > 0.0:
 				continue
 			zone_state[id].glow = 1.0
-			var k := 1.0 - dist / (FIELD * Geom.M)
+			var k := 1.0 - dist / (reach * Geom.M)
 			b.apply_central_force(d.normalized() * b.mass * (220.0 * k + 40.0))
 			b.linear_velocity *= exp(-1.6 * k * dt)
 			if dist < CATCH * Geom.M:
@@ -160,6 +182,7 @@ func _process(dt: float) -> void:
 		z.glow = maxf(0.0, z.glow - dt * 2.0)
 		z.reject = maxf(0.0, z.reject - dt * 1.6)
 		z.eat = maxf(0.0, z.eat - dt * 1.4)
+	_step_convey(dt)
 	_step_swallow(dt)
 	_step_debris(dt)
 	_step_hoses(dt)
@@ -203,6 +226,58 @@ func field_pull(p: Vector2) -> Vector2:
 	if field_glow.size() < 40:
 		field_glow.append([q, 1.0])
 	return (q - p).normalized() * (60.0 + depth * 1.6) + (c - p).normalized() * 10.0
+
+
+# scrap: nothing whole to save and nothing dangerous in it
+func is_scrap(b) -> bool:
+	for p in b.pieces:
+		if p.cls == "equip" and p.intact:
+			return false
+		if game.sys.dest_of(p) == "hazard":
+			return false
+	return true
+
+
+static func in_trough(com: Vector2) -> bool:
+	var x := com.x / Geom.M
+	return com.y > TROUGH_Y * Geom.M and x > TROUGH_X0 and x < TROUGH_X1
+
+
+# the point on the trough straight below p (where to push scrap down to)
+static func trough_below(p: Vector2) -> Vector2:
+	return Vector2(clampf(p.x / Geom.M, TROUGH_X0 + 0.5, TROUGH_X1 - 0.5), TROUGH_Y + 0.3) * Geom.M
+
+
+func _start_convey(b) -> void:
+	b.capture = "trough"
+	b.freeze_mode = RigidBody2D.FREEZE_MODE_KINEMATIC
+	b.set_deferred("freeze", true)
+	b.collision_layer = 0
+	b.collision_mask = 0
+	conveying.append(b)
+	game.sfx.play("clank", b.global_position, 0.6)
+
+
+func _step_convey(dt: float) -> void:
+	var M := Geom.M
+	var mouth := zpos("metal")
+	for b in conveying.duplicate():
+		if not is_instance_valid(b):
+			conveying.erase(b)
+			continue
+		var com_off: Vector2 = b.global_transform.basis_xform(b.center_of_mass)
+		var com: Vector2 = b.global_position + com_off
+		var lane := (TROUGH_Y + 0.45) * M
+		var nx := move_toward(com.x, mouth.x, CONVEY * M * dt)
+		var ny := move_toward(com.y, lane, CONVEY * M * dt)
+		b.global_position = Vector2(nx, ny) - com_off
+		b.rotation = lerp_angle(b.rotation, 0.0, 1.0 - exp(-3.0 * dt))
+		if absf(nx - mouth.x) < 0.4 * M:
+			conveying.erase(b)
+			swallowing.append([b, "metal", 0.0, b.global_position, b.rotation])
+			b.capture = "metal"
+			zone_state["metal"].busy = 1.0
+			game.on_swallow_start(b, "metal")
 
 
 func _start_swallow(b, id: String) -> void:
@@ -381,6 +456,14 @@ func _draw_static() -> void:
 	ci.draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Color(0.07, 0.073, 0.082))
 	ci.draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Pal.ink(0.5), false, 1.2)
 	ci.draw_string(font, Vector2(TOWER_X + 0.9, -11.4) * M, "BERTH 07  ·  SALVAGE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Pal.ink(0.32))
+	# the scrap trough along the floor, into the furnace
+	var tl := Vector2(TROUGH_X0, TROUGH_Y) * M
+	var tr := Vector2(TROUGH_X1, TROUGH_Y) * M
+	ci.draw_rect(Rect2(tl, Vector2(tr.x - tl.x, (FLOOR_Y - TROUGH_Y) * M)), Color(0.05, 0.053, 0.06))
+	ci.draw_line(tl, tr, Pal.ink(0.45), 1.6)
+	ci.draw_line(tl, tl + Vector2(0, (FLOOR_Y - TROUGH_Y) * M), Pal.ink(0.45), 1.6)
+	ci.draw_line(tr, tr + Vector2(0, (FLOOR_Y - TROUGH_Y) * M), Pal.ink(0.45), 1.6)
+	ci.draw_string(font, tl + Vector2(12, -8), game.txt("trough"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.ink(0.5))
 	# dock floor markings under the ship
 	for x in range(0, 44, 3):
 		ci.draw_line(Vector2(x * M, 8.85 * M), Vector2((x + 1.4) * M, 8.85 * M), Pal.ink(0.1), 2.0)
@@ -523,7 +606,23 @@ func _truss_v(r: Rect2) -> void:
 		k += 1
 
 
+func _draw_trough(ci: CanvasItem) -> void:
+	var M := Geom.M
+	var mx: float = zpos("metal").x
+	var y := (TROUGH_Y + 0.4) * M
+	var x := TROUGH_X0 * M + 20.0
+	var ph := fposmod(t * CONVEY * M * 0.25, 40.0)
+	while x < TROUGH_X1 * M - 10.0:
+		var px := x + (ph if x < mx else -ph)
+		var dirx := 1.0 if px < mx else -1.0
+		if absf(px - mx) > 30.0:
+			ci.draw_line(Vector2(px - 5.0 * dirx, y - 6), Vector2(px + 3.0 * dirx, y), Pal.heat(0.25, 1.2), 1.4)
+			ci.draw_line(Vector2(px + 3.0 * dirx, y), Vector2(px - 5.0 * dirx, y + 6), Pal.heat(0.25, 1.2), 1.4)
+		x += 40.0
+
+
 func _draw_add() -> void:
+	_draw_trough(add_node)
 	var tex: Texture2D = game.fx.glow_tex
 	var M := Geom.M
 	# beacons on the open ends of the arm and the platform, and the field corners

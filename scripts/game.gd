@@ -51,6 +51,10 @@ const OP_CAT := {
 var ops := {}                # kind -> count
 var _measured := {}
 var done_t := 0.0
+var cam_pan := Vector2.ZERO
+var rmb_down := false
+var rmb_moved := 0.0
+var overview := false
 var training := false        # the ship file is a training course, not a contract
 var tutorial: Tutorial
 var assist: Assist
@@ -377,7 +381,7 @@ func _process(dt: float) -> void:
 			SaveGame.save(self)
 	_read_input()
 	var dev_warp: bool = Txt.dev and DevPanel.warp and bot == null
-	var want_warp: bool = state == "play" and not menu_open and (Input.is_physical_key_pressed(KEY_EQUAL) or dev_warp or (bot != null and bot.get("warp", false)))
+	var want_warp: bool = state == "play" and not menu_open and (Keys.down("warp") or dev_warp or (bot != null and bot.get("warp", false)))
 	if want_warp != warp:
 		warp = want_warp
 		if hitstop_t <= 0.0 and slowmo <= 0.0:
@@ -430,13 +434,13 @@ func _read_input() -> void:
 	if b.has("move"):
 		mv = b.move
 	elif not menu_open and not contract_open:
-		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
+		if Keys.down("left"):
 			mv.x -= 1
-		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
+		if Keys.down("right"):
 			mv.x += 1
-		if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
+		if Keys.down("up"):
 			mv.y -= 1
-		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+		if Keys.down("down"):
 			mv.y += 1
 	player_moved = mv != Vector2.ZERO
 	# Q hint in the training course: the drone flies itself to where the target shows
@@ -444,8 +448,10 @@ func _read_input() -> void:
 		var to: Vector2 = tutorial.autopilot - drone.global_position
 		mv = to.normalized() * clampf(to.length() / 90.0, 0.25, 1.0)
 	drone.input.move = mv if state == "play" else Vector2.ZERO
-	drone.input.dash = b.get("dash", Input.is_physical_key_pressed(KEY_SHIFT)) and state == "play"
-	drone.input.brake = b.get("brake", Input.is_physical_key_pressed(KEY_SPACE)) and state == "play"
+	drone.input.dash = b.get("dash", Keys.down("dash")) and state == "play"
+	drone.input.brake = b.get("brake", Keys.down("brake")) and state == "play"
+	drone.input.hold = b.get("hold", Keys.down("hold") and not menu_open) and state == "play"
+	overview = bot == null and state == "play" and not menu_open and not contract_open and Keys.down("overview")
 	drone.aim = aim
 
 
@@ -491,23 +497,23 @@ func _unhandled_input(ev: InputEvent) -> void:
 			if tutorial.done and k in [KEY_1, KEY_2]:
 				after_training("exam" if k == KEY_1 else "contract")
 				return
-		match k:
-			KEY_1: tools.set_tool(1)
-			KEY_2: tools.set_tool(2)
-			KEY_3: tools.set_tool(3)
-			KEY_4: tools.set_tool(4)
-			KEY_5: tools.set_tool(5)
-			KEY_TAB: blueprint.toggle()
-			KEY_6: repair_kit()
-			KEY_7: breaching_ring()
-			KEY_F:
+		match Keys.action_of(ev):
+			"tool1": tools.set_tool(1, false, true)
+			"tool2": tools.set_tool(2, false, true)
+			"tool3": tools.set_tool(3, false, true)
+			"tool4": tools.set_tool(4, false, true)
+			"tool5": tools.set_tool(5, false, true)
+			"blueprint": blueprint.toggle()
+			"repair": repair_kit()
+			"ring": breaching_ring()
+			"assist":
 				drone.assist = not drone.assist
 				Txt.assist = drone.assist
 				Txt.save_settings(testing)
 				say("assist_on" if drone.assist else "assist_off", drone.global_position + Vector2(0, -44))
 				sfx.play("switch")
-			KEY_C: open_contract()
-			KEY_H:
+			"contract": open_contract()
+			"hints":
 				if training:
 					toggle_hints()
 				else:
@@ -521,9 +527,19 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom_target = clampf(zoom_target / 1.1, 0.85, 2.6)
 		elif ev.button_index == MOUSE_BUTTON_RIGHT and state == "play":
+			# a right click lets go; a right drag pans the view (on release)
+			rmb_down = true
+			rmb_moved = 0.0
+	elif ev is InputEventMouseButton and not ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT:
+		if rmb_down and rmb_moved < 10.0 and state == "play":
 			if tools.held_piece != null:
 				tools.release_grab(true)
 			tools.job = {}
+		rmb_down = false
+	elif ev is InputEventMouseMotion and rmb_down:
+		rmb_moved += ev.relative.length()
+		if rmb_moved >= 10.0:
+			cam_pan -= ev.relative / maxf(zoom_now, 0.1)
 
 
 func toggle_menu() -> void:
@@ -555,9 +571,12 @@ func close_contract() -> void:
 # ---------------------------------------------------------------- camera
 
 func _camera(dt: float) -> void:
+	_pan(dt)
 	var target := cam_pos
 	if cam_override != null:
 		target = cam_override
+	elif overview:
+		target = SHIP_CENTER
 	elif drone != null and (drone.alive or state == "play"):
 		var dp: Vector2 = drone.global_position
 		var lead := drone.linear_velocity * 0.22
@@ -565,6 +584,7 @@ func _camera(dt: float) -> void:
 		target = dp + lead + look
 		if tools.held_piece != null and not tools.held_piece.gone:
 			target = target.lerp(tools.grab_point(), 0.18)
+		target += cam_pan
 	# a critically damped follow: soft, never laggy
 	var k := 38.0
 	var c := 2.0 * sqrt(k)
@@ -574,6 +594,10 @@ func _camera(dt: float) -> void:
 		cam_vel += ((target - cam_pos) * k - cam_vel * c) * h
 		cam_pos += cam_vel * h
 	var zt := zoom_override if zoom_override > 0.0 else zoom_target
+	if overview and zoom_override <= 0.0:
+		# the whole ship and the berth in view
+		var vs := get_viewport().get_visible_rect().size
+		zt = minf(vs.x / (50.0 * Geom.M), vs.y / (26.0 * Geom.M))
 	if state == "play" and drone.alive:
 		zt *= lerpf(1.0, 0.86, clampf(drone.linear_velocity.length() / 700.0, 0.0, 1.0))
 	zoom_now = Pal.damp(zoom_now, zt, 4.0 if zoom_override > 0.0 else 6.0, dt)
@@ -585,6 +609,25 @@ func _camera(dt: float) -> void:
 	cam.position = cam_pos + off + punch
 	cam.zoom = Vector2(zoom_now, zoom_now)
 	cam.rotation = sin(tt * 37.0) * 0.006 * sh
+
+
+# the view leaves the drone while the right button drags it or the pointer
+# rests on a screen edge, and drifts back when let go
+func _pan(dt: float) -> void:
+	var edge := Vector2.ZERO
+	if bot == null and state == "play" and not menu_open and not contract_open and not rmb_down and DisplayServer.window_is_focused():
+		var vs := get_viewport().get_visible_rect().size
+		var m := get_viewport().get_mouse_position()
+		if Rect2(Vector2.ZERO, vs).has_point(m):
+			if m.x < 6.0: edge.x = -1.0
+			elif m.x > vs.x - 6.0: edge.x = 1.0
+			if m.y < 6.0: edge.y = -1.0
+			elif m.y > vs.y - 6.0: edge.y = 1.0
+	if edge != Vector2.ZERO:
+		cam_pan += edge * 1100.0 / maxf(zoom_now, 0.1) * dt
+	elif not (rmb_down and rmb_moved >= 10.0):
+		cam_pan = Pal.damp2(cam_pan, Vector2.ZERO, 5.0, dt)
+	cam_pan = cam_pan.limit_length(40.0 * Geom.M)
 
 
 # a few frames of near-freeze that sell an impact

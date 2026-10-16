@@ -498,6 +498,11 @@ func _haul_guide(s: Vector2) -> void:
 		return
 	var zone := _zone_for(tl.held_body)
 	var wp: Vector2 = Dock.zpos(zone)
+	var com0: Vector2 = tl.held_body.global_transform * tl.held_body.center_of_mass
+	if zone == "metal":
+		var tp := Dock.trough_below(com0)
+		if tp.distance_to(com0) < wp.distance_to(com0):
+			wp = tp
 	var sp := to_screen(wp)
 	var dist: float = (tl.held_body.global_transform * tl.held_body.center_of_mass).distance_to(wp) / Geom.M
 	var col := Pal.tint(Pal.FLUID, 0.95, 1.2) if zone == "hazard" else (Pal.ink(0.95, 1.2) if zone == "equip" else Pal.heat(0.95, 1.3))

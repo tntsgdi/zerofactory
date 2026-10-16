@@ -4,7 +4,8 @@ extends Node2D
 # drone, on what can actually be seen (never inside a room nobody has opened).
 #   1 measure   2 laser   3 magnetic grapple   4 wrench   5 gas/fluid hose
 
-const RANGE := 4.0 * 48.0
+const RANGE := 4.0 * 48.0          # the laser and the grapple
+const REACH := {1: 6.0 * 48.0, 4: 6.0 * 48.0}   # measuring and the wrench reach further
 const GRAB_MAX_T := 3.0
 const EMPTY_SPEED := 2600.0
 const K_TETHER := 34.0
@@ -15,6 +16,7 @@ var world: World
 var sys: Systems
 var drone: Drone
 var tool := 2
+var pin_key := "-"           # what the pointer was on when a number key chose the tool
 var hover := {}
 var aim := Vector2.ZERO
 var lmb := false
@@ -68,7 +70,15 @@ func _init() -> void:
 	add_child(add_node)
 
 
-func set_tool(n: int, force: bool = false) -> void:
+# how far the tool in hand reaches
+func reach(n: int = -1) -> float:
+	return REACH.get(tool if n < 0 else n, RANGE)
+
+
+func set_tool(n: int, force: bool = false, by_key: bool = false) -> void:
+	# a number key pins its tool over the context tool until the pointer moves to something else
+	if by_key:
+		pin_key = _context()[1]
 	# the training course opens one tool at a time
 	if not force and game.tutorial != null and not game.tutorial.tool_allowed(n):
 		denied_slot = n
@@ -100,12 +110,49 @@ func set_tool(n: int, force: bool = false) -> void:
 
 
 func in_range(p: Vector2) -> bool:
-	return drone.alive and drone.global_position.distance_to(p) <= RANGE
+	return drone.alive and drone.global_position.distance_to(p) <= reach()
 
 
 func clamp_range(p: Vector2) -> Vector2:
 	var d := p - drone.global_position
-	return drone.global_position + d.limit_length(RANGE)
+	return drone.global_position + d.limit_length(reach())
+
+
+# The context tool (design/体验打磨定案.md §5): out of the laser, the tool in
+# hand follows what the pointer is on — a bolt, lock, clamp, valve, switch or
+# connector takes the wrench, a pressure port the meter, a floating piece the
+# grapple. Never while a job, a cut or a hold is going on, never in the
+# training course (it teaches the keys), never for a bot.
+const WRENCH_CTRLS := ["valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam"]
+
+
+func _context() -> Array:
+	var pick := 15.0 / game.cam_zoom()
+	var best := [0, "", INF]
+	for h in [_near_ctrl(WRENCH_CTRLS, pick), _near_joint(pick * 0.9), _near_connector(pick * 0.9)]:
+		if not h.is_empty() and h.d < best[2]:
+			best = [4, "w%s%s" % [h.kind, h.get("label", "")] + str(h.pos.round()), h.d]
+	var hm := _near_ctrl(["port", "test"], pick)
+	if not hm.is_empty() and hm.d < best[2]:
+		best = [1, "m%s" % hm.ctrl.id, hm.d]
+	if best[0] == 0 and _visible(aim):
+		var list: Array = world.pieces_at(aim)
+		if not list.is_empty() and list[0].body != null:
+			best = [3, "g%d" % list[0].id, 0.0]
+	return best
+
+
+func _context_step() -> void:
+	if not Txt.context or game.bot != null or game.tutorial != null or tool == 2 or tool == 5:
+		return
+	if cutting or not job.is_empty() or held_body != null or held_piece != null or lmb:
+		return
+	var c := _context()
+	if c[1] == pin_key:
+		return
+	pin_key = ""
+	if c[0] != 0 and c[0] != tool:
+		tool = c[0]
 
 
 func step(dt: float) -> void:
@@ -132,6 +179,7 @@ func step(dt: float) -> void:
 		queue_redraw()
 		add_node.queue_redraw()
 		return
+	_context_step()
 	hover = _find_hover()
 	match tool:
 		2:
@@ -697,9 +745,9 @@ func _draw() -> void:
 	var z: float = game.cam_zoom()
 	var lw := 1.3 / z
 	# the reach of the tools, faint, brighter when something is out of reach
-	var out: bool = (not hover.is_empty() and hover.get("reason", "") == "range") or (tool == 2 and lmb and aim.distance_to(drone.global_position) > RANGE)
+	var out: bool = (not hover.is_empty() and hover.get("reason", "") == "range") or (tool == 2 and lmb and aim.distance_to(drone.global_position) > reach())
 	var ra := 0.16 if out else 0.05
-	_dashed_circle(drone.global_position, RANGE, Pal.ink(ra), lw)
+	_dashed_circle(drone.global_position, reach(), Pal.ink(ra), lw)
 	# hover target
 	if not hover.is_empty() and hover.kind != "piece" and hover.kind != "inspect":
 		var c := Pal.ink(0.9) if hover.ok else Pal.ink(0.35)

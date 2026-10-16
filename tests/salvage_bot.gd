@@ -433,7 +433,11 @@ func _strip_paced() -> void:
 		sent[b] = zone
 		var mouth: Vector2 = Dock.zpos(zone)
 		# a body that drifted off is fetched from the berth's edge, not from wherever it went
-		var d: float = minf((b.global_transform * b.center_of_mass).distance_to(mouth) / M, 50.0)
+		var com: Vector2 = b.global_transform * b.center_of_mass
+		var d: float = minf(com.distance_to(mouth) / M, 50.0)
+		if zone == "metal":
+			# scrap is pushed down into the trough, or thrown into the furnace's reach
+			d = minf(maxf(0.0, d - Dock.SCRAP_FIELD + 1.0), com.distance_to(Dock.trough_below(com)) / M)
 		var mk := m / k
 		_work(k * (d / (6.0 / (1.0 + mk)) + d / 6.0 + 2.0) + (k - 1) * 2.5)
 		hauls += k

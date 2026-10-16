@@ -17,6 +17,7 @@ static var cfg_path := CFG            # tests point this at their own file
 static var test_zh := true            # the language a test runs in
 static var chapter_done := false      # chapter one seen to the end
 static var dev := false               # developer mode (F12)
+static var context := true            # the tool follows what the cursor is on (not the laser)
 const TIERS := ["guided", "standard", "hardcore"]
 const CFG := "user://zeropower_settings.cfg"
 
@@ -163,6 +164,8 @@ const S := {
 	"net": ["碎屑收集网", "DEBRIS NET"],
 	"zone_equip": ["设备回收", "EQUIPMENT"],
 	"zone_metal": ["金属熔炉", "FURNACE"],
+	"trough": ["废料长槽 → 熔炉", "SCRAP TROUGH → FURNACE"],
+	"trough_only_scrap": ["长槽只收废金属", "THE TROUGH TAKES SCRAP ONLY"],
 	"zone_hazard": ["危险品回收", "HAZMAT"],
 	# tools
 	"tool_1": ["测量", "MEASURE"],
@@ -439,6 +442,20 @@ const S := {
 	"t_continue": ["继续拆解", "CONTINUE"],
 	"t_quit": ["退出", "QUIT"],
 	"t_start": ["开始游戏", "START"],
+	"s_context": ["情境工具", "CONTEXT TOOL"],
+	"s_keys_row": ["按键设置", "KEY BINDINGS"],
+	"s_on": ["开", "ON"],
+	"s_off": ["关", "OFF"],
+	"s_press": ["按下新按键…（Esc 取消）", "PRESS A KEY… (ESC CANCELS)"],
+	"s_reset": ["恢复默认按键", "RESET TO DEFAULTS"],
+	"s_keys_help": ["↑↓ 选择 · Enter 改键 · Esc 返回", "↑↓ PICK · ENTER REBIND · ESC BACK"],
+	"key_up": ["上", "UP"], "key_down": ["下", "DOWN"], "key_left": ["左", "LEFT"], "key_right": ["右", "RIGHT"],
+	"key_dash": ["冲刺", "DASH"], "key_brake": ["刹停", "BRAKE"], "key_hold": ["悬停锁定（按住）", "HOLD POSITION (HOLD)"],
+	"key_overview": ["拉远看全船（按住）", "OVERVIEW (HOLD)"],
+	"key_tool1": ["测量", "MEASURE"], "key_tool2": ["激光切割", "LASER"], "key_tool3": ["磁力抓钩", "GRAPPLE"],
+	"key_tool4": ["维护工具", "WRENCH"], "key_tool5": ["气液回收", "HOSE"], "key_blueprint": ["图纸", "DRAWING"],
+	"key_contract": ["合同", "CONTRACT"], "key_repair": ["维修包", "REPAIR KIT"], "key_ring": ["爆破切割环", "BREACHING RING"],
+	"key_assist": ["飞行稳定", "FLIGHT ASSIST"], "key_hints": ["提示", "HINTS"], "key_warp": ["加速时间（按住）", "TIME WARP (HOLD)"],
 	"sc_full": ["完整拆解", "FULL STRIP"],
 	"sc_rescue": ["抢救设备", "EQUIPMENT RESCUE"],
 	"sc_section": ["分段拆解", "SECTION STRIP"],
@@ -701,6 +718,8 @@ static func load_settings(testing: bool) -> void:
 		clues = cf.get_value("career", "clues", [])
 		chapter_done = cf.get_value("career", "chapter_done", false)
 		dev = cf.get_value("ui", "dev", false)
+		context = cf.get_value("ui", "context", true)
+		Keys.load_from(cf)
 		vol_master = cf.get_value("audio", "master", 1.0)
 		vol_music = cf.get_value("audio", "music", 0.8)
 		vol_sfx = cf.get_value("audio", "sfx", 0.9)
@@ -721,6 +740,8 @@ static func save_settings(testing: bool) -> void:
 	cf.set_value("career", "clues", clues)
 	cf.set_value("career", "chapter_done", chapter_done)
 	cf.set_value("ui", "dev", dev)
+	cf.set_value("ui", "context", context)
+	Keys.store(cf)
 	cf.set_value("audio", "master", vol_master)
 	cf.set_value("audio", "music", vol_music)
 	cf.set_value("audio", "sfx", vol_sfx)

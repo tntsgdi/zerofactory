@@ -27,7 +27,8 @@ var hurt_t := 0.0
 var spawn_t := 0.0
 var add_node: Node2D
 var smoke_t := 0.0
-var input := {"move": Vector2.ZERO, "dash": false, "brake": false}
+var input := {"move": Vector2.ZERO, "dash": false, "brake": false, "hold": false}
+var hold_at := Vector2.INF   # where the drone is held while the hold key is down
 var external := Vector2.ZERO
 var assist := true             # flight assist: holds position, kills side drift
 var assist_k := 1.0            # 0..1 for the HUD switch animation
@@ -112,6 +113,13 @@ func _physics_process(dt: float) -> void:
 		else:
 			linear_velocity = Vector2.ZERO
 			acc = Vector2.ZERO
+	# hold: stay put where the key went down, whatever pulls (the tether included)
+	if input.get("hold", false):
+		if hold_at == Vector2.INF:
+			hold_at = global_position
+		acc = ((hold_at - global_position) * 40.0 - linear_velocity * 12.0 - external / mass).limit_length(ACCEL * BRAKE_K * 2.0)
+	else:
+		hold_at = Vector2.INF
 	thrust = acc / ACCEL
 	apply_central_force(acc * mass)
 	if external != Vector2.ZERO:
