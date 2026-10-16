@@ -26,11 +26,11 @@ func _ready() -> void:
 	sfx_bus = _bus("SFX", Settings.SFX_DB)
 	music_bus = _bus("Music", Settings.MUSIC_DB)
 	Settings.apply_audio()
-	var dir := DirAccess.open("res://assets/audio")
-	if dir != null:
-		for f in dir.get_files():
-			if f.ends_with(".ogg"):
-				streams[f.get_basename()] = load("res://assets/audio/" + f)
+	# ResourceLoader, not DirAccess: in an exported build the folder holds
+	# only "x.ogg.import" / "x.ogg.remap", and a plain listing finds no sounds
+	for f in ResourceLoader.list_directory("res://assets/audio"):
+		if f.ends_with(".ogg"):
+			streams[f.get_basename()] = load("res://assets/audio/" + f)
 	for i in VOICES:
 		var v := AudioStreamPlayer.new()
 		v.bus = "SFX"
