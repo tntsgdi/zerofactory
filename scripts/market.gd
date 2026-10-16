@@ -9,6 +9,8 @@ class_name Market
 const TYPES := {"gr7": {"class": "GR", "name": ["灰鹭级货船", "HERON-CLASS FREIGHTER"], "length": 42.0, "value": 120000.0}}
 const REASONS := 8
 const LOGS := 8
+const GOALS := ["safe", "fast", "valuable"]
+const FAST_TIME := 0.75          # a fast job's standard time, of the usual
 const BASE_TIME := 18.0 * 60.0    # s, a one-star contract
 const STAR_TIME := 4.0 * 60.0     # s more per extra star
 # the short jobs on part of a ship: standard time (the hold's is also its hard stop)
@@ -75,6 +77,20 @@ static func valid_offer(rng: RandomNumberGenerator, career: Dictionary, stars: i
 
 
 # what a contract's scope pays for, in a line
+static func goal_text(o: Dictionary) -> String:
+	var g: String = o.get("goal", "")
+	# a rescue is a valuable-equipment job already, paid piece by piece: its scope says it all
+	return Txt.t("goal_" + g + "_d") if g != "" and o.get("scope", "full") != "rescue" else ""
+
+
+static func _named(d: Dictionary) -> Array:
+	var out: Array = []
+	for pd in d.pieces:
+		if pd.get("mandatory", false):
+			out.append(pd.get("tag", ""))
+	return out
+
+
 static func scope_text(o: Dictionary) -> String:
 	match o.get("scope", "full"):
 		"section": return Txt.t("sc_section_d")
@@ -101,6 +117,11 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 		"reason": "R_reason_%02d" % rng.randi_range(1, REASONS),
 		"variant": rng.randi(),
 	}
+	# the order's goal: a second dimension over its scope (a rescue is a valuable-equipment job by nature);
+	# drawn from the contract's own seed, so it never shifts the market's other draws
+	o.goal = "valuable" if scope == "rescue" else GOALS[int(o.variant) % GOALS.size()]
+	if o.goal == "fast":
+		o.time = snappedf(float(o.time) * FAST_TIME, 60.0)
 	var d := Variant.make(Ship.load_data(ship), o)
 	# the estimate is the broker's, not the truth: within 8% either way
 	var value: float = float(d.value.total) * rng.randf_range(0.92, 1.08)
@@ -111,6 +132,7 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 		# a rescue costs little to take: the pieces are paid one by one
 		o.fee = snappedf(float(d.value.total) * RESCUE_FEE, 100.0)
 	o.scope_tags = d.get("scope", {}).get("tags", [])
+	o.named = _named(d)
 	o.logs = _logs(rng, traps)
 	var cargo: Array = []
 	for c in Variant.CONTAINERS:

@@ -160,7 +160,7 @@ static func save(g) -> void:
 			"must": g.mandatory_ok, "incidents": g.incidents, "time": g.playtime, "hints": g.hints_seen, "ledger": g.ledger,
 			"drone": {"p": _v2(g.drone.global_position), "v": _v2(g.drone.linear_velocity), "hp": g.drone.integrity, "alive": g.drone.alive},
 			"tool": g.tools.tool, "hose_mode": g.tools.hose_mode, "reveals": g.reveal_count, "respawn": g.drone_respawn, "used": g.used, "verified": g.verified, "ops": g.ops,
-			"debris": debris},
+			"debris": debris, "must_value": g.must_value, "changed": g.changed, "time_by": g.time_by},
 	}
 	if not g.job.is_empty():
 		d.job = g.job
@@ -446,6 +446,9 @@ static func apply_late(g, d: Dictionary) -> void:
 	g.loss_lines = gd.lines
 	for k in gd.must:
 		g.mandatory_ok[k] = gd.must[k]
+	g.must_value = gd.get("must_value", {})
+	g.changed = gd.get("changed", {})
+	g.time_by = gd.get("time_by", {})
 	g.incidents = gd.get("incidents", [])
 	g.playtime = gd.time
 	g.hints_seen = gd.hints

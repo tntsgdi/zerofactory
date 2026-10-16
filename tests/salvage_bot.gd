@@ -35,10 +35,58 @@ var scrapped := 0          # whole equipment it had to cut up (too heavy)
 var snapped := 0
 
 
+var rec: Array = []        # what it did to make the ship safe, in order: ["w"|"h", ctrl] / ["o", room, ctrl] / ["g", guard]
+var replay = null          # a remembered order (rec of an earlier ship) done blindly, instead of reading this ship
+var replay_wait := 0.0     # sim s it waits after the remembered order before it strips (as long as it took then)
+var safe_at := 0.0         # sim s when it judged the ship safe
+
+
 func _init(game, opts: Dictionary = {}) -> void:
 	g = game
 	careless = opts.get("careless", false)
 	paced = opts.get("paced", false)
+	replay = opts.get("replay", null)
+	replay_wait = opts.get("replay_wait", 0.0)
+
+
+func _w(id: String) -> void:
+	rec.append(["w", id])
+	g.do_wrench(ctrl(id))
+
+
+func _h(id: String) -> void:
+	rec.append(["h", id])
+	g.do_hose(ctrl(id))
+
+
+# the remembered order, one step every few frames: whatever is missing on this ship is skipped
+func _replay() -> void:
+	if phase_t % 5 != 0:
+		return
+	if not replay.is_empty():
+		var op: Array = replay.pop_front()
+		match op[0]:
+			"w":
+				if not ctrl(op[1]).is_empty():
+					g.do_wrench(ctrl(op[1]))
+			"h":
+				if not ctrl(op[1]).is_empty():
+					g.do_hose(ctrl(op[1]))
+			"o":
+				if g.world.rooms.has(op[1]):
+					_open_room(op[1], op[2])
+			"g":
+				var gp = g.world.tag(op[1])
+				if gp != null:
+					for j in g.world.joints_of(gp):
+						g.world.kill_joint(j)
+		_note("remembered %s" % str(op))
+		return
+	Engine.time_scale = fast
+	if g.sys.time >= replay_wait:
+		Engine.time_scale = 1.0
+		_note("remembered order done at t=%.1f s sim" % g.sys.time)
+		_go_strip()
 
 
 func _work(sec: float) -> void:
@@ -91,6 +139,8 @@ func step() -> bool:
 		"prep":
 			if careless:
 				_go_strip()
+			elif replay != null:
+				_replay()
 			else:
 				_prep()
 		"strip":
@@ -120,13 +170,14 @@ func _prep() -> void:
 			if gp != null:
 				for j in w.joints_of(gp):
 					w.kill_joint(j)
+				rec.append(["g", gd])
 				_note("guard %s off" % gd)
 				_work(2.5)
 			return
 	# dead legs: the valve between a test port and its room opens first
 	for gv in s.gas_valves:
 		if not s.on(gv.ctrl) and not _hidden(gv.ctrl) and _once("valve " + gv.ctrl):
-			g.do_wrench(ctrl(gv.ctrl))
+			_w(gv.ctrl)
 			_note("open %s" % gv.ctrl)
 			_work(2.5)
 			return
@@ -145,7 +196,7 @@ func _prep() -> void:
 			want = vk != "" and s.fluid(vk) > 0.015
 		if want:
 			done_ops["hose " + id] = true
-			g.do_hose(ctrl(id))
+			_h(id)
 			_note("hose %s" % id)
 			_work(2.5)
 			return
@@ -153,19 +204,19 @@ func _prep() -> void:
 	for tg in s.src_order:
 		var src: Dictionary = s.src[tg]
 		if src.has("switch") and s.on(src.switch) and not _hidden(src.switch) and _once("sw " + src.switch):
-			g.do_wrench(ctrl(src.switch))
+			_w(src.switch)
 			_note("switch %s off" % src.switch)
 			_work(2.5)
 			return
 		if src.has("remote") and src.running and not _hidden(src.remote) and _once("remote " + src.remote):
-			g.do_wrench(ctrl(src.remote))
+			_w(src.remote)
 			_note("remote stop %s" % src.remote)
 			_work(2.5)
 			return
 	for tg in s.iso:
 		var sw: String = s.iso[tg].get("switch", "")
 		if sw != "" and s.on(sw) and not _hidden(sw) and _once("iso " + sw):
-			g.do_wrench(ctrl(sw))
+			_w(sw)
 			_note("own supply %s off" % sw)
 			_work(2.5)
 			return
@@ -176,7 +227,7 @@ func _prep() -> void:
 	for tg in s.src_order:
 		var src: Dictionary = s.src[tg]
 		if src.kind == "cap" and src.has("discharge") and src.charge > 0.02 and not fed and not s.on(src.discharge) and not _hidden(src.discharge):
-			g.do_wrench(ctrl(src.discharge))
+			_w(src.discharge)
 			_note("discharge %s" % src.discharge)
 			_work(2.5)
 			return
@@ -195,7 +246,7 @@ func _prep() -> void:
 				_open_room(lc.hidden_room, src.local)
 			return
 		if _once("local " + src.local):
-			g.do_wrench(ctrl(src.local))
+			_w(src.local)
 			_note("local stop %s" % src.local)
 			_work(2.5)
 			return
@@ -213,6 +264,7 @@ func _prep() -> void:
 			forced += 1
 		Engine.time_scale = 1.0
 		_note("safe at t=%.1f s sim" % s.time)
+		safe_at = s.time
 		_go_strip()
 
 
@@ -264,6 +316,8 @@ func _cond_ok(until: Dictionary) -> bool:
 # opens a room the way the ship's procedure does it (its cuts), or by force
 func _open_room(room: String, for_ctrl: String) -> void:
 	var w = g.world
+	if replay == null:
+		rec.append(["o", room, for_ctrl])
 	for k in g.ship.get("procedures", {}):
 		var steps: Array = g.ship.procedures[k]
 		var cuts: Array = []

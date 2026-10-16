@@ -173,8 +173,8 @@ func start_ending(early: bool) -> void:
 	]
 	if g.income_rest > 0.0:
 		end_rows.append(["e_rest", g.income_rest])
-	if g.standard_time() > 0.0:
-		end_rows.append(["e_bonus", g.bonus()])
+	for b in g.bonuses():
+		end_rows.append(b)
 
 
 # the career's books after this contract: [label key, amount, kind]
@@ -630,8 +630,13 @@ func _contract_panel() -> void:
 	var ph := by0 - y + 80.0 + lrow + (56.0 if g.scope() != "full" else 0.0)
 	UI.panel(c, Rect2(x - 18, y - 30, 340, ph), 0.82)
 	_text(g.txt("contract") + " " + g.ship.get("contract", ""), Vector2(x, y), 13, Pal.ink(0.5), font)
+	var kinds: Array = []
 	if g.scope() != "full":
-		_text(g.txt("sc_" + g.scope()), Vector2(x + 300, y), 13, Pal.heat(0.95, 1.2), font_b, 1)
+		kinds.append(g.txt("sc_" + g.scope()))
+	if g.goal() != "":
+		kinds.append(g.txt("goal_" + g.goal()))
+	if not kinds.is_empty():
+		_text(" · ".join(kinds), Vector2(x + 300, y), 13, Pal.heat(0.95, 1.2), font_b, 1)
 	_text(g.ship_title(), Vector2(x, y + 24), 20, Pal.ink(0.95), font_b)
 	# mandatory items
 	var items: Array = g.mandatory_items()
@@ -1196,6 +1201,8 @@ func _offer_rows() -> Array:
 	rows.append(["li", g.txt("c_req3_n") % Pal.money(float(o.get("value", 0.0))), 16])
 	if o.get("scope", "full") == "full":
 		rows.append(["li", g.txt("c_req4"), 16])
+	if Market.goal_text(o) != "":
+		rows.append(["li", Market.goal_text(o), 16])
 	rows.append(["gap", "", 10])
 	rows.append(["h", g.txt("tm_reason"), 13])
 	rows.append(["p", Copy.slot(o.get("reason", "")), 15])

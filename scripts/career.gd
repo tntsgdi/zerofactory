@@ -11,6 +11,7 @@ const LOAN_START := 300000.0
 const INSTALLMENT := 20000.0      # taken at every settlement
 const INTEREST := 0.02            # of the principal still owed, every settlement
 const BONUS := 0.2                # of the net profit, finished within the standard time
+const FAST_BONUS := 0.35          # the same on a fast-recovery job (its standard time is a quarter shorter)
 const FIRST := "GR-001"           # the hand-made Heron; the market opens after it
 # The fixed contracts a new berth works through, in order, before the market
 # opens (design/体验打磨定案.md: training → the work tug → S-09 Swift → GR-001).
@@ -288,10 +289,10 @@ static func file_notes(ship: String, verified: Dictionary) -> void:
 
 # the time bonus: +20% of a positive net profit within the standard time,
 # falling off in a straight line to nothing at twice the standard time
-static func time_bonus(net: float, secs: float, standard: float) -> float:
+static func time_bonus(net: float, secs: float, standard: float, share: float = BONUS) -> float:
 	if standard <= 0.0 or net <= 0.0:
 		return 0.0
-	return snappedf(net * BONUS * clampf((2.0 * standard - secs) / standard, 0.0, 1.0), 1.0)
+	return snappedf(net * share * clampf((2.0 * standard - secs) / standard, 0.0, 1.0), 1.0)
 
 
 # pay off part of the loan from funds now; returns what was paid
@@ -378,7 +379,8 @@ static func settle(r: Dictionary) -> Dictionary:
 	for k in used:
 		data.items[k] = maxi(0, int(data.items.get(k, 0)) - int(used[k]))
 	data.history.append({"id": a.get("id", "?"), "ship": a.get("ship", "gr7"), "net": gross - fee, "rate": r.get("rate", 0.0),
-		"grade": grade, "time": r.get("time", 0.0), "stars": a.get("stars", 0), "bonus": bonus, "loan": data.loan, "ops": r.get("ops", {})})
+		"grade": grade, "time": r.get("time", 0.0), "stars": a.get("stars", 0), "bonus": bonus, "loan": data.loan, "ops": r.get("ops", {}),
+		"goal": a.get("goal", ""), "scope": a.get("scope", "full"), "bonuses": r.get("bonuses", []), "incidents": r.get("incidents", []), "time_by": r.get("time_by", {})})
 	# the opening contracts follow one another; the market opens after the last of them
 	var oi: int = int(a.get("opening", -1))
 	data.active = opening(oi + 1) if oi >= 0 and oi + 1 < OPENING.size() else {}

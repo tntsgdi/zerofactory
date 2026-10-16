@@ -41,6 +41,7 @@ static func make(base: Dictionary, job: Dictionary) -> Dictionary:
 		Traps.apply(d, t, rng, notes)
 	revalue(d)
 	_scope(d, job)
+	_goal(d, job)
 	d.variant = {"seed": int(job.get("variant", 0)), "traps": traps.duplicate(), "notes": notes, "targets": d.get("variant_targets", {})}
 	d.erase("variant_targets")
 	return d
@@ -265,6 +266,20 @@ static func _scope(d: Dictionary, job: Dictionary) -> void:
 				total += float(pd.get("value", 0.0)) if pd.get("cls", "") == "equip" else _mass(pd) * price
 	d.value.total = snappedf(total, 1.0)
 	d.scope = {"kind": kind, "tags": picked, "pay": pay, "boundary": AFT_X if kind == "section" else -1.0}
+
+
+# a valuable-equipment job names two more pieces: the most valuable whole, safe equipment in scope
+static func _goal(d: Dictionary, job: Dictionary) -> void:
+	if job.get("goal", "") != "valuable" or job.get("scope", "full") == "rescue":
+		return
+	var pool: Array = []
+	for pd in d.pieces:
+		if pd.get("cls", "") == "equip" and pd.get("scope", true) and not pd.get("mandatory", false) and pd.get("tag", "") != "" \
+				and pd.get("hazard", "") == "" and float(pd.get("mass", 0.0)) <= 3.0 and float(pd.get("cond", 1.0)) >= 0.99:
+			pool.append(pd)
+	pool.sort_custom(func(x, y): return float(x.get("value", 0.0)) > float(y.get("value", 0.0)))
+	for pd in pool.slice(0, 2):
+		pd.mandatory = true
 
 
 static func _cx(pd: Dictionary) -> float:

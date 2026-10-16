@@ -99,8 +99,8 @@ func _run() -> void:
 	check(r1.sum.ended and r1.sum.incidents == 0, "GR-001 taken apart safely")
 	var cr: Dictionary = g1.career_result
 	check(not cr.is_empty() and not cr.prepaid and int(Career.data.done) == 1 and Career.data.market, "GR-001 settled with the career; the market opens")
-	var expect_money: float = r1.sum.net - cr.installment - cr.interest
-	check(absf(float(Career.data.money) - expect_money) < 1.0, "funds = net %d − installment %d − interest %d = %d (%d)" % [r1.sum.net, cr.installment, cr.interest, expect_money, Career.data.money])
+	var expect_money: float = r1.sum.net + cr.bonus - cr.installment - cr.interest
+	check(absf(float(Career.data.money) - expect_money) < 1.0, "funds = net %d + bonuses %d − installment %d − interest %d = %d (%d)" % [r1.sum.net, cr.bonus, cr.installment, cr.interest, expect_money, Career.data.money])
 	check(absf(float(Career.data.loan) - (Career.LOAN_START - cr.installment)) < 1.0, "loan down by one installment: %d" % Career.data.loan)
 	g1.queue_free()
 	await _frames(2)

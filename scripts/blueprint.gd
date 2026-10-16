@@ -20,6 +20,7 @@ var x1 := 46.0 * 48.0
 var y_top := -4.0 * 48.0
 # "my engineering notes": what earlier ships of this type showed the operator's own hands
 var notes: Dictionary = {}
+var start_fix := {}         # tag -> fixings each noted piece had when the contract began
 var note_polys: Array = []   # [poly, tag, info]
 var note_runs: Array = []    # [path, id]
 var note_points: Array = []  # [pos, text]
@@ -88,6 +89,9 @@ func snapshot() -> void:
 		var p = w.tag(tg)
 		if p != null:
 			note_polys.append([p.poly, tg, notes.pieces[tg]])
+		var live = game.world.tag(tg)
+		if live != null:
+			start_fix[tg] = game.world.joints_of(live).size()
 	for id in notes.get("lines", {}):
 		if w.lines.has(id):
 			var l = w.lines[id]
@@ -99,10 +103,10 @@ func snapshot() -> void:
 			note_runs.append([path, id.to_upper(), notes.lines[id]])
 	for id in notes.get("ports", {}):
 		if w.ctrls.has(id):
-			note_points.append([w.ctrl_world(w.ctrls[id]), "✓ %s → %s" % [id, notes.ports[id]]])
+			note_points.append([w.ctrl_world(w.ctrls[id]), "✓ %s → %s" % [id, notes.ports[id]], id])
 	for id in notes.get("ctrls", {}):
 		if w.ctrls.has(id) and not notes.get("ports", {}).has(id):
-			note_points.append([w.ctrl_world(w.ctrls[id]), "✓ " + id])
+			note_points.append([w.ctrl_world(w.ctrls[id]), "✓ " + id, id])
 	w.free()
 
 
@@ -112,6 +116,19 @@ func toggle() -> void:
 	if on and has_notes() and not notes_said:
 		notes_said = true
 		Copy.say(game.radio, "L_notes_first")
+
+
+# has the thing a note is about changed on this ship since the contract began?
+#   a piece: lost a fixing, been cut, or come loose; a line: cut; a control: operated
+func note_void(key: String) -> bool:
+	if game.changed.has(key):
+		return true
+	if key.begins_with("p:"):
+		var p = game.world.tag(key.substr(2))
+		if p == null or p.gone:
+			return true
+		return game.world.joints_of(p).size() < int(start_fix.get(key.substr(2), 0)) or not p.intact or not p.heat.is_empty() or p.body != null
+	return false
 
 
 func has_notes() -> bool:
@@ -241,25 +258,31 @@ func _draw() -> void:
 # what my own hands checked on earlier ships of the type: solid, warm, ticked
 func _draw_notes(lw: float, a: float) -> void:
 	var nc := Color(1.0, 0.78, 0.45, 0.85 * a)
+	# a note on something that has changed on this ship since the contract began is void
+	var vc := Color(nc.r, nc.g, nc.b, nc.a * 0.35)
+	var void_s: String = "  · " + game.txt("nt_void")
 	for np in note_polys:
 		var poly: PackedVector2Array = np[0]
 		var cl := poly.duplicate()
 		cl.append(poly[0])
-		draw_polyline(cl, nc, lw * 1.6, true)
+		var dead := note_void("p:" + np[1])
+		draw_polyline(cl, vc if dead else nc, lw * 1.6, true)
 		var info = np[2]
 		var txt: String = "✓ " + np[1]
 		if info is Dictionary and info.has("fix"):
 			txt += "  " + str(info.fix)
-		_label(Geom.bbox(poly).end + Vector2(2, 0), txt, 12, nc)
+		_label(Geom.bbox(poly).end + Vector2(2, 0), txt + (void_s if dead else ""), 12, vc if dead else nc)
 	for r in note_runs:
-		draw_polyline(r[0], nc, lw * 2.2, true)
+		var dead2 := note_void("l:" + r[1].to_lower())
+		draw_polyline(r[0], vc if dead2 else nc, lw * 2.2, true)
 		var ends = r[2]
 		var txt2: String = "✓ " + r[1]
 		if ends is Array and ends.size() == 2:
 			txt2 += "  %s → %s" % [ends[0], ends[1]]
-		_label(r[0][r[0].size() / 2], txt2, 12, nc, Vector2(4, 14))
+		_label(r[0][r[0].size() / 2], txt2 + (void_s if dead2 else ""), 12, vc if dead2 else nc, Vector2(4, 14))
 	for p in note_points:
-		_point_label(p[0], p[1], nc)
+		var dead3 := note_void("c:" + p[2])
+		_point_label(p[0], p[1] + (void_s if dead3 else ""), vc if dead3 else nc)
 	# the panel: how much is in the notes, and that none of it is about this ship's accident
 	var rows := notes_rows()
 	var at := Vector2(x0 + 2.0 * 48.0, y_top - 4.8 * 48.0)

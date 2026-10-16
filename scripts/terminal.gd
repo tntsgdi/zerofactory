@@ -804,6 +804,8 @@ func _market(s: Vector2, a: float) -> void:
 		_thumb(o, Rect2(x, y + 222, w, 92), row_k.call(2))
 		var task := Market.scope_text(o) if scope != "full" else Txt.t("tm_task_full")
 		c_wrap(task, Vector2(x, y + 340), w, 15, Pal.ink(0.88 * row_k.call(3)))
+		if Market.goal_text(o) != "":
+			_text(Market.goal_text(o), Vector2(x, y + 386), 13, Pal.tint(Pal.FLUID, 0.9 * row_k.call(3), 1.1), font_b)
 		# 4 · the money, line by line
 		var due := Career.due_for(o)
 		var lines := [
@@ -812,12 +814,12 @@ func _market(s: Vector2, a: float) -> void:
 			[Txt.t("tm_due_c"), "−" + Pal.money(due)],
 		]
 		for j in lines.size():
-			var yy := y + 400 + j * 26
+			var yy := y + 414 + j * 26
 			var jk: float = row_k.call(4 + j)
 			_text(lines[j][0], Vector2(x, yy), 14, Pal.ink(0.6 * jk), font)
 			_text(lines[j][1], Vector2(r.end.x - 28, yy), 15, Pal.ink(0.85 * jk), font_b, 1)
 		if float(Career.data.money) < float(o.fee):
-			_text(Txt.t("tm_borrow") % Pal.money(float(o.fee) - float(Career.data.money)), Vector2(x, y + 478), 13, Pal.heat(0.9 * k, 1.1), font)
+			_text(Txt.t("tm_borrow") % Pal.money(float(o.fee) - float(Career.data.money)), Vector2(x, y + 490), 13, Pal.heat(0.9 * k, 1.1), font)
 		# 5 · the paperwork: why it was scrapped, what the logs say, what is declared
 		var pk: float = row_k.call(8)
 		draw_line(Vector2(x, y + 496), Vector2(x + w, y + 496), Pal.ink(0.1 * pk), 1.0)

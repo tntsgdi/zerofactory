@@ -101,6 +101,9 @@ var devalued: Array = []     # [reason key, tag, amount]: value knocked off what
 var mandatory_lost := {}     # tag -> reason key: a named piece that can no longer be delivered whole
 var income_rest := 0.0       # an early end: what was left, taken as scrap at a discount
 var mandatory_ok := {}     # tag -> recovered intact into the equipment bay
+var time_by := {}           # where the contract's time went (V2 2.9): measure cut maintain haul fly wait menu
+var changed := {}           # what has changed on site since the contract began: "l:q1", "c:K-G" (old notes on it are void)
+var must_value := {}         # named pieces delivered whole: tag -> value (for the named-equipment bonus)
 var incidents: Array = []  # [playtime, kind, detail]: what went wrong and when (the accident review reads it)
 var _mand: Array = []
 var _mand_zh := -1
@@ -400,6 +403,8 @@ func _process(dt: float) -> void:
 			autosave_t = 0.0
 			SaveGame.save(self)
 			hud.toast_saved()
+	if state == "play" and bot == null:
+		_account(dt, rdt)
 	_read_input()
 	var dev_warp: bool = Txt.dev and DevPanel.warp and bot == null
 	var want_warp: bool = state == "play" and not menu_open and (Keys.down("warp") or dev_warp or (bot != null and bot.get("warp", false)))
@@ -427,6 +432,24 @@ func _process(dt: float) -> void:
 	elif slowmo > 0.0:
 		slowmo -= rdt
 		Engine.time_scale = 0.28 if slowmo > 0.0 else (_warp_k() if warp else 1.0)
+
+
+# one frame of the contract, booked to what the operator was doing
+func _account(dt: float, rdt: float) -> void:
+	var k := "wait"
+	var sec := dt
+	if menu_open or contract_open or (blueprint != null and blueprint.on):
+		k = "menu"
+		sec = rdt
+	elif tools.cutting:
+		k = "cut"
+	elif tools.held_body != null or tools.held_piece != null:
+		k = "haul"
+	elif not tools.job.is_empty():
+		k = "measure" if tools.job.kind == "measure" else "maintain"
+	elif drone.alive and drone.linear_velocity.length() > 20.0:
+		k = "fly"
+	time_by[k] = float(time_by.get(k, 0.0)) + sec
 
 
 func _warp_k() -> float:
@@ -777,7 +800,11 @@ func finish_contract(early: bool) -> void:
 
 # what the career needs to know about how this contract went
 func settle_report() -> Dictionary:
-	return {"earned": earned(), "losses": losses, "rate": recovery_rate(), "grade": hud.grade(), "time": playtime, "fee": fee, "bonus": bonus(), "used": used, "ops": ops}
+	var tb := {}
+	for k in time_by:
+		tb[k] = snappedf(float(time_by[k]), 0.1)
+	return {"earned": earned(), "losses": losses, "rate": recovery_rate(), "grade": hud.grade(), "time": playtime, "fee": fee, "bonus": bonus(), "used": used, "ops": ops,
+		"bonuses": bonuses(), "incidents": incidents.duplicate(true), "time_by": tb}
 
 
 # the contract's standard time (0: none, like the first contract)
@@ -785,8 +812,44 @@ func standard_time() -> float:
 	return float(job.get("time", 0.0))
 
 
+# what the contract pays on top of the books (V2 2.2 / 2.6): [label key, amount]
+#   time     finished within the standard time (a fast job pays a bigger share)
+#   rate     the recovery rate reached 70 / 80 / 92 %
+#   named    each named piece of equipment delivered whole (a rescue pays per piece already)
+#   safe     a safe-recovery job with no incident at all
+func bonuses() -> Array:
+	if not career() or training or exam != null:
+		return []
+	var out: Array = []
+	var g: String = goal()
+	if standard_time() > 0.0:
+		out.append(["e_bonus", Career.time_bonus(net(), playtime, standard_time(), Career.FAST_BONUS if g == "fast" else Career.BONUS)])
+	var r := recovery_rate()
+	for th in RATE_BONUS:
+		if r >= th[0]:
+			out.append(["e_rate_bonus", snappedf(earned() * th[1], 1.0)])
+			break
+	if scope() != "rescue":
+		var named := 0.0
+		for tg in must_value:
+			named += maxf(MUST_MIN, float(must_value[tg]) * (MUST_VALUABLE if g == "valuable" else MUST_SHARE))
+		if named > 0.0:
+			out.append(["e_must_bonus", snappedf(named, 1.0)])
+	if g == "safe" and incidents.is_empty():
+		out.append(["e_safe_bonus", snappedf(earned() * SAFE_SHARE, 1.0)])
+	return out
+
+
 func bonus() -> float:
-	return Career.time_bonus(net(), playtime, standard_time())
+	var sum := 0.0
+	for b in bonuses():
+		sum += float(b[1])
+	return sum
+
+
+# the order's goal on top of its scope: "safe", "fast", "valuable" (or none, like the opening contracts)
+func goal() -> String:
+	return job.get("goal", "")
 
 
 func career() -> bool:
@@ -1064,6 +1127,7 @@ func on_swallowed(b, zone: String) -> void:
 			verify("pieces", p.tag, {"to": zone})
 		if zone == "equip" and p.intact and p.cls == "equip" and p.mandatory:
 			mandatory_ok[p.tag] = true
+			must_value[p.tag] = float(p.value)
 		elif p.mandatory and p.cls == "equip":
 			mandatory_gone(p, "mg_wrong_mouth")
 		if story != null and p.intact:
@@ -1505,6 +1569,7 @@ func leak_pos(lk: Dictionary) -> Vector2:
 
 
 func on_line_cut(l, at: Vector2) -> void:
+	changed["l:" + l.id] = true
 	if l.kind == "cable":
 		var volts: float = sys.line_volts(l) if l.id != "" else 0.0
 		# line_volts reads alive lines; it has just been cut, so ask about the source side
@@ -1932,6 +1997,8 @@ func has_upgrade(id: String) -> bool:
 
 
 func do_wrench(tg: Dictionary) -> void:
+	if tg.get("kind", "") == "ctrl" and tg.has("ctrl"):
+		changed["c:" + tg.ctrl.id] = true
 	# the training interlock looks at what the wrench is about to undo
 	if tutorial != null:
 		var on_piece = null
@@ -2208,6 +2275,11 @@ func _age_messages(dt: float) -> void:
 
 
 # how the controls work: these stay on in the standard tier
+const RATE_BONUS := [[0.92, 0.07], [0.80, 0.04], [0.70, 0.02]]   # recovery rate -> share of what was earned
+const MUST_SHARE := 0.10        # a named piece delivered whole: this share of its value...
+const MUST_VALUABLE := 0.30     # ...or this, on a valuable-equipment job
+const MUST_MIN := 500.0
+const SAFE_SHARE := 0.08        # a safe-recovery job with no incident: this share of what was earned
 const UI_HINTS := ["field", "hose", "measured", "drone_lost", "free_body", "equip_cut"]
 var hint_log: Array = []
 
