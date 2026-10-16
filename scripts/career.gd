@@ -11,7 +11,16 @@ const LOAN_START := 300000.0
 const INSTALLMENT := 20000.0      # taken at every settlement
 const INTEREST := 0.02            # of the principal still owed, every settlement
 const BONUS := 0.2                # of the net profit, finished within the standard time
-const FIRST := "GR-001"           # the first contract is the hand-made Heron
+const FIRST := "GR-001"           # the hand-made Heron; the market opens after it
+# The fixed contracts a new berth works through, in order, before the market
+# opens (design/体验打磨定案.md: training → the work tug → S-09 Swift → GR-001).
+# The tug and the Swift go in front of GR-001 here once their designs are
+# approved and their ship files exist:
+#   {"id": "TUG-001", "ship": "tug", "fee": 0.0, "intro": "L_tug_in"},
+#   {"id": "S09-001", "ship": "s09", "fee": 0.0, "intro": "L_swift_in"},
+const OPENING := [
+	{"id": FIRST, "ship": "gr7", "first": true, "fee": 9000.0},
+]
 # reputation points per settlement grade (fail, pass, good, excellent) and the levels
 const REP_GAIN := [-1, 1, 2, 3]
 const LEVELS := [["trainee", 0], ["certified", 6], ["senior", 16], ["chief", 30]]
@@ -92,7 +101,7 @@ static func fresh() -> Dictionary:
 		"done": 0,
 		"history": [],
 		"offers": [],
-		"active": {"id": FIRST, "ship": "gr7", "first": true, "fee": 9000.0, "fee_paid": false},
+		"active": opening(0),
 		"market": false,           # opens once the first contract is done
 		"seed": randi(),
 		"archive": {},
@@ -129,10 +138,30 @@ static func _normalize() -> void:
 		var b: Dictionary = data.get(bag, {})
 		for k in b:
 			b[k] = int(b[k])
+	# counts and tallies (stock, kit, the desk's log, the archive) are whole, wherever they sit
+	var act: Dictionary = data.get("active", {})
+	for k in ["items", "kit", "desk", "notes"]:
+		if act.has(k):
+			act[k] = _whole(act[k])
+	for k in ["desk", "archive"]:
+		if data.has(k):
+			data[k] = _whole(data[k])
 	for o in data.get("offers", []) + [data.get("active", {})]:
 		for k in ["stars", "variant"]:
 			if o.has(k):
 				o[k] = int(o[k])
+
+
+static func _whole(v):
+	if v is float and v == floorf(v) and absf(v) < 1e15:
+		return int(v)
+	if v is Dictionary:
+		for k in v:
+			v[k] = _whole(v[k])
+	elif v is Array:
+		for i in v.size():
+			v[i] = _whole(v[i])
+	return v
 
 
 # a new career: the old one is kept beside it as .old
@@ -257,6 +286,16 @@ static func _paid_off() -> bool:
 	return true
 
 
+# the i-th opening contract, ready to play ({} past the last)
+static func opening(i: int) -> Dictionary:
+	if i < 0 or i >= OPENING.size():
+		return {}
+	var o: Dictionary = OPENING[i].duplicate(true)
+	o.opening = i
+	o.fee_paid = false
+	return o
+
+
 # A short job on part of a ship carries the installment and interest in
 # proportion to its standard time against a full contract's (never under 30%).
 static func due_share(job: Dictionary) -> float:
@@ -308,10 +347,12 @@ static func settle(r: Dictionary) -> Dictionary:
 	var used: Dictionary = r.get("used", {})
 	for k in used:
 		data.items[k] = maxi(0, int(data.items.get(k, 0)) - int(used[k]))
-	data.market = true
 	data.history.append({"id": a.get("id", "?"), "ship": a.get("ship", "gr7"), "net": gross - fee, "rate": r.get("rate", 0.0),
 		"grade": grade, "time": r.get("time", 0.0), "stars": a.get("stars", 0), "bonus": bonus, "loan": data.loan, "ops": r.get("ops", {})})
-	data.active = {}
+	# the opening contracts follow one another; the market opens after the last of them
+	var oi: int = int(a.get("opening", -1))
+	data.active = opening(oi + 1) if oi >= 0 and oi + 1 < OPENING.size() else {}
+	data.market = data.active.is_empty()
 	data.offers = []
 	var paid_off := _paid_off()
 	save()

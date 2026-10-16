@@ -37,6 +37,9 @@ func _initialize() -> void:
 				for t in o.traps:
 					if Traps.TIER[t] == 1 and Market.level_index(rep) < 1:
 						bad.append("subtle trap %s at %s" % [t, lv])
+				# value and fee by risk: whole-ship contracts only (a part-ship job is smaller by design)
+				if o.get("scope", "full") != "full":
+					continue
 				if not by_star.has(st):
 					by_star[st] = {"n": 0, "traps": 0.0, "value": 0.0, "fee": 0.0}
 				var b: Dictionary = by_star[st]

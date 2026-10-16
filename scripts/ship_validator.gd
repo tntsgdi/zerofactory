@@ -442,11 +442,14 @@ static func _settle(d: Dictionary, w, bad: Array) -> void:
 	# part of a ship: only what is inside the scope is paid, gas and fluids not at all
 	if d.has("scope"):
 		sum = 0.0
-		for id in w.order:
-			var p = w.pieces[id]
-			if p.scope:
-				sum += p.value if p.cls == "equip" else p.mass * w.metal_price
-		sum *= float(d.scope.get("premium", 1.0))
+		if d.scope.kind == "rescue":
+			for tg in d.scope.get("pay", {}):
+				sum += float(d.scope.pay[tg])
+		else:
+			for id in w.order:
+				var p = w.pieces[id]
+				if p.scope:
+					sum += p.value if p.cls == "equip" else p.mass * w.metal_price
 	if absf(sum - total) > total * 0.05:
 		bad.append("parts add up to $%d but the contract is worth $%d" % [int(sum), int(total)])
 	if w.structural_mass <= 0.0:

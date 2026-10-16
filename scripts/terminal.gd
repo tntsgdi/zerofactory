@@ -668,7 +668,8 @@ func _tabs(a: float) -> void:
 
 func _top(s: Vector2, a: float) -> void:
 	var d := Career.data
-	_text("BERTH 07  ·  CHARON-DISPATCH", Vector2(60, 56), 13, Pal.ink(0.4 * a), font)
+	var company: String = str(Career.data.get("company", ""))
+	_text((company if company != "" else "BERTH 07") + "  ·  CHARON-DISPATCH", Vector2(60, 56), 13, Pal.ink(0.55 * a), font)
 	_text(Txt.t("tm_title"), Vector2(60, 94), 30, Pal.ink(0.92 * a), font_l)
 	var loan_c := Pal.heat(0.9 * a, 1.0) if float(d.loan) > 0.0 else Pal.ink(0.95 * a)
 	var mc := Pal.ink(0.95 * a).lerp(Pal.ink(1.0 * a, 1.5) if money_flash > 0.0 else Pal.heat(a, 1.4), absf(money_flash))
@@ -837,10 +838,9 @@ func _thumb(o: Dictionary, r: Rect2, a: float) -> void:
 	draw_rect(r, Color(0, 0, 0, 0.25 * a))
 	# the part the contract buys, shaded
 	match o.get("scope", "full"):
-		"aft":
+		"section":
 			draw_rect(Rect2(P.call(Vector2(Variant.AFT_X, -4.0)), Vector2((L - Variant.AFT_X) * sc, 8.0 * sc)), Pal.heat(0.16 * a, 1.0))
-		"hold":
-			draw_rect(Rect2(P.call(Vector2(10.15, -3.55)), Vector2(16.7 * sc, 6.5 * sc)), Pal.heat(0.16 * a, 1.0))
+			draw_dashed_line(P.call(Vector2(Variant.AFT_X, -4.4)), P.call(Vector2(Variant.AFT_X, 4.4)), Pal.heat(0.9 * a, 1.2), 1.4, 5.0)
 	var hull := PackedVector2Array()
 	for v in [Vector2(0.2, 0.5), Vector2(0.9, -1.6), Vector2(2.4, -3.3), Vector2(4.6, -4.0), Vector2(33.0, -4.0), Vector2(33.0, -3.1), Vector2(40.6, -3.1), Vector2(40.6, 3.1), Vector2(33.0, 3.1), Vector2(33.0, 4.0), Vector2(4.6, 4.0), Vector2(2.4, 3.4), Vector2(0.8, 2.2), Vector2(0.2, 0.5)]:
 		hull.append(P.call(v))

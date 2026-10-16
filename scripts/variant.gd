@@ -206,19 +206,19 @@ static func revalue(d: Dictionary) -> void:
 
 # ---------------------------------------------------------------- contract scope
 
-# Not every contract is the whole ship. "aft": only what is aft of frame 27
-# (rooms D, E, the engines and the hull around them). "rescue": three named
-# pieces of equipment, delivered whole; done when they are in. "hold": what
-# is in the cargo hold, against a hard time limit. Pieces outside the scope
-# stay where they are as far as the owner is concerned: nothing is paid for
-# them. The hull itself never changes; only what is bought.
-const SCOPES := ["full", "aft", "rescue", "hold"]
-const AFT_X := 27.0                 # m, frame 27
-const HOLD_LIMIT := 10.0 * 60.0     # s
-# a short job pays a premium on what it buys (the owner wants it fast): enough
-# to bring it to about 30% of the whole ship's value, within these bounds
-const PREMIUM := {"aft": [1.0, 1.0], "rescue": [1.0, 2.5], "hold": [1.0, 3.5]}
-const SHORT_SHARE := 0.3
+# Not every contract is the whole ship (design/体验打磨定案.md, section 4).
+# "section": only the aft section, behind frame 27 (rooms D, E, the engines
+# and the hull round them). The rest of the ship may be moved, but a piece
+# from outside the section that is taken away or cut costs a breach penalty.
+# "rescue": three named pieces of equipment, each paid a fixed fee when it
+# arrives whole at the equipment mouth; done when all three are in; the rest
+# of the hull is not the berth's (the tug takes it away). The hull itself
+# never changes; only what is bought.
+const SCOPES := ["full", "section", "rescue"]
+const AFT_X := 27.0                 # m, frame 27: the section boundary
+const RESCUE_PAY := 1.2             # a rescued piece pays its value × this, whatever its condition
+const BREACH_CUT := 0.5             # cutting into whole equipment outside the section: half its value
+const BREACH_CUT_METAL := 300.0     # cutting into structure outside the section, per piece cut
 
 
 static func _scope(d: Dictionary, job: Dictionary) -> void:
@@ -234,14 +234,11 @@ static func _scope(d: Dictionary, job: Dictionary) -> void:
 	var price: float = float(d.value.get("metal", 12000.0)) / maxf(1.0, metal_m)
 	var keep := {}
 	var picked: Array = []
+	var pay := {}
 	match kind:
-		"aft":
+		"section":
 			for pd in d.pieces:
 				if _cx(pd) > AFT_X:
-					keep[pd.key] = true
-		"hold":
-			for pd in d.pieces:
-				if pd.get("room", "") == "C":
 					keep[pd.key] = true
 		"rescue":
 			var pool: Array = []
@@ -252,6 +249,7 @@ static func _scope(d: Dictionary, job: Dictionary) -> void:
 				var pd = pool.pop_at(rng.randi_range(0, pool.size() - 1))
 				keep[pd.key] = true
 				picked.append(pd.tag)
+				pay[pd.tag] = snappedf(float(pd.value) * RESCUE_PAY, 100.0)
 	var total := 0.0
 	for pd in d.pieces:
 		var inside: bool = keep.has(pd.key)
@@ -261,10 +259,12 @@ static func _scope(d: Dictionary, job: Dictionary) -> void:
 		elif kind == "rescue":
 			pd.mandatory = true
 		if inside:
-			total += float(pd.get("value", 0.0)) if pd.get("cls", "") == "equip" else _mass(pd) * price
-	var k: float = clampf(SHORT_SHARE * float(d.value.total) / maxf(1.0, total), PREMIUM[kind][0], PREMIUM[kind][1])
-	d.value.total = snappedf(total * k, 1.0)
-	d.scope = {"kind": kind, "limit": HOLD_LIMIT if kind == "hold" else 0.0, "tags": picked, "premium": k}
+			if kind == "rescue":
+				total += float(pay[pd.tag])
+			else:
+				total += float(pd.get("value", 0.0)) if pd.get("cls", "") == "equip" else _mass(pd) * price
+	d.value.total = snappedf(total, 1.0)
+	d.scope = {"kind": kind, "tags": picked, "pay": pay, "boundary": AFT_X if kind == "section" else -1.0}
 
 
 static func _cx(pd: Dictionary) -> float:

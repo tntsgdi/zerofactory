@@ -294,7 +294,7 @@ func _new_slot(i: int, company: String) -> void:
 		return
 	var nm := company.strip_edges()
 	if nm == "":
-		nm = Txt.t("t_company_default") % (i + 1)
+		nm = Txt.t("t_company_default")
 	_stop_naming()
 	Career.use_slot(i + 1)
 	Career.start_new()
@@ -420,7 +420,7 @@ func _draw_slots(s: Vector2, vk: float) -> void:
 		draw_string(font, Vector2(r.end.x - 28 - sw, r.position.y + 34), status, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.tint(Pal.AIR, 0.75 * e, 1.0))
 		var nm: String = d.get("company", "")
 		if nm == "":
-			nm = Txt.t("t_company_default") % (i + 1)
+			nm = Txt.t("t_company_default")
 		draw_string(font_l, Vector2(x, r.position.y + 82), nm, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 56, 30, Pal.ink(0.96 * e))
 		var lv := "trainee"
 		for l in Career.LEVELS:

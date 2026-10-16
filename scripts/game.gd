@@ -50,6 +50,7 @@ const OP_CAT := {
 }
 var ops := {}                # kind -> count
 var _measured := {}
+var done_t := 0.0
 var training := false        # the ship file is a training course, not a contract
 var tutorial: Tutorial
 var assist: Assist
@@ -359,12 +360,14 @@ func _process(dt: float) -> void:
 	state_t += rdt
 	if state == "play" and not menu_open:
 		playtime += dt
+		# the end is checked when something is delivered; once a second as well, for a
+		# last piece that went some other way (and for a contract loaded with nothing left)
+		done_t += rdt
+		if done_t > 1.0:
+			done_t = 0.0
+			_check_done()
 		if (training or career()) and not Career.data.is_empty() and Career.usable():
 			Career.data.time = float(Career.data.get("time", 0.0)) + rdt
-		if time_limit() > 0.0 and playtime >= time_limit() and not ended:
-			# the hold contract's hard stop: the berth's slot is over
-			say("sc_time_up", drone.global_position)
-			finish_contract(true)
 		if standard_time() > 0.0 and playtime > standard_time() and not hints_seen.has("late"):
 			hints_seen["late"] = true
 			Copy.say(radio, "L_late")
@@ -769,7 +772,11 @@ func leave() -> void:
 	# the screen closes on a heat line and the terminal opens out of it
 	hud.close_then(func():
 		get_tree().paused = false
-		get_tree().change_scene_to_file("res://scenes/terminal.tscn"))
+		# the next opening contract is towed straight in; after the last, the terminal
+		if not Career.active().is_empty():
+			Game.play_career(get_tree())
+		else:
+			get_tree().change_scene_to_file("res://scenes/terminal.tscn"))
 
 
 # the career's contract in hand (the first one after training), or the terminal when there is none
@@ -795,13 +802,34 @@ func earned() -> float:
 	return income_equip + income_metal + income_hazard + sys.gas_value() + sys.fluid_value()
 
 
-# "full" | "aft" | "rescue" | "hold" (Variant._scope)
+# "full" | "section" | "rescue" (Variant._scope)
 func scope() -> String:
 	return ship.get("scope", {}).get("kind", "full")
 
 
-func time_limit() -> float:
-	return float(ship.get("scope", {}).get("limit", 0.0))
+# a section contract's boundary (m), or -1
+func boundary() -> float:
+	return float(ship.get("scope", {}).get("boundary", -1.0))
+
+
+# what a piece would have fetched (whole equipment at its value and condition, the rest as scrap)
+func worth(p) -> float:
+	if p.cls == "equip" and p.intact:
+		return p.value * clampf(p.cond, 0.0, 1.0)
+	return p.mass * world.metal_price
+
+
+# taken from outside a section contract's section, or cut there: the breach is charged
+func breach(p, cut: bool, at: Vector2) -> void:
+	if scope() != "section" or p.scope:
+		return
+	var amount: float
+	if cut:
+		amount = worth(p) * Variant.BREACH_CUT if p.cls == "equip" and p.intact else Variant.BREACH_CUT_METAL
+	else:
+		amount = worth(p)
+	if amount > 0.5:
+		lose("loss_breach_cut" if cut else "loss_breach_take", snappedf(amount, 10.0), at)
 
 
 func recovery_rate() -> float:
@@ -842,7 +870,12 @@ func gain(kind: String, amount: float, at: Vector2, label: String) -> void:
 func piece_value(p, zone: String) -> float:
 	if not p.scope:
 		return 0.0
-	return _piece_value(p, zone) * float(ship.get("scope", {}).get("premium", 1.0))
+	# a rescue pays each named piece its fixed fee, whole at the equipment mouth, and nothing else
+	if scope() == "rescue":
+		if zone == "equip" and p.cls == "equip" and p.intact:
+			return float(ship.scope.get("pay", {}).get(p.tag, 0.0))
+		return 0.0
+	return _piece_value(p, zone)
 
 
 func _piece_value(p, zone: String) -> float:
@@ -924,6 +957,8 @@ func on_swallowed(b, zone: String) -> void:
 			sys.set_fluid(fv, 0.0)
 		if sys.src.has(p.tag) and sys.src[p.tag].kind == "cap":
 			sys.drain_source(p.tag)
+	for p in b.pieces:
+		breach(p, false, at)
 	var label := ", ".join(names) if not names.is_empty() else txt("scrap_metal")
 	if not b.pieces.any(func(p): return p.scope):
 		label = txt("sc_out")
@@ -1020,7 +1055,8 @@ func on_body_freed(b) -> void:
 		# tiny cut-offs go straight to the debris net
 		var vel: Vector2 = (b.global_position - SHIP_CENTER).normalized() * randf_range(60, 140)
 		for p in b.pieces:
-			dock.add_debris(world.world_poly(p), vel, p.mass * world.metal_price * float(ship.get("scope", {}).get("premium", 1.0)) if p.scope else 0.0)
+			dock.add_debris(world.world_poly(p), vel, p.mass * world.metal_price if p.scope and scope() != "rescue" else 0.0)
+			breach(p, false, world.frame(p) * Geom.centroid(p.poly))
 		world.remove_body(b)
 		sfx.play("debris")
 		return
@@ -1157,6 +1193,7 @@ func on_laser_blocked(p, pos: Vector2) -> void:
 
 
 func on_cut_into(p, pos: Vector2) -> void:
+	breach(p, true, pos)
 	if p.cls != "equip":
 		return
 	var was_value: float = p.value * p.cond

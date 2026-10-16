@@ -377,6 +377,7 @@ func _draw_hud() -> void:
 			_contract_panel()
 			c.draw_set_transform(Vector2.ZERO)
 		_overweight()
+		_boundary(s)
 		_haul_guide(s)
 		if g.warp:
 			_warp(s)
@@ -525,6 +526,23 @@ func _haul_guide(s: Vector2) -> void:
 	_text(lbl, lp, 15, col, font_b)
 
 
+# a section contract: the frame where the section starts, drawn across the ship
+func _boundary(s: Vector2) -> void:
+	var bx: float = game.boundary()
+	if bx < 0.0:
+		return
+	var top := to_screen(Vector2(bx, -5.6) * Geom.M)
+	var bot := to_screen(Vector2(bx, 5.2) * Geom.M)
+	if top.x < -40.0 or top.x > s.x + 40.0:
+		return
+	c.draw_dashed_line(top, bot, Pal.heat(0.85, 1.3), 2.0, 12.0)
+	var lbl: String = game.txt("sc_boundary")
+	c.draw_rect(Rect2(top + Vector2(8, -30), Vector2(_tw(lbl, 14, font_b) + 16, 26)), Color(0.02, 0.022, 0.026, 0.85))
+	_text(lbl, top + Vector2(16, -11), 14, Pal.heat(0.95, 1.2), font_b)
+	# the section side is lit, the other side carries the breach warning
+	_text("→", top + Vector2(-6, 20), 18, Pal.heat(0.9, 1.3), font_b, 0)
+
+
 func _zone_for(b) -> String:
 	var equip := false
 	var metal_m := 0.0
@@ -627,11 +645,6 @@ func _contract_panel() -> void:
 	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 13, Pal.ink(0.5), font)
 	if g.story != null and not g.story.items.is_empty():
 		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 13, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
-	elif g.time_limit() > 0.0:
-		# a hard stop: the clock runs down, and burns in the last minute
-		var left := maxf(0.0, g.time_limit() - g.playtime)
-		var hot := left < 60.0
-		_text(g.txt("sc_left") + " " + _clock(left), Vector2(x + 300, by + 36), 13 if hot else 12, Pal.heat(0.7 + 0.3 * sin(t * 8.0), 1.3) if hot else Pal.ink(0.55), font_b if hot else font, 1)
 	elif g.standard_time() > 0.0:
 		# the clock against the standard time: past it, the time bonus starts to shrink
 		var late: bool = g.playtime > g.standard_time()
