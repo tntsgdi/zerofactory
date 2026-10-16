@@ -953,9 +953,15 @@ func _settlement(s: Vector2) -> void:
 	if e < 0.0:
 		return
 	var a := clampf(e / 0.5, 0.0, 1.0)
-	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.5 * a))
+	c.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.62 * a))
 	var cx := s.x * 0.5
 	var y := s.y * 0.5 - 300.0
+	# the sheet the books are written on: it rises into place
+	var pk := Pal.ease_out(clampf(e / 0.45, 0.0, 1.0))
+	var sheet := Rect2(cx - 330, y - 50 + (1.0 - pk) * 40.0, 660, (850.0 if not career_rows().is_empty() else 720.0))
+	c.draw_rect(sheet, Color(0.022, 0.024, 0.029, 0.98 * pk))
+	c.draw_rect(sheet, Pal.ink(0.1 * pk), false, 1.0)
+	c.draw_rect(Rect2(sheet.position, Vector2(sheet.size.x * pk, 2)), Pal.heat(pk, 1.2))
 	_text(g.txt("e_done") if not end_early else g.txt("e_early"), Vector2(cx, y), 20, Pal.ink(0.7 * a), font, 0)
 	_text(g.txt("e_contract") + " " + g.ship.get("contract", "") + " · " + (g.txt("e_must_ok") if g.all_mandatory_ok() else g.txt("e_must_no")), Vector2(cx, y + 30), 14, Pal.ink(0.45 * a), font, 0)
 	# the big number rolls up
@@ -1006,7 +1012,7 @@ func _settlement(s: Vector2) -> void:
 	var te := e - 1.8
 	var traps: Array = g.job.get("traps", [])
 	if te > 0.0 and not traps.is_empty():
-		_trap_rows(traps, Vector2(cx + 380, ry + 40), te)
+		_trap_rows(traps, Vector2(cx + 380, ry + 10), te)
 	var ge := ne - 0.9
 	if ge > 0.0:
 		_stamp(Vector2(cx + 330, y + 100), ge)
@@ -1018,6 +1024,10 @@ func _settlement(s: Vector2) -> void:
 # the contract's signature traps: avoided or not, and the review note where one bit
 func _trap_rows(traps: Array, at: Vector2, e: float) -> void:
 	var a := clampf(e / 0.3, 0.0, 1.0)
+	var card := Rect2(at + Vector2(-24, -36 + (1.0 - Pal.ease_out(a)) * 20.0), Vector2(528, 60 + traps.size() * 78))
+	c.draw_rect(card, Color(0.022, 0.024, 0.029, 0.98 * a))
+	c.draw_rect(card, Pal.ink(0.1 * a), false, 1.0)
+	c.draw_rect(Rect2(card.position, Vector2(3, card.size.y * a)), Pal.heat(a, 1.1))
 	_text(game.txt("e_traps"), at, 15, Pal.ink(0.5 * a), font)
 	var yy := at.y + 34.0
 	for i in traps.size():

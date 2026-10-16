@@ -16,6 +16,7 @@ static var quality := "high"          # high | low (no glow, no anti-aliasing)
 static var cfg_path := CFG            # tests point this at their own file
 static var test_zh := true            # the language a test runs in
 static var chapter_done := false      # chapter one seen to the end
+static var dev := false               # developer mode (F12)
 const TIERS := ["guided", "standard", "hardcore"]
 const CFG := "user://zeropower_settings.cfg"
 
@@ -476,6 +477,22 @@ const S := {
 	"in_explosive_cargo": ["%s 实际装载危险品", "%s ACTUALLY HOLDS DANGEROUS GOODS"],
 	"in_fire_system": ["灭火剂储罐 FX-01 未释放，%d kPa", "FIRE BOTTLE FX-01 NEVER DISCHARGED: %d kPa"],
 	"in_none": ["没有发现隐藏状态", "NOTHING HIDDEN FOUND"],
+	"dev_on": ["开发者模式：开（F12 关闭）", "DEVELOPER MODE ON (F12 TO CLOSE)"],
+	"dev_off": ["开发者模式：关", "DEVELOPER MODE OFF"],
+	"dev_xray": ["透视真实状态", "X-RAY: TRUE STATE"],
+	"dev_safe": ["一键排空断电", "MAKE IT SAFE"],
+	"dev_free": ["全部零件脱落", "FREE EVERY PIECE"],
+	"dev_god": ["无人机无敌", "DRONE CAN'T BE HURT"],
+	"dev_warp": ["时间 ×8", "TIME ×8"],
+	"dev_rooms": ["打开全部舱室", "OPEN EVERY ROOM"],
+	"dev_items": ["消耗品各 +3", "+3 OF EACH CONSUMABLE"],
+	"dev_end": ["立即结束合同", "END THE CONTRACT"],
+	"dev_money": ["资金 +$100,000", "+$100,000 FUNDS"],
+	"dev_loan": ["清空贷款", "CLEAR THE LOAN"],
+	"dev_rep": ["声望 +5", "+5 REPUTATION"],
+	"dev_upgrades": ["全部首批升级", "ALL FIRST UPGRADES"],
+	"dev_offers": ["刷新报价", "NEW OFFERS"],
+	"dev_trap": ["单陷阱合同", "ONE-TRAP CONTRACT"],
 	"tm_cargo": ["货物清单（申报）", "CARGO MANIFEST (AS DECLARED)"],
 	"tm_no_cargo": ["无货物", "NO CARGO"],
 	"tm_logs_note": ["记录可能过时或有误，以实测为准", "LOGS MAY BE OUT OF DATE OR WRONG: MEASURE"],
@@ -587,6 +604,7 @@ static func load_settings(testing: bool) -> void:
 		hint_tier = cf.get_value("ui", "hint_tier", "standard")
 		clues = cf.get_value("career", "clues", [])
 		chapter_done = cf.get_value("career", "chapter_done", false)
+		dev = cf.get_value("ui", "dev", false)
 		vol_master = cf.get_value("audio", "master", 1.0)
 		vol_music = cf.get_value("audio", "music", 0.8)
 		vol_sfx = cf.get_value("audio", "sfx", 0.9)
@@ -606,6 +624,7 @@ static func save_settings(testing: bool) -> void:
 	cf.set_value("ui", "hint_tier", hint_tier)
 	cf.set_value("career", "clues", clues)
 	cf.set_value("career", "chapter_done", chapter_done)
+	cf.set_value("ui", "dev", dev)
 	cf.set_value("audio", "master", vol_master)
 	cf.set_value("audio", "music", vol_music)
 	cf.set_value("audio", "sfx", vol_sfx)

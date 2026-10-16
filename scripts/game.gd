@@ -253,6 +253,10 @@ func _ready() -> void:
 		add_child(th)
 	for n in [dock, world, sys, fx, blueprint, drone, tools]:
 		n.process_mode = Node.PROCESS_MODE_PAUSABLE
+	var dev := DevPanel.new()
+	dev.game = self
+	dev.where = "game"
+	add_child(dev)
 	# last child: it sees input first while open
 	settings_panel = SettingsPanel.new()
 	settings_panel.testing = testing
@@ -363,11 +367,12 @@ func _process(dt: float) -> void:
 			autosave_t = 0.0
 			SaveGame.save(self)
 	_read_input()
-	var want_warp: bool = state == "play" and not menu_open and (Input.is_physical_key_pressed(KEY_EQUAL) or (bot != null and bot.get("warp", false)))
+	var dev_warp: bool = Txt.dev and DevPanel.warp and bot == null
+	var want_warp: bool = state == "play" and not menu_open and (Input.is_physical_key_pressed(KEY_EQUAL) or dev_warp or (bot != null and bot.get("warp", false)))
 	if want_warp != warp:
 		warp = want_warp
 		if hitstop_t <= 0.0 and slowmo <= 0.0:
-			Engine.time_scale = WARP if warp else 1.0
+			Engine.time_scale = _warp_k() if warp else 1.0
 	match state:
 		"intro":
 			_intro(rdt)
@@ -384,10 +389,14 @@ func _process(dt: float) -> void:
 	_age_messages(rdt)
 	if hitstop_t > 0.0:
 		hitstop_t -= rdt
-		Engine.time_scale = 0.05 if hitstop_t > 0.0 else (0.28 if slowmo > 0.0 else (WARP if warp else 1.0))
+		Engine.time_scale = 0.05 if hitstop_t > 0.0 else (0.28 if slowmo > 0.0 else (_warp_k() if warp else 1.0))
 	elif slowmo > 0.0:
 		slowmo -= rdt
-		Engine.time_scale = 0.28 if slowmo > 0.0 else (WARP if warp else 1.0)
+		Engine.time_scale = 0.28 if slowmo > 0.0 else (_warp_k() if warp else 1.0)
+
+
+func _warp_k() -> float:
+	return 8.0 if Txt.dev and DevPanel.warp and bot == null else WARP
 
 
 func _physics_process(dt: float) -> void:
@@ -1065,7 +1074,7 @@ func _drone_upkeep(dt: float) -> void:
 
 
 func hurt_drone(amount: float, from: Vector2, key: String, cd_key: String = "", cd: float = 1.0) -> void:
-	if not drone.alive or drone.spawn_t < 1.0:
+	if not drone.alive or drone.spawn_t < 1.0 or (Txt.dev and DevPanel.god and bot == null):
 		return
 	var now := Time.get_ticks_msec() / 1000.0
 	if cd_key != "" and now - hurt_cd.get(cd_key, -99.0) < cd:

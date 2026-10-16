@@ -59,6 +59,9 @@ func _ready() -> void:
 	Settings.apply(get_viewport())
 	settings = SettingsPanel.new()
 	add_child(settings)
+	var dev := DevPanel.new()
+	dev.where = "title"
+	add_child(dev)
 	for i in 140:
 		dust.append([Vector2(randf(), randf()), randf_range(0.004, 0.02), randf() * TAU])
 
