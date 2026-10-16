@@ -85,7 +85,21 @@ func _init() -> void:
 	add_child(clamp_node)
 
 
+var stern := Vector2(42.0, 0.0)   # m: where the tug pushes, the ship's aft end
+
+
 func set_ship(ship: Dictionary) -> void:
+	# the tug sits right behind whatever ship this is
+	var x1 := -INF
+	var y0 := INF
+	var y1 := -INF
+	for pd in ship.get("pieces", []):
+		for q in pd.get("poly", []):
+			x1 = maxf(x1, q[0])
+			y0 = minf(y0, q[1])
+			y1 = maxf(y1, q[1])
+	if x1 > -INF:
+		stern = Vector2(x1 + 0.4, (y0 + y1) * 0.5)
 	clamps = []
 	clamp_t = []
 	for c in ship.get("clamps", []):
@@ -416,10 +430,10 @@ func tug_pos() -> Vector2:
 	if game == null or game.state != "intro":
 		return Vector2.INF
 	var tt: float = game.state_t
-	var x: float = world.position.x + 42.0 * Geom.M
+	var x: float = world.position.x + stern.x * Geom.M
 	if tt > 3.4:
 		x += pow(tt - 3.4, 2.0) * 900.0
-	return Vector2(x, 0.0)
+	return Vector2(x, stern.y * Geom.M)
 
 
 func _tug(p: Vector2) -> void:

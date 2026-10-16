@@ -101,6 +101,7 @@
 	},
 	"story": {
 		"contract": "GR-001",
+		"title": ["GR-7「灰鹭号」中型货运船 · 42 m","GR-7 GREY HERON · MEDIUM FREIGHTER · 42 m"],
 		"arrive": [["好了，真家伙来了。","Right. Here's the real thing."],["灰鹭级货船，四十二米。前些天出了点事故，船主决定直接报废。","Heron-class freighter, forty-two metres. Had an accident a few days back; the owner's scrapping her."],["送过来的资料不全，尾部肯定有问题，别的还不好说。","The paperwork's incomplete. The stern's definitely bad. The rest, who knows."]],
 		"start": [["这单不像训练舱那么简单。","This one's not like the training rig."],["里面还有没有气，哪里通着电，管道里剩下什么，都得自己查。","Gas, power, whatever's left in the pipes — you check all of it yourself."],["我会在无线电里待着。有问题可以问，但怎么拆还是你决定。","I'll stay on the radio. Ask if you need to. How you take her apart is your call."],["开始吧。","Go on, then."]],
 		"banner": [["CONTRACT GR-001 — ACTIVE","目标：开始现场检查"],["CONTRACT GR-001 — ACTIVE","OBJECTIVE: BEGIN SITE SURVEY"]],

@@ -551,6 +551,7 @@ static func _rooms() -> void:
 static func story() -> Dictionary:
 	return {
 		"contract": "GR-001",
+		"title": ["GR-7「灰鹭号」中型货运船 · 42 m", "GR-7 GREY HERON · MEDIUM FREIGHTER · 42 m"],
 		"arrive": [
 			["好了，真家伙来了。", "Right. Here's the real thing."],
 			["灰鹭级货船，四十二米。前些天出了点事故，船主决定直接报废。", "Heron-class freighter, forty-two metres. Had an accident a few days back; the owner's scrapping her."],

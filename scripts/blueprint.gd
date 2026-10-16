@@ -13,6 +13,7 @@ var equip: Array = []     # [poly, tag]
 var runs: Array = []      # [path, label, kind]
 var points: Array = []    # [pos, label, kind]
 var font: Font
+var snapped := false
 var t := 0.0
 var x0 := -2.0 * 48.0     # drawn extent (px), from the ship's own size
 var x1 := 46.0 * 48.0
@@ -82,7 +83,10 @@ func _process(dt: float) -> void:
 	k = Pal.damp(k, 1.0 if on else 0.0, 10.0, dt)
 	if absf(k - was) > 0.001 or k > 0.01:
 		queue_redraw()
-	if rooms.is_empty() and game != null and game.world != null:
+	# once: a ship with no rooms (the assessment module) left this empty and
+	# the drawing was rebuilt every frame
+	if not snapped and game != null and game.world != null:
+		snapped = true
 		snapshot()
 
 

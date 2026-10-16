@@ -9,6 +9,7 @@ signal piece_freed(body)
 const KERF := 3.4
 const BOLT_RING := [Vector2(1, 0), Vector2(0.7071, 0.7071), Vector2(0, 1), Vector2(-0.7071, 0.7071), Vector2(-1, 0), Vector2(-0.7071, -0.7071), Vector2(0, -1), Vector2(0.7071, -0.7071)]
 
+const STATIC_LAYER := 8       # the attached ship (and only it) is on this physics layer
 var game: Game
 var pieces := {}
 var order: Array = []          # piece ids in draw order
@@ -56,7 +57,8 @@ static func _p(key: String, t0: int) -> void:
 func _init() -> void:
 	font = Fonts.get_font("Regular")
 	static_body = StaticBody2D.new()
-	static_body.collision_layer = 1
+	# layer 8 as well: free bodies ray-check against the attached ship alone
+	static_body.collision_layer = 1 | STATIC_LAYER
 	static_body.collision_mask = 0
 	add_child(static_body)
 	back_layer = _layer(0, false, _draw_back)
@@ -433,6 +435,7 @@ func make_body(group: Array, from_body):
 	bodies_node.add_child(b)
 	b.global_position = com
 	b.reset_physics_interpolation()
+	b._last = com
 	var to_local := b.global_transform.affine_inverse()
 	for p in group:
 		var old := frame(p)

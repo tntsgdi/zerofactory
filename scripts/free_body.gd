@@ -14,6 +14,11 @@ var prev_v := Vector2.ZERO
 var tethered := false
 var capture = null          # recovery zone that is swallowing this body
 var capture_t := 0.0
+const INSET := 1.0            # px: collision sits this far inside the outline
+const MAX_SPEED := 900.0      # px/s for anything loose
+const MAX_SPIN := 6.0         # rad/s
+const TELEPORT := 72.0        # px in one step: more than this was placed, not moved
+var _last := Vector2.INF     # where the body was last physics step
 var cols := {}              # piece id -> Array of CollisionPolygon2D
 var age := 0.0
 var rejected_t := 0.0
@@ -79,6 +84,12 @@ func rebuild_cols(p) -> void:
 	var poly := Geom.simplify(p.poly, 1.4)
 	if Geom.area(poly) < 20.0 or not Geom.valid(poly):
 		poly = p.poly
+	# a hair inside the drawn outline: a piece that comes loose was touching its
+	# neighbours, and shapes that start in contact slip past continuous
+	# collision (a light box could be knocked straight through a bulkhead)
+	var inset := Geometry2D.offset_polygon(poly, -INSET)
+	if inset.size() == 1 and Geom.area(inset[0]) >= 20.0 and Geom.valid(inset[0]):
+		poly = inset[0]
 	if Geom.area(poly) >= 20.0 and Geom.valid(poly):
 		var c := CollisionPolygon2D.new()
 		c.build_mode = CollisionPolygon2D.BUILD_SOLIDS
@@ -97,6 +108,31 @@ func drop_piece(p) -> void:
 
 
 func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
+	# a light piece squeezed between something heavy and the hull can be pushed
+	# right through it: if the body's centre crossed the attached ship since
+	# the last step, put it back and bounce it off
+	var here: Vector2 = state.transform.origin
+	# only motion the physics made (speed, or the solver pushing overlaps
+	# apart): a teleport (a load, a test placing it) jumps metres at once
+	var moved := _last.distance_to(here) if _last != Vector2.INF else 0.0
+	var could := maxf(state.linear_velocity.length() * state.step * 2.0, TELEPORT)
+	if capture == null and moved > 0.5 and moved < could:
+		var q := PhysicsRayQueryParameters2D.create(_last, here, World.STATIC_LAYER)
+		var hit: Dictionary = state.get_space_state().intersect_ray(q)
+		if not hit.is_empty():
+			var xf := state.transform
+			xf.origin = _last
+			state.transform = xf
+			state.linear_velocity = state.linear_velocity.bounce(hit.normal) * 0.4
+			state.angular_velocity *= 0.5
+			return
+	_last = here
+	# nothing loose outruns the collision: a hard knock still sends it flying,
+	# just not through a wall
+	if state.linear_velocity.length() > MAX_SPEED:
+		state.linear_velocity = state.linear_velocity.limit_length(MAX_SPEED)
+	if absf(state.angular_velocity) > MAX_SPIN:
+		state.angular_velocity = clampf(state.angular_velocity, -MAX_SPIN, MAX_SPIN)
 	for i in state.get_contact_count():
 		var imp := state.get_contact_impulse(i).length()
 		if imp > hit_imp:

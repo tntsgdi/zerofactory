@@ -330,8 +330,12 @@ func _overweight() -> void:
 
 func _intro_overlay(s: Vector2) -> void:
 	var k := clampf(game.state_t / 0.6, 0.0, 1.0) * clampf((6.0 - game.state_t) / 0.6, 0.0, 1.0)
-	_text(game.txt("contract"), Vector2(70, s.y - 120), 16, Pal.ink(0.5 * k), font)
-	_text(game.txt("ship"), Vector2(70, s.y - 86), 30, Pal.ink(0.9 * k), font_l)
+	# what is coming in: the ship file's own title
+	var g = game
+	var head: String = g.txt("tut_course") if g.training else ("APPRENTICE ASSESSMENT" if g.exam != null else (g.txt("contract") + " " + g.ship.get("contract", "")).strip_edges())
+	var ttl: Array = g.ship.get("title", [])
+	_text(head, Vector2(70, s.y - 120), 16, Pal.ink(0.5 * k), font)
+	_text((ttl[0] if Txt.zh else ttl[1]) if ttl.size() == 2 else g.ship.get("name", ""), Vector2(70, s.y - 86), 30, Pal.ink(0.9 * k), font_l)
 	_text("ESC / SPACE", Vector2(s.x - 70, s.y - 60), 12, Pal.ink(0.3 * k), font, 1)
 	# letterbox bars slide away as the drone launches
 	var bar := 70.0 * clampf((5.2 - game.state_t) / 0.6, 0.0, 1.0)

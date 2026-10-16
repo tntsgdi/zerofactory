@@ -1,6 +1,7 @@
 {
 	"id": "ts1",
 	"name": "TS-1 TRAINING SECTION",
+	"title": ["TS-1 训练舱段 · 12 m","TS-1 TRAINING SECTION · 12 m"],
 	"length": 12.0,
 	"value": {"metal":4000.0,"total":10200.0},
 	"clamps": [[15.7,2.2],[18.2,2.2]],

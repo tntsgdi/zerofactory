@@ -126,6 +126,7 @@ static func meta() -> Dictionary:
 	var d := {
 		"id": "e07" + variant,
 		"name": "E-07 AUX MODULE",
+		"title": ["E-07 辅助设备舱 · 6 m", "E-07 AUX MODULE · 6 m"],
 		"length": 6.0,
 		"value": {"total": {"a": 3700.0, "b": 4700.0, "c": 3600.0, "d": 3600.0}[variant], "metal": 600.0},
 		"clamps": [[18.6, 1.8], [23.4, 1.8]],
