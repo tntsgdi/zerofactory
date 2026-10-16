@@ -158,6 +158,13 @@ func _fit_all() -> void:
 	_fit("shop item", _prefixed("up_") + _prefixed("it_") + _prefixed("fa_"), 17, 1000, "Medium")
 	_fit("terminal keys and messages", _keys(["tm_keys", "tm_borrow", "tm_short", "tm_bought", "tm_none", "tm_later", "tm_owned"]), 16, 1300)
 	_fit("terminal button", _keys(["tm_take", "tm_buy"]), 20, 260, "Medium")
+	_fit("terminal repay row", _keys(["tm_repay"]), 17, 1000, "Medium")
+	_fit("terminal repay row", _keys(["tm_repay_d"]), 13, 1100)
+	_fit("survey report (2 lines)", _prefixed("in_"), 14, 1000)
+	_fit("terminal intel hint", _keys(["tm_use_intel", "tm_intel", "tm_repaid"]), 13, 1300)
+	_fit("milestone", _keys(["tm_paid_off"]), 22, 1700, "Medium")
+	_fit("notes panel", _prefixed("nt_"), 16, 600)
+	_fit("on-site messages", _keys(["item_none", "item_repaired", "item_spare", "ring_no_target", "ring_fired", "hatch_welded", "snapped"]), 16, 900)
 	var copy: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(Copy.FILE))
 	var reasons: Array = []
 	var logs: Array = []

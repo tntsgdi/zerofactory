@@ -6,7 +6,7 @@ extends SceneTree
 # things the upgrades answer: an overloaded container (5 t grapple), a
 # cracked rib in the hold (precision kit), gas and fluids to draw (pump),
 # loose scrap (recovery arm).
-# godot --headless --path . --fixed-fps 60 -s tests/upgrade_check.gd
+# godot --headless --path . --fixed-fps 60 -s tests/upgrade_check.gd -- [only=<upgrade>]
 
 const Bot = preload("res://tests/salvage_bot.gd")
 const BOT := {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "lmb": false, "move": Vector2.ZERO}
@@ -41,7 +41,9 @@ func pick(heavy_n: int) -> Dictionary:
 				cargo += 1
 				if float(pd.mass) > 3.0:
 					heavy += 1
-		if heavy >= heavy_n and cargo == 3 and d.variant.targets.hidden_damage == "p7" and d.labels.get("C-01", "") == "PRECISION" and float(d.gas.rooms.C) > 90.0:
+		var p7 = Variant.piece(d, "p7")
+		var under: bool = p7 != null and Variant._bbox(p7.poly).position.x < 13.6
+		if heavy >= heavy_n and cargo == 3 and d.variant.targets.hidden_damage == "p7" and under and d.labels.get("C-01", "") == "PRECISION" and float(d.gas.rooms.C) > 90.0:
 			print("contract %s seed %d: %s" % [o.id, int(o.variant), str(d.variant.notes)])
 			return o
 		if heavy_n >= 2 and heavy >= 2 and cargo >= 2:
@@ -75,7 +77,13 @@ func _run() -> void:
 	var one := pick(1)
 	var two := pick(2)
 	print("  kit                time      income   hauls  arm  scrapped  snapped  incidents")
+	var only := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("only="):
+			only = a.substr(5)
 	for kit in KITS:
+		if only != "" and (kit.is_empty() or kit[0] != only):
+			continue
 		var o: Dictionary = two if kit == ["grapple5"] else one
 		var base: Dictionary = await _play(o, [])
 		if not kit.is_empty():

@@ -971,8 +971,6 @@ func on_body_freed(b) -> void:
 			b.linear_velocity = p.get_meta("snap_kick") * 260.0
 			b.angular_velocity = randf_range(-1.5, 1.5)
 			p.remove_meta("snap_kick")
-			if p.kind == "hull":
-				_falls_in(p)
 	var all_metal := true
 	for p in b.pieces:
 		if p.cls == "equip":
@@ -1222,9 +1220,13 @@ func on_snap(j) -> void:
 	incident("snap", pa.get_meta("origin", pa.tag) if pa != null else "")
 	world.kill_joint(j)
 	# the part that let go drops away from the pull: a roof plate's half falls into the room below
-	var pb = world.pieces.get(j.b)
+	# the half the grapple is not holding is the one that drops
+	var held = tools.held_piece
+	var pb = world.pieces.get(j.a if held != null and held.id == j.b else j.b) if held != null else world.pieces.get(j.a)
 	if pb != null:
 		pb.set_meta("snap_kick", Vector2(0, 1) if pb.kind == "hull" else Vector2.from_angle(randf() * TAU))
+		if pb.kind == "hull":
+			_falls_in(pb)
 	fx.flash(at, 120.0, 0.35, Pal.ink(0.9, 1.8))
 	fx.burst_shards(at, 12, 360.0, Pal.ink(0.8), 7.0)
 	fx.sparks(at, Vector2.from_angle(randf() * TAU), 18, Pal.ink(0.9, 1.4), 320.0, 0.35, PI)
@@ -1258,7 +1260,8 @@ func _falls_in(p) -> void:
 		if qb.end.x < bb.position.x or qb.position.x > bb.end.x:
 			continue
 		var before: float = q.cond
-		q.cond = maxf(0.0, q.cond - 0.5 * q.fragile)
+		# a tonne of plate dropping the height of the hold: what is fragile is finished
+		q.cond = maxf(0.0, q.cond - q.fragile)
 		lost += (before - q.cond) * q.value
 		fx.sparks(Vector2(qb.get_center().x, qb.position.y), Vector2.UP, 16, Pal.ink(0.9, 1.4), 280.0, 0.35, PI)
 	if lost > 50.0:
