@@ -100,6 +100,7 @@ static func fresh() -> Dictionary:
 		"debt_rule": 2,
 		"rep": 0,
 		"upgrades": {},
+		"growth_goal": "",
 		"items": {},
 		"done": 0,
 		"history": [],

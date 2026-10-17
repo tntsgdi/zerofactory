@@ -8,9 +8,9 @@ extends Control
 # button on the right, with what is left after and what the next contract
 # fee would borrow), berth management (the loan with a repay slider,
 # training replay, what opens later in one line).
-# Keys: 1 2 3 tabs, ← → pick, ↑ ↓ quantity / amount, Enter take/buy, Esc title.
+# Keys: 1 2 3 4 tabs, ← → pick, ↑ ↓ quantity / amount, Enter take/buy, Esc title.
 
-const TABS := ["market", "shop", "berth"]
+const TABS := ["market", "shop", "berth", "skills"]
 # what can be bought: [id, kind, price, Txt name key, Txt effect key]
 # the first four are fitted (drawn on the drone and the berth), the rest are stock
 const SHOP := [
@@ -98,6 +98,8 @@ var leave_offer := {}      # the offer being taken (it leaves the market as it i
 # counts from the next contract
 var overlay := false
 var on_close: Callable
+var on_skill_changed: Callable
+var book: SkillBook
 var next_job := {}         # an opening contract still to play: the market shows it, alone
 
 
@@ -134,6 +136,15 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	Settings.apply(get_viewport())
+	book = SkillBook.new()
+	book.visible = tab == 3
+	book.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	book.offset_top = 198
+	book.offset_bottom = -70
+	book.changed = func():
+		if on_skill_changed.is_valid():
+			on_skill_changed.call()
+	add_child(book)
 	settings = SettingsPanel.new()
 	settings.testing = testing
 	add_child(settings)
@@ -194,7 +205,7 @@ func offers() -> Array:
 
 
 func items() -> Array:
-	return offers() if tab == 0 else (SHOP if tab == 1 else BERTH)
+	return [] if tab == 3 else (offers() if tab == 0 else (SHOP if tab == 1 else BERTH))
 
 
 # ---------------------------------------------------------------- input
@@ -214,7 +225,7 @@ func _process(dt: float) -> void:
 	for i in items().size():
 		if _item_rect(i).has_point(m):
 			hover = i
-	for i in 3:
+	for i in TABS.size():
 		if _tab_rect(i).has_point(m):
 			hover_tab = i
 	hover_go = _go_rect().has_point(m)
@@ -275,7 +286,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			milestone = -1.0
 		return
 	match ev.physical_keycode:
-		KEY_1, KEY_2, KEY_3:
+		KEY_1, KEY_2, KEY_3, KEY_4:
 			set_tab(ev.physical_keycode - KEY_1)
 		KEY_LEFT, KEY_A:
 			sel = maxi(0, sel - 1)
@@ -312,9 +323,16 @@ func close() -> void:
 func set_tab(i: int) -> void:
 	# on site the market is not open: contracts are signed between jobs
 	var lo := 1 if overlay else 0
-	if clampi(i, lo, 2) != tab:
+	if clampi(i, lo, 3) != tab:
 		deal_t = 0.0
-	tab = clampi(i, lo, 2)
+	tab = clampi(i, lo, 3)
+	if book != null:
+		book.visible = tab == 3
+		if tab == 3:
+			var goal := Growth.find_track(str(Career.data.get("growth_goal", "")))
+			if not goal.is_empty():
+				book.selected = goal[0]
+			book.refresh()
 	sel = 0
 	qty = 1
 	repay_amt = _repay_default()
@@ -405,6 +423,8 @@ func say(text: String) -> void:
 
 # take the selected contract, or buy the selected thing
 func act() -> void:
+	if tab == 3:
+		return
 	if tab == 0 and not next_job.is_empty():
 		start_next()
 	elif tab == 0:
@@ -653,6 +673,8 @@ func _qty_rect(d: int) -> Rect2:
 
 
 func _go_rect() -> Rect2:
+	if tab == 3:
+		return Rect2(-100, -100, 1, 1)
 	var s := size
 	match tab:
 		0:
@@ -733,7 +755,7 @@ func _backdrop(s: Vector2, a: float) -> void:
 
 
 func _tabs(a: float) -> void:
-	for i in 3:
+	for i in TABS.size():
 		var r := _tab_rect(i)
 		var on := tab == i
 		if hover_tab == i and not on:
@@ -752,6 +774,12 @@ func _top(s: Vector2, a: float) -> void:
 	var company: String = str(Career.data.get("company", ""))
 	_text((company if company != "" else "BERTH 07") + "  ·  CHARON-DISPATCH", Vector2(60, 56), 13, Pal.ink(0.55 * a), font)
 	_text(Txt.t("tm_title"), Vector2(60, 94), 30, Pal.ink(0.92 * a), font_l)
+	var goal := Growth.find_track(str(d.get("growth_goal", "")))
+	if not goal.is_empty():
+		var id: String = goal[0]
+		var reason := Growth.reason(id)
+		var state := reason if reason != "" else Growth.text(["已攒够", "READY TO BUY"])
+		_text(Growth.text(["目标：%s · %s · 按 4 查看", "GOAL: %s · %s · 4 TO VIEW"]) % [Growth.text(goal[2]), state], Vector2(60, 118), 13, Pal.ink(0.65 * a), font)
 	var loan_c := Pal.heat(0.9 * a, 1.0) if float(d.loan) > 0.0 else Pal.ink(0.95 * a)
 	var mc := Pal.ink(0.95 * a).lerp(Pal.ink(1.0 * a, 1.5) if money_flash > 0.0 else Pal.heat(a, 1.4), absf(money_flash))
 	var cols := [
@@ -1382,6 +1410,8 @@ func _berth(s: Vector2, a: float) -> void:
 # ---------------------------------------------------------------- the button, the keys, the messages
 
 func _bottom(s: Vector2, a: float) -> void:
+	if tab == 3:
+		return
 	var r := _go_rect()
 	var label := ""
 	var note := ""
@@ -1521,15 +1551,23 @@ func _outlook(r: Rect2, a: float) -> void:
 	for it in SHOP + BERTH:
 		if it[1] in ["upgrade", "facility"] and not d.upgrades.has(it[0]):
 			buy.append(it)
-	buy.sort_custom(func(p, q): return float(p[2]) < float(q[2]))
+	for row in Growth.TRACKS:
+		if Growth.level(d.upgrades, row[0]) < 3:
+			buy.append([row[0], "skill", Growth.price(row[0]), Growth.text(row[2])])
+	var goal: String = str(d.get("growth_goal", ""))
+	buy.sort_custom(func(p, q):
+		if p[0] == goal or q[0] == goal:
+			return p[0] == goal and q[0] != goal
+		return float(p[2]) < float(q[2]))
 	var y := r.position.y + 48.0
 	for i in mini(buy.size(), 9):
 		var it: Array = buy[i]
 		var k := Pal.ease_out(clampf((deal_t - 0.2 - i * 0.04) / 0.3, 0.0, 1.0)) * a
-		var can := money >= float(it[2])
-		_text(Txt.t(it[3]), Vector2(x, y), 15, Pal.ink(0.9 * k), font)
+		var can: bool = money >= float(it[2]) and (it[1] != "skill" or Growth.reason(it[0]) == "")
+		var need := Growth.reason(it[0]) if it[1] == "skill" else ""
+		_text(("★ " if it[0] == goal else "") + Txt.t(it[3]), Vector2(x, y), 15, Pal.ink(0.9 * k), font)
 		_text(Pal.money(float(it[2])), Vector2(x + colw - 120, y), 15, Pal.ink((0.95 if can else 0.6) * k), font_b, 1)
-		_text(Txt.t("tm_out_can") if can else Txt.t("tm_out_short") % Pal.money(float(it[2]) - money), Vector2(x + colw, y), 13, Pal.tint(Pal.FLUID, 0.85 * k, 1.1) if can else Pal.ink(0.45 * k), font, 1)
+		_text(Txt.t("tm_out_can") if can else (need if need != "" else Txt.t("tm_out_short") % Pal.money(float(it[2]) - money)), Vector2(x + colw, y), 13, Pal.tint(Pal.FLUID, 0.85 * k, 1.1) if can else Pal.ink(0.45 * k), font, 1)
 		y += 34.0
 	var x2 := x + colw + 40.0
 	_text(Txt.t("tm_out_ships"), Vector2(x2, r.position.y + 10), 15, Pal.ink(0.7 * a), font_b)

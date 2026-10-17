@@ -72,7 +72,13 @@ func _init() -> void:
 
 # how far the tool in hand reaches
 func reach(n: int = -1) -> float:
-	return REACH.get(tool if n < 0 else n, RANGE)
+	var which := tool if n < 0 else n
+	if game != null:
+		match which:
+			1: return game.skill_value("meter_range") * Geom.M
+			3: return game.skill_value("grapple_range") * Geom.M
+			5: return game.skill_value("hose_range") * Geom.M
+	return REACH.get(which, RANGE)
 
 
 func set_tool(n: int, force: bool = false, by_key: bool = false) -> void:
@@ -360,6 +366,10 @@ func _start_job() -> void:
 					dur = 0.4
 				"ctrl":
 					dur = {"switch": 0.22, "remote": 0.22, "valve": 0.5, "door": 0.25, "hatch": 0.3, "jam": 0.9, "stop": 0.35, "socket": 0.45, "discharge": 0.45}.get(hover.ctrl.kind, 0.35)
+	if kind == "wrench":
+		dur /= game.skill_value("wrench_speed")
+	elif kind == "measure":
+		dur = game.skill_value("meter_speed")
 	job = {"kind": kind, "t": 0.0, "dur": dur, "target": hover.duplicate(), "pos": hover.pos}
 	game.sfx.play("probe" if kind == "measure" else ("wrench" if kind == "wrench" else "hose"))
 
@@ -409,7 +419,7 @@ func _speed_at(p: Vector2) -> Array:
 	var s := EMPTY_SPEED
 	for q in list:
 		s = minf(s, q.cut_speed)
-	return [s, list]
+	return [s * game.skill_value("laser_power"), list]
 
 
 func _guarded(q) -> bool:
@@ -512,7 +522,7 @@ func _laser(dt: float) -> void:
 	material_k = Pal.damp(material_k, 1.0 if in_material else 0.0, 18.0, dt)
 	# lines the beam passed over
 	if moved_world.size() >= 2:
-		for hit in world.cut_lines(moved_world):
+		for hit in world.cut_lines(moved_world, game.skill_value("laser_kerf")):
 			game.on_line_cut(hit[0], hit[1])
 	# commit kerfs that are anchored to an edge
 	for id in pending.keys():
@@ -536,7 +546,7 @@ func _laser(dt: float) -> void:
 func _kerf_point(q, wp: Vector2) -> void:
 	var lp: Vector2 = world.frame(q).affine_inverse() * wp - world.door_offset(q)
 	if not pending.has(q.id):
-		var near_edge: bool = Geom.dist_to_boundary(lp, q.poly) <= World.KERF + 1.5 or not Geometry2D.is_point_in_polygon(lp, q.poly)
+		var near_edge: bool = Geom.dist_to_boundary(lp, q.poly) <= game.skill_value("laser_kerf") + 1.5 or not Geometry2D.is_point_in_polygon(lp, q.poly)
 		pending[q.id] = {"pl": PackedVector2Array([lp]), "anch": near_edge, "t": 0.0}
 		return
 	var pd: Dictionary = pending[q.id]
@@ -544,7 +554,7 @@ func _kerf_point(q, wp: Vector2) -> void:
 	if pl[pl.size() - 1].distance_to(lp) >= 1.5:
 		pl.append(lp)
 		pd.pl = pl
-	if not pd.anch and Geom.dist_to_boundary(lp, q.poly) <= World.KERF + 1.0:
+	if not pd.anch and Geom.dist_to_boundary(lp, q.poly) <= game.skill_value("laser_kerf") + 1.0:
 		pd.anch = true
 
 
@@ -555,7 +565,7 @@ func _commit(id: int) -> void:
 	if p == null or p.gone:
 		return
 	var pl: PackedVector2Array = pd.pl
-	var res: Dictionary = world.commit_cut(p, pl)
+	var res: Dictionary = world.commit_cut(p, pl, game.skill_value("laser_kerf"))
 	game.on_kerf(p, res)
 	stroke_cuts += 1
 	# keep cutting from where the front is now, on whatever holds that point
@@ -680,10 +690,10 @@ func physics_step(dt: float) -> void:
 	if held_piece.body != held_body:
 		held_body = held_piece.body
 	var d: Vector2 = aim - drone.global_position if not latched else latch_d
-	var reach := clampf(d.length(), 1.4 * 48.0, 3.4 * 48.0)
-	tether_target = drone.global_position + d.normalized() * reach
+	var tether_reach := clampf(d.length(), 1.4 * Geom.M, reach(3) * 0.85)
+	tether_target = drone.global_position + d.normalized() * tether_reach
 	var g := grab_point()
-	if g.distance_to(drone.global_position) > RANGE * 1.35:
+	if g.distance_to(drone.global_position) > reach(3) * 1.35:
 		game.say("tether_snap", g)
 		release_grab(false)
 		return
@@ -707,12 +717,13 @@ func physics_step(dt: float) -> void:
 						break
 		var r: Vector2 = g - held_body.global_transform * held_body.center_of_mass
 		var vg: Vector2 = held_body.linear_velocity + Vector2(-r.y, r.x) * held_body.angular_velocity
-		var c := 2.0 * 0.85 * sqrt(K_TETHER * m)
+		var c := 2.0 * 0.85 * sqrt(K_TETHER * m) * game.skill_value("grapple_stable")
 		var f: Vector2 = (tether_target - g) * K_TETHER - (vg - drone.linear_velocity) * c
-		f = f.limit_length(FMAX)
-		tether_force = f.length() / FMAX
+		var force_max := FMAX * maxf(1.0, game.grab_max() / 5.0)
+		f = f.limit_length(force_max)
+		tether_force = f.length() / force_max
 		held_body.apply_force(f, g - held_body.global_position)
-		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.7)
+		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.7) / game.skill_value("grapple_stable")
 	else:
 		# still fixed to the ship: the beam pulls, the fixings decide
 		var m2: float = world.group_mass(held_piece)
@@ -727,7 +738,7 @@ func physics_step(dt: float) -> void:
 			else:
 				weak.append(j)
 		var lines_held: Array = world.lines_of(held_piece)
-		drone.external -= (tether_target - g).normalized() * FMAX * 0.35 * pull
+		drone.external -= (tether_target - g).normalized() * FMAX * 0.35 * pull / game.skill_value("grapple_stable")
 		if overweight or fixed > 0:
 			strain = minf(1.0, strain + dt * 1.5 * pull)
 			return
@@ -860,7 +871,7 @@ func _draw_add() -> void:
 			continue
 		var pl: PackedVector2Array = world.frame(p) * (pending[id].pl as PackedVector2Array)
 		if pl.size() >= 2:
-			add_node.draw_polyline(pl, Pal.heat(0.85, 2.4), World.KERF * 1.6, true)
+			add_node.draw_polyline(pl, Pal.heat(0.85, 2.4), game.skill_value("laser_kerf") * 1.6, true)
 	# the magnetic tether
 	if held_piece != null and not held_piece.gone:
 		var a := drone.muzzle()
@@ -868,7 +879,7 @@ func _draw_add() -> void:
 		var tension: float = maxf(strain, tether_force * 0.6)
 		var col := Pal.ink(0.55, 1.4).lerp(Pal.heat(0.9, 2.0), clampf(strain + (0.5 if overweight else 0.0), 0.0, 1.0))
 		# the 5 t grapple pulls with five strands of beam, the stock one with three
-		var strands := 5 if game.has_upgrade("grapple5") else 3
+		var strands := int(ceil(game.grab_max()))
 		for i in strands:
 			var off := (i - (strands - 1) * 0.5) * 4.0 / z
 			var nrm := (b - a).normalized().orthogonal()

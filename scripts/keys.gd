@@ -69,7 +69,9 @@ static func label(action: String) -> String:
 static func load_from(cf: ConfigFile) -> void:
 	map = {}
 	for a in ORDER:
-		var v = cf.get_value("keys", a, null)
+		if not cf.has_section_key("keys", a):
+			continue
+		var v = cf.get_value("keys", a)
 		if v is Array and not v.is_empty():
 			var arr: Array = []
 			for k in v:
