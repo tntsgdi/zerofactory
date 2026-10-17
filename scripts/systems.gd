@@ -16,6 +16,8 @@ var GW := 440
 var GH := 100
 const K_OPEN := 8.0               # m²/s of exchange per contact cell
 const SAFE_KPA := 5.0
+# hazards that only ever go to the hazard mouth (which pays 40 % of their value)
+const HAZARD_ONLY := ["explosive", "bio", "chem"]
 
 var game: Game
 var world: World
@@ -934,7 +936,7 @@ func dest_of(p) -> String:
 		return "metal"
 	if not p.intact:
 		return "metal"
-	if p.hazard in ["explosive", "bio"]:
+	if p.hazard in Systems.HAZARD_ONLY:
 		return "hazard"
 	var fv := fluid_in_piece(p)
 	if fv != "" and fvol[fv].amount > float(fvol[fv].get("hazard", 0.02)):

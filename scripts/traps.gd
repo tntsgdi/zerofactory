@@ -15,10 +15,15 @@ class_name Traps
 #   hidden_damage   a hold roof plate cracked along an old seam: hauled off, it snaps and half drops in
 #   explosive_cargo a container of dangerous goods under an ordinary stencil
 #   fire_system     the fire suppression bottle never discharged
+# and, only where a ship type has a slot for it (EXTRA, never on the Heron):
+#   bio_breach      an isolation pod's negative-pressure valve has failed: its air is dirty and
+#                   above the corridor's, so opening its hatch blows it into the corridor
 
 const ALL := ["wrong_valve", "fake_stop", "hidden_tank", "live_cargo", "welded_hatch",
 	"rerouted_line", "second_source", "hidden_damage", "explosive_cargo", "fire_system"]
+const EXTRA := ["bio_breach"]
 const TIER := {
+	"bio_breach": 0,
 	"wrong_valve": 0, "fake_stop": 0, "hidden_tank": 0, "live_cargo": 0, "welded_hatch": 0,
 	"explosive_cargo": 0, "fire_system": 0, "rerouted_line": 1, "second_source": 1, "hidden_damage": 1,
 }
@@ -41,7 +46,7 @@ static func allowed(d: Dictionary) -> Array:
 		return ALL
 	var out: Array = []
 	var slots: Dictionary = d.market.get("slots", {})
-	for t in ALL:
+	for t in ALL + EXTRA:
 		if slots.has(t):
 			out.append(t)
 	return out
@@ -78,6 +83,8 @@ static func evidence(d: Dictionary, trap: String) -> Array:
 				return ev
 			"live_cargo":
 				return [["piece", tg], ["ctrl", "K-RF"], ["line", "cr"]]
+			"bio_breach":
+				return [["ctrl", "S-" + tg], ["ctrl", "P-" + tg]]
 	match trap:
 		"wrong_valve":
 			return [["ctrl", "P-C01"], ["ctrl", "V-C01"]]
@@ -114,6 +121,8 @@ static func intel(d: Dictionary, trap: String) -> Array:
 			return ["in_hidden_tank", [int(float(gas.vessels.get("TX", {}).get("kpa", 0.0)))]]
 		"fire_system":
 			return ["in_fire_system", [int(float(gas.vessels.get("FX", {}).get("kpa", 0.0)))]]
+		"bio_breach":
+			return ["in_bio_breach", [tg, int(float(gas.rooms.get(tg, 0.0)))]]
 		"live_cargo", "explosive_cargo":
 			return ["in_" + trap, [tg]]
 		"hidden_damage":
@@ -268,6 +277,16 @@ static func apply(d: Dictionary, trap: String, rng: RandomNumberGenerator, notes
 # what it does depends on where it sits on that ship.
 static func _apply_slot(d: Dictionary, trap: String, sl: Dictionary, rng: RandomNumberGenerator, notes: Array) -> void:
 	match trap:
+		"bio_breach":
+			# the pod's air is dirtier than the patient left it, and above the corridor
+			var room: String = sl.rooms[rng.randi_range(0, sl.rooms.size() - 1)]
+			_target(d, trap, room)
+			d.gas.rooms[room] = snappedf(rng.randf_range(108.0, 118.0), 0.1)
+			var b: Dictionary = d.get("bio", {})
+			var br: Dictionary = b.get("rooms", {})
+			br[room] = snappedf(rng.randf_range(3.2, 4.2), 0.01)
+			b.rooms = br
+			d.bio = b
 		"hidden_tank":
 			# each place it may stand: [x, the piece it is bolted to]
 			var spot: Array = sl.x[rng.randi_range(0, sl.x.size() - 1)]

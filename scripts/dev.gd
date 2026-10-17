@@ -487,7 +487,7 @@ func _draw_builder() -> void:
 	var allowed: Array = Traps.allowed(Ship.load_data(b_ship))
 	var tx := lx
 	var ty2 := y
-	for tr in Traps.ALL:
+	for tr in Traps.ALL + Traps.EXTRA:
 		var ok: bool = tr in allowed
 		if not ok:
 			continue

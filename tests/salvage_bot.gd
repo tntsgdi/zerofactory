@@ -183,6 +183,14 @@ func _prep() -> void:
 			_note("open %s" % gv.ctrl)
 			_work(2.5)
 			return
+	# biohazard sealed where it stands, before anything moves it
+	for id in w.ctrls:
+		var c = w.ctrls[id]
+		if c.kind == "seal" and not c.state and not _hidden(id) and w.ctrl_alive(c) and _once("seal " + id):
+			_w(id)
+			_note("seal %s" % id)
+			_work(2.5)
+			return
 	# every gas port on something under pressure gets a hose
 	for id in w.ctrls:
 		var c = w.ctrls[id]
@@ -255,7 +263,7 @@ func _prep() -> void:
 	# a room with things inside that need a hose or a switch opens once it is empty
 	for id in w.ctrls:
 		var c = w.ctrls[id]
-		if c.kind in ["port", "switch"] and c.hidden_room != "" and w.room_hidden(c.hidden_room) and not s.hoses.has(id):
+		if c.kind in ["port", "switch", "seal"] and c.hidden_room != "" and w.room_hidden(c.hidden_room) and not s.hoses.has(id):
 			if s.P(c.hidden_room) < 5.0 and _once("open " + c.hidden_room):
 				_open_room(c.hidden_room, "")
 				return
@@ -368,6 +376,10 @@ func _unsafe() -> Array:
 	for k in s.fvol:
 		if s.fvol[k].amount > 0.02:
 			out.append("fluid %s %.3f" % [k, s.fvol[k].amount])
+	for id in g.world.ctrls:
+		var c = g.world.ctrls[id]
+		if c.kind == "seal" and not c.state and g.world.ctrl_alive(c):
+			out.append("unsealed %s" % c.target)
 	if not s.heat.is_empty() and s.loop_T > 60.0:
 		out.append("loop %.0f C" % s.loop_T)
 	if s.bus_live:

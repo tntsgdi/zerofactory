@@ -233,5 +233,54 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			for i in 3:
 				L(ci, Vector2(w * (0.3 + i * 0.2), 3), Vector2(w * (0.3 + i * 0.2), h - 3), 0.25)
 			ci.draw_string(font, Vector2(w * 0.32, h * 0.6), (p.tag + "  " + p.label).strip_edges(), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.5))
+		"bed":
+			# a stretcher on its frame, the monitor on its arm
+			box(ci, Rect2(w * 0.04, h * 0.42, w * 0.7, h * 0.14), 0.5)
+			L(ci, Vector2(w * 0.1, h * 0.56), Vector2(w * 0.1, h * 0.96), 0.4)
+			L(ci, Vector2(w * 0.68, h * 0.56), Vector2(w * 0.68, h * 0.96), 0.4)
+			box(ci, Rect2(w * 0.78, h * 0.06, w * 0.2, h * 0.3), 0.5)
+			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.8, h * 0.22), Vector2(w * 0.85, h * 0.22), Vector2(w * 0.88, h * 0.12), Vector2(w * 0.91, h * 0.3), Vector2(w * 0.96, h * 0.22)]), Pal.ink(0.55), 1.0)
+			L(ci, Vector2(w * 0.88, h * 0.36), Vector2(w * 0.88, h * 0.96), 0.3)
+		"op_table":
+			box(ci, Rect2(w * 0.08, h * 0.5, w * 0.84, h * 0.1), 0.5)
+			L(ci, Vector2(w * 0.5, h * 0.6), Vector2(w * 0.5, h * 0.96), 0.45, 1.4)
+			L(ci, Vector2(w * 0.3, h * 0.96), Vector2(w * 0.7, h * 0.96), 0.45)
+			ci.draw_arc(Vector2(w * 0.5, h * 0.18), w * 0.2, PI, TAU, 16, Pal.ink(0.5), 1.0, true)
+			L(ci, Vector2(w * 0.3, h * 0.18), Vector2(w * 0.7, h * 0.18), 0.5)
+			L(ci, Vector2(w * 0.5, h * 0.18 - w * 0.2), Vector2(w * 0.5, 0), 0.3)
+		"freezer":
+			box(ci, Rect2(w * 0.04, h * 0.04, w * 0.92, h * 0.92), 0.5)
+			for k in 3:
+				box(ci, Rect2(w * (0.1 + k * 0.29), h * 0.14, w * 0.24, h * 0.66), 0.3)
+			for k in 4:
+				L(ci, Vector2(w * (0.14 + k * 0.22), h * 0.86), Vector2(w * (0.2 + k * 0.22), h * 0.92), 0.35)
+			ci.draw_string(font, Vector2(w * 0.12, h * 0.52), "-80°C", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.45))
+		"filter":
+			box(ci, Rect2(w * 0.06, h * 0.06, w * 0.88, h * 0.88), 0.5)
+			for k in 5:
+				L(ci, Vector2(w * 0.14, h * (0.2 + k * 0.14)), Vector2(w * 0.86, h * (0.2 + k * 0.14)), 0.3)
+		"biobox":
+			box(ci, Rect2(w * 0.06, h * 0.12, w * 0.88, h * 0.82), 0.6, 1.2)
+			L(ci, Vector2(w * 0.02, h * 0.12), Vector2(w * 0.98, h * 0.12), 0.6, 1.6)
+			ring(ci, Vector2(w * 0.5, h * 0.54), minf(w, h) * 0.2, 0.55)
+			ci.draw_string(font, Vector2(w * 0.24, h * 0.92), "BIO", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.55))
+		"monitor":
+			box(ci, Rect2(w * 0.06, h * 0.06, w * 0.88, h * 0.62), 0.5)
+			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.12, h * 0.4), Vector2(w * 0.4, h * 0.4), Vector2(w * 0.48, h * 0.16), Vector2(w * 0.56, h * 0.6), Vector2(w * 0.62, h * 0.4), Vector2(w * 0.88, h * 0.4)]), Pal.ink(0.5), 1.0)
+			L(ci, Vector2(w * 0.5, h * 0.68), Vector2(w * 0.5, h * 0.96), 0.35)
+		"screen":
+			box(ci, Rect2(w * 0.03, h * 0.08, w * 0.94, h * 0.84), 0.5)
+			for r in 2:
+				for k in 6:
+					box(ci, Rect2(w * (0.07 + k * 0.15), h * (0.18 + r * 0.38), w * 0.12, h * 0.28), 0.25)
+		"water":
+			var rr := w * 0.45
+			ci.draw_arc(Vector2(w * 0.5, rr + 2), rr, PI, TAU, 18, Pal.ink(0.5), 1.0, true)
+			L(ci, Vector2(w * 0.05, rr + 2), Vector2(w * 0.05, h - 3), 0.5)
+			L(ci, Vector2(w * 0.95, rr + 2), Vector2(w * 0.95, h - 3), 0.5)
+			L(ci, Vector2(w * 0.05, h - 3), Vector2(w * 0.95, h - 3), 0.5)
+			for k in 3:
+				L(ci, Vector2(w * 0.12, h * (0.55 + k * 0.12)), Vector2(w * 0.88, h * (0.55 + k * 0.12)), 0.2)
+			ci.draw_string(font, Vector2(w * 0.2, h * 0.5), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.45))
 		"guard":
 			L(ci, Vector2(w * 0.5, 3), Vector2(w * 0.45, h - 3), 0.3)

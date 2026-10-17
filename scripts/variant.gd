@@ -305,7 +305,7 @@ static func revalue(d: Dictionary) -> void:
 	for pd in d.pieces:
 		if pd.get("cls", "") == "equip":
 			# explosives only ever go to the hazard mouth, which pays 40 %
-			sum += float(pd.get("value", 0.0)) * (0.4 if pd.get("hazard", "") == "explosive" else 1.0)
+			sum += float(pd.get("value", 0.0)) * (0.4 if pd.get("hazard", "") in Systems.HAZARD_ONLY else 1.0)
 	d.value.total = snappedf(sum, 1.0)
 
 

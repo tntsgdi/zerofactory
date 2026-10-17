@@ -221,7 +221,7 @@ static func _power(d: Dictionary, w, bad: Array) -> void:
 			bad.append("lamp %s lights missing room %s" % [lamps[n], n])
 	for id in w.ctrls:
 		var c = w.ctrls[id]
-		if c.kind == "test" and c.medium != "volt":
+		if c.kind == "test" and not c.medium in ["volt", "bio"]:
 			bad.append("test point %s does not read volts" % id)
 
 
@@ -440,7 +440,7 @@ static func _settle(d: Dictionary, w, bad: Array) -> void:
 		var p = w.pieces[id]
 		if p.cls == "equip":
 			# explosives only ever go to the hazard mouth, which pays 40 %
-			sum += p.value * (0.4 if p.hazard == "explosive" else 1.0)
+			sum += p.value * (0.4 if p.hazard in Systems.HAZARD_ONLY else 1.0)
 	# part of a ship: only what is inside the scope is paid, gas and fluids not at all
 	if d.has("scope"):
 		sum = 0.0
