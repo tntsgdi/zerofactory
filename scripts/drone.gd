@@ -88,10 +88,12 @@ func _physics_process(dt: float) -> void:
 	if spawn_t > 0.3 and spawn_t < 1.6 and mv.length() < 0.05:
 		braking = true
 	var acc := Vector2.ZERO
-	var vmax := DASH_VMAX if dashing else VMAX
+	var drive := game.skill_value("drive") if game != null else 1.0
+	var accel := ACCEL * drive
+	var vmax := (DASH_VMAX if dashing else VMAX) * drive
 	if mv.length() > 0.05:
 		var dir := mv.normalized()
-		acc = dir * ACCEL * (DASH_K if dashing else 1.0)
+		acc = dir * accel * (DASH_K if dashing else 1.0)
 		# no more push along the drift once at top speed
 		var along := linear_velocity.dot(dir)
 		if along > vmax:
@@ -99,7 +101,7 @@ func _physics_process(dt: float) -> void:
 	if assist and not braking:
 		# fly-by-wire: steer the velocity toward what the keys ask for
 		var v_des := mv.normalized() * vmax if mv.length() > 0.05 else Vector2.ZERO
-		var cap := ACCEL * (DASH_K + 0.4 if dashing else 2.3)
+		var cap := accel * (DASH_K + 0.4 if dashing else 2.3)
 		acc = ((v_des - linear_velocity) * 9.0).limit_length(cap)
 		if mv.length() < 0.05 and linear_velocity.length() < 6.0 and external.length() < 1.0:
 			linear_velocity = Vector2.ZERO
@@ -107,8 +109,8 @@ func _physics_process(dt: float) -> void:
 	if braking:
 		var v := linear_velocity
 		if v.length() > 4.0:
-			acc = -v.normalized() * ACCEL * BRAKE_K
-			if v.length() < ACCEL * BRAKE_K * dt:
+			acc = -v.normalized() * accel * BRAKE_K
+			if v.length() < accel * BRAKE_K * dt:
 				acc = -v / dt
 		else:
 			linear_velocity = Vector2.ZERO
@@ -117,7 +119,7 @@ func _physics_process(dt: float) -> void:
 	if input.get("hold", false):
 		if hold_at == Vector2.INF:
 			hold_at = global_position
-		acc = ((hold_at - global_position) * 40.0 - linear_velocity * 12.0 - external / mass).limit_length(ACCEL * BRAKE_K * 2.0)
+		acc = ((hold_at - global_position) * 40.0 - linear_velocity * 12.0 - external / mass).limit_length(accel * BRAKE_K * 2.0)
 	else:
 		hold_at = Vector2.INF
 	thrust = acc / ACCEL
@@ -223,6 +225,16 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, 8.5, Color(0.03, 0.03, 0.035))
 	draw_arc(Vector2.ZERO, 8.5, 0.0, TAU, 20, Pal.ink(0.6), 1.0, true)
 	draw_circle(lens * 0.5, 3.4, Pal.ink(0.95))
+	if game != null:
+		var armor := Growth.level(game.job.get("kit", {}), "armor")
+		for i in armor:
+			draw_rect(Rect2(Vector2(-23 - i * 3, -23 - i * 3), Vector2(46 + i * 6, 46 + i * 6)), Pal.ink(0.55), false, 1.0)
+		var shield := Growth.level(game.job.get("kit", {}), "shield")
+		for i in shield:
+			draw_arc(Vector2.ZERO, 33.0 + i * 4, heading - 0.6, heading + 0.6, 20, Pal.ink(0.6), 1.0, true)
+		var drive := Growth.level(game.job.get("kit", {}), "drive")
+		for i in drive:
+			draw_line(Vector2(-14 + i * 12, -27), Vector2(-14 + i * 12, -34), Pal.ink(0.8), 2.0)
 	# integrity tick ring
 	if integrity < 100.0:
 		draw_arc(Vector2.ZERO, R + 7.0, -PI / 2.0, -PI / 2.0 + TAU * integrity / 100.0, 40, Pal.ink(0.35) if integrity > 35.0 else Pal.heat(0.8, 1.2), 1.6, true)

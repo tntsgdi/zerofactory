@@ -453,7 +453,7 @@ func bio_add(room: String, index: float) -> void:
 
 # the high-flow recovery pump draws gas and fluid twice as fast
 func pump_k() -> float:
-	return 2.0 if game != null and game.has_upgrade("pump2") else 1.0
+	return game.skill_value("pump_rate") if game != null else 1.0
 
 
 # how fast a gas port's hose draws (m² of the volume per second)

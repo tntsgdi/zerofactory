@@ -4,3 +4,8 @@
 build/
 tests/out/
 *.tmp
+
+# Local verification artifacts; retain the concise validation record.
+/proofs/*
+!/proofs/.gdignore
+!/proofs/validation.md

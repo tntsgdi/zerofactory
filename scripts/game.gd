@@ -178,6 +178,7 @@ func _ready() -> void:
 		ship_id = data.get("ship", "gr7")
 		if data.has("job"):
 			job = data.job
+	fit_skills()
 	ship = Ship.load_data(ship_id)
 	training = ship.get("training", false)
 	if training or ship.has("exam"):
@@ -704,7 +705,9 @@ func open_console(which: String) -> void:
 	layer.layer = 60
 	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(layer)
+	term.on_skill_changed = fit_skills
 	term.on_close = func():
+		fit_skills()
 		console_ui = null
 		layer.queue_free()
 		get_tree().paused = false
@@ -1488,6 +1491,11 @@ func hurt_drone(amount: float, from: Vector2, key: String, cd_key: String = "", 
 	if cd_key != "":
 		hurt_cd[cd_key] = now
 	incident("drone_hit", key)
+	amount *= skill_value("armor") / 100.0
+	if key in ["arc_hit", "live_unplug"]:
+		amount *= skill_value("shield") / 100.0
+	if key in ["scald", "fire_hit"]:
+		amount *= skill_value("thermal") / 100.0
 	drone.hurt(amount, from)
 	shake(0.25 + amount / 100.0, (drone.global_position - from).normalized())
 	sfx.play("hurt")
@@ -1501,7 +1509,7 @@ func on_drone_impact(pos: Vector2, dv: float) -> void:
 		if dmg >= 8.0:
 			hurt_drone(dmg, pos, "hit_hard", "impact", 0.7)
 		elif drone.alive and not DevPanel.god:
-			drone.integrity = maxf(1.0, drone.integrity - dmg)
+			drone.integrity = maxf(1.0, drone.integrity - dmg * skill_value("armor") / 100.0)
 			hud.hurt_flash(dmg)
 	fx.sparks(pos, (drone.global_position - pos).normalized(), 6, Pal.ink(0.8, 1.3), 220.0, 0.3, 1.0)
 
@@ -2149,7 +2157,7 @@ func repair_kit() -> void:
 		say("item_none", drone.global_position + Vector2(0, -44), txt("it_repair"))
 		sfx.play("deny")
 		return
-	drone.integrity = minf(100.0, drone.integrity + 50.0)
+	drone.integrity = minf(100.0, drone.integrity + skill_value("repair_eff"))
 	log_op("repair")
 	fx.ring(drone.global_position, 10.0, 60.0, 0.4, Pal.ink(0.8, 1.6), 2.0)
 	fx.sparks(drone.global_position, Vector2.UP, 14, Pal.ink(0.9, 1.4), 160.0, 0.4, PI)
@@ -2189,13 +2197,28 @@ func breaching_ring() -> void:
 
 # what the grapple can haul (the 5 t tractor grapple lifts the limit)
 func grab_max() -> float:
-	return 5.0 if has_upgrade("grapple5") else Tools.GRAB_MAX_T
+	return skill_value("grapple_mass")
 
 
 # the berth's upgrades this contract was taken with
 # what goes straight to the debris net (t): 0.1, or 0.5 with the net upgrade
 func debris_max() -> float:
 	return 0.5 if has_upgrade("net05") else 0.1
+
+
+func skill_value(id: String) -> float:
+	var kit: Dictionary = job.get("kit", {})
+	if bot != null and not bot.get("kit", {}).is_empty():
+		kit = kit.duplicate()
+		kit.merge(bot.get("kit", {}), true)
+	return Growth.value(kit, id)
+
+
+func fit_skills() -> void:
+	if career() and Career.usable() and Career.active().get("id", "") == job.get("id", ""):
+		Growth.sync_kit(job)
+		if drone != null:
+			drone.queue_redraw()
 
 
 func has_upgrade(id: String) -> bool:
