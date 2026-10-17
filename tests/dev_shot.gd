@@ -41,7 +41,9 @@ func _process(_dt: float) -> bool:
 	frame += 1
 	match frame:
 		20:
-			_dev(term).builder = true
+			_dev(term).set_open(true)
+			_dev(term).bench.page = 2
+			_dev(term).bench.refresh()
 		60:
 			Cap.save(root, "res://tests/out/dev_builder.png")
 			var o: Dictionary = DevPanel.build(Career.data).offer

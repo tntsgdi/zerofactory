@@ -1,8 +1,8 @@
 class_name DevPanel
 extends CanvasLayer
-# Developer mode, for testing by hand: F12 anywhere turns it on or off (kept
-# in the settings). While on, a panel at the top right lists what the F keys
-# do here; every row can also be clicked.
+# Developer workbench: F12 opens/closes the modal card surface. Debug switches
+# remain active when collapsed; Disable Dev restores normal switches. Original
+# F-key shortcuts remain available while developer mode is enabled.
 #   On site:   F1 x-ray (the ship's true state)   F2 make it safe   F3 free every piece
 #              F4 drone can't be hurt   F5 time ×1 / ×2 / ×4 / ×8 / ×¼   F6 open every room
 #              F7 +3 of each consumable   F8 end the contract now   F9 inspect what the pointer is on
@@ -24,6 +24,8 @@ const KIT := [["scan_kit", "up_scan"], ["grapple5", "up_grapple"], ["pump2", "up
 	["berth88", "fa_berth"], ["hauler2", "fa_hauler2"], ["crane", "fa_crane"], ["port2", "fa_port2"], ["buffer", "fa_buffer"], ["zones", "fa_zones"]]
 const GOALS := ["", "safe", "fast", "valuable"]
 const SCOPES := ["full", "section", "rescue"]
+
+static var workbench_open := false
 
 static var god := false          # the drone takes no damage
 static var time_k := 1.0         # time on site (1 = as it runs)
@@ -53,6 +55,10 @@ var xray_node: Node2D
 var builder := false             # the contract builder is open
 var hits: Array = []             # [Rect2, Callable] of what can be clicked, as last drawn
 var mouse := Vector2.ZERO
+var bench: DevWorkbench
+var pause_owned := false
+var previous_tree_pause := false
+var previous_sim_pause := false
 var check_key := ""
 var check_res := {}              # the builder's contract as the validator saw it
 
@@ -62,7 +68,7 @@ static func warp_on() -> bool:
 
 
 func _ready() -> void:
-	layer = 60
+	layer = 80
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	font = Fonts.get_font("Regular")
 	font_b = Fonts.get_font("Medium")
@@ -71,6 +77,11 @@ func _ready() -> void:
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.draw.connect(_draw_panel)
 	add_child(c)
+	bench = DevWorkbench.new()
+	bench.dev = self
+	add_child(bench)
+	bench.visible = false
+	workbench_open = false
 	if game != null:
 		xray_node = Node2D.new()
 		xray_node.z_index = 30
@@ -106,49 +117,87 @@ func _time_text() -> String:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	_handle_key(ev)
+
+
+func _handle_key(ev: InputEvent) -> void:
 	if not (ev is InputEventKey and ev.pressed and not ev.echo):
 		return
 	var key: int = ev.physical_keycode
 	if key == KEY_F12:
-		Txt.dev = not Txt.dev
 		if not Txt.dev:
-			builder = false
-		Txt.save_settings(game != null and game.testing)
-		say(Txt.t("dev_on") if Txt.dev else Txt.t("dev_off"))
+			Txt.dev = true
+			Txt.save_settings(game != null and game.testing)
+		set_open(not workbench_open)
 		get_viewport().set_input_as_handled()
 		return
 	if not Txt.dev:
 		return
-	if key == KEY_ESCAPE and builder:
-		builder = false
+	if key == KEY_ESCAPE and workbench_open:
+		set_open(false)
 		get_viewport().set_input_as_handled()
 		return
-	if key < KEY_F1 or key > KEY_F10:
-		return
-	var n := key - KEY_F1 + 1
-	if n > rows().size() or rows()[n - 1][0] == "":
-		return
-	get_viewport().set_input_as_handled()
-	run(n)
+	if key >= KEY_F1 and key <= KEY_F10:
+		var n := key - KEY_F1 + 1
+		if n <= rows().size() and rows()[n - 1][0] != "":
+			get_viewport().set_input_as_handled()
+			run(n)
 
 
-# clicks on the panel and the builder never reach the game below
 func _input(ev: InputEvent) -> void:
-	if not Txt.dev:
-		return
 	if ev is InputEventMouseMotion:
 		mouse = ev.position
-		return
-	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		# the builder is drawn last, over the rows: it is asked first
-		for i in range(hits.size() - 1, -1, -1):
-			var h: Array = hits[i]
-			if h[0].has_point(ev.position):
-				h[1].call()
-				get_viewport().set_input_as_handled()
-				return
-		if builder and _builder_rect().has_point(ev.position):
+	_handle_key(ev)
+	if Txt.dev and not workbench_open and ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		if Rect2(c.size.x - 350, 18, 330, 36).has_point(ev.position):
+			set_open(true)
 			get_viewport().set_input_as_handled()
+
+
+func set_open(open: bool) -> void:
+	workbench_open = open and Txt.dev
+	if game != null and workbench_open and not pause_owned:
+		previous_tree_pause = get_tree().paused
+		previous_sim_pause = game.paused_sim
+		pause_owned = true
+		game.dev_overlay_open = true
+		game.paused_sim = true
+		if game.tools.cutting:
+			game.tools._finish_cut()
+		game.tools.lmb = false
+		game.tools.lmb_pressed = false
+		game.prev_lmb = false
+		get_tree().paused = true
+	elif not workbench_open:
+		_release_pause()
+	if bench != null:
+		bench.visible = workbench_open
+		if workbench_open:
+			bench.refresh()
+
+
+func _release_pause() -> void:
+	if pause_owned and is_instance_valid(game):
+		game.dev_overlay_open = false
+		game.paused_sim = previous_sim_pause
+		get_tree().paused = previous_tree_pause
+	pause_owned = false
+
+
+func _exit_tree() -> void:
+	_release_pause()
+	workbench_open = false
+
+
+func disable() -> void:
+	set_open(false)
+	Txt.dev = false
+	god = false
+	xray = false
+	inspect = false
+	time_k = 1.0
+	Engine.time_scale = 1.0
+	Txt.save_settings(game != null and game.testing)
 
 
 # do what row n stands for (1-based)
@@ -156,6 +205,9 @@ func run(n: int) -> void:
 	var row: Array = rows()[n - 1]
 	if row[1] == "dev_builder":
 		builder = not builder
+		set_open(true)
+		bench.page = 2
+		bench.refresh()
 		return
 	match where:
 		"game":
@@ -169,6 +221,8 @@ func run(n: int) -> void:
 func say(s: String) -> void:
 	toast = s
 	toast_t = 0.0
+	if bench != null and bench.visible:
+		bench.refresh()
 
 
 # ---------------------------------------------------------------- on site
@@ -228,6 +282,7 @@ func _game_key(n: int) -> void:
 				Game.start_ship = g.ship_id
 			SaveGame.load_requested = false
 			say(Txt.t("dev_again"))
+			set_open(false)
 			g.restart()
 			return
 	say(_row_label(rows()[n - 1]))
@@ -249,6 +304,8 @@ func _terminal_key(n: int) -> void:
 		4:
 			for kv in KIT:
 				d.upgrades[kv[0]] = 1
+			for track in Growth.TRACKS:
+				_set_skill(d.upgrades, track[0], 3)
 		5:
 			for id in ["repair", "ring", "spare", "intel"]:
 				d.items[id] = int(d.items.get(id, 0)) + 3
@@ -278,6 +335,7 @@ func _terminal_key(n: int) -> void:
 			d.certified = true
 			d.market = true
 			d.active = {}
+			terminal.next_job = {}
 			d.offers = []
 			Career.ensure_offers(Market.make)
 			terminal.dealt()
@@ -293,6 +351,7 @@ func _first_card(o: Dictionary) -> void:
 		d.offers = [o]
 	else:
 		d.offers[0] = o
+	terminal.thumbs.clear()
 	terminal.dealt()
 
 
@@ -352,6 +411,8 @@ func _start() -> void:
 	if not r.ok:
 		say(Txt.t("dev_b_invalid"))
 		return
+	if game != null and not game.dev_job():
+		SaveGame.save(game)
 	var o: Dictionary = r.offer.duplicate(true)
 	o.dev = true
 	o.dev_from = where
@@ -360,12 +421,16 @@ func _start() -> void:
 	Game.start_ship = b_ship
 	SaveGame.load_requested = false
 	builder = false
+	set_open(false)
 	Engine.time_scale = 1.0
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
 func _to_card() -> void:
+	if not Career.active().is_empty():
+		say(Growth.text(["先完成当前合同，或在作业控制中跳过开局合同", "Finish the current job, or skip opening jobs in Operations"]))
+		return
 	var r := _checked()
 	if not r.ok:
 		say(Txt.t("dev_b_invalid"))
@@ -375,199 +440,109 @@ func _to_card() -> void:
 	say(Txt.t("dev_b_carded"))
 
 
-func _builder_rect() -> Rect2:
-	var s := c.size
-	return Rect2(s.x * 0.5 - 330.0, 110.0, 660.0, 470.0)
+# ---------------------------------------------------------------- workbench actions
+
+static func _set_skill(kit: Dictionary, id: String, level: int) -> void:
+	kit["skill_" + id] = clampi(level, 0, 3)
+	if Growth.LEGACY.has(id):
+		if level > 0:
+			kit[Growth.LEGACY[id]] = 1
+		else:
+			kit.erase(Growth.LEGACY[id])
 
 
-# ---------------------------------------------------------------- drawing
+func tune_skills(level: int, persistent: bool, only: String = "") -> bool:
+	if not Txt.dev:
+		return false
+	var ids: Array = [only] if only != "" else Growth.TRACKS.map(func(row): return row[0])
+	if only != "" and Growth.find_track(only).is_empty():
+		return false
+	if persistent:
+		if Career.data.is_empty() or not Career.usable():
+			say(Growth.text(["请先选择生涯存档", "Select a career save first"]))
+			return false
+		var before: Dictionary = Career.data
+		Career.data = before.duplicate(true)
+		for id in ids:
+			_set_skill(Career.data.upgrades, id, level)
+		var active: Dictionary = Career.active()
+		if not active.is_empty():
+			var kit: Dictionary = active.get("kit", {}).duplicate()
+			for id in ids:
+				_set_skill(kit, id, level)
+			active.kit = kit
+		if not Career.save():
+			Career.data = before
+			say(Growth.text(["保存失败，等级未更改", "Save failed; levels were not changed"]))
+			return false
+		if game != null:
+			game.fit_skills()
+	else:
+		if game == null:
+			return false
+		var kit: Dictionary = game.job.get("kit", {}).duplicate()
+		for id in ids:
+			_set_skill(kit, id, level)
+		game.job.kit = kit
+	if game != null:
+		game.drone.queue_redraw()
+	say(Growth.text(["技能装配已更新", "Skill loadout updated"]))
+	return true
 
+
+func adjust_funds(amount: float, rep: int = 0) -> bool:
+	if not Txt.dev or Career.data.is_empty() or not Career.usable():
+		return false
+	var before: Dictionary = Career.data
+	Career.data = before.duplicate(true)
+	Career.data.money = maxf(0.0, float(Career.data.money) + amount)
+	Career.data.rep = maxi(0, int(Career.data.rep) + rep)
+	if not Career.save():
+		Career.data = before
+		say(Growth.text(["保存失败，资金未更改", "Save failed; funds were not changed"]))
+		return false
+	say(Growth.text(["生涯资金 / 声望已更新", "Career funds / reputation updated"]))
+	return true
+
+
+func restore_drone(home: bool = false) -> void:
+	if game == null:
+		return
+	if not game.drone.alive or home:
+		game._launch_drone()
+	game.drone.integrity = 100.0
+	game.drone.alive = true
+	game.drone.linear_velocity = Vector2.ZERO
+	game.drone.external = Vector2.ZERO
+	game.drone_respawn = -1.0
+	game.drone.queue_redraw()
+	say(Growth.text(["无人机已恢复", "Drone restored"]))
+
+
+# A compact status badge stays on site; the old shortcut list is gone.
 func _process(dt: float) -> void:
 	t += dt
 	toast_t += dt
-	k = Pal.damp(k, 1.0 if Txt.dev else 0.0, 12.0, dt)
-	if k > 0.003 or toast_t < 2.0:
-		c.queue_redraw()
+	if bench != null and bench.visible != (Txt.dev and workbench_open):
+		set_open(workbench_open and Txt.dev)
+	c.queue_redraw()
 	if xray_node != null:
 		xray_node.visible = Txt.dev and xray
 		if xray_node.visible:
 			xray_node.queue_redraw()
 
 
-func _button(r: Rect2, text: String, on: bool, act: Callable, size_px: int = 13) -> void:
-	var over := r.has_point(mouse)
-	c.draw_rect(r, Color(0.16, 0.05, 0.06, 0.9) if on else Color(0.06, 0.06, 0.07, 0.9 if over else 0.7))
-	c.draw_rect(r, Pal.heat(0.9, 1.2) if on else Pal.ink(0.45 if over else 0.2), false, 1.0)
-	c.draw_string(font, Vector2(r.position.x + 8, r.position.y + r.size.y * 0.5 + size_px * 0.36), text, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 12, size_px, Pal.ink(0.95 if on or over else 0.72))
-	hits.append([r, act])
-
-
-# a row of choices; returns the x after it
-# a row of chips from x; past x1 (if given) it wraps under itself. Returns the last row's y
-func _chips(x: float, y: float, items: Array, w: float = 0.0, x1: float = INF) -> float:
-	var x0 := x
-	for it in items:
-		var tw: float = w if w > 0.0 else font.get_string_size(it[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 18.0
-		if x + tw > x1 and x > x0:
-			x = x0
-			y += 32.0
-		_button(Rect2(x, y, tw, 26), it[0], it[1], it[2])
-		x += tw + 6.0
-	return y
-
-
 func _draw_panel() -> void:
-	var s := c.size
 	hits = []
-	if toast_t < 2.0:
-		var ta := clampf((2.0 - toast_t) / 0.3, 0.0, 1.0) * clampf(toast_t / 0.08, 0.0, 1.0)
-		var w := font_b.get_string_size(toast, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 28.0
-		var r := Rect2(s.x * 0.5 - w * 0.5, 22.0 - (1.0 - ta) * 10.0, w, 30.0)
-		c.draw_rect(r, Color(0.1, 0.03, 0.03, 0.88 * ta))
-		c.draw_rect(r, Pal.heat(0.8 * ta, 1.0), false, 1.0)
-		c.draw_string(font_b, r.position + Vector2(14, 21), toast, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.ink(0.95 * ta))
-	if k < 0.01:
-		return
-	var rs := rows()
-	var pw := 280.0
-	var ph := 40.0 + rs.size() * 24.0
-	var x := s.x - 20.0 - pw + (1.0 - Pal.ease_out(k)) * 40.0
-	var r2 := Rect2(x, _panel_y(), pw, ph)
-	c.draw_rect(r2, Color(0.02, 0.02, 0.025, 0.94 * k))
-	c.draw_rect(Rect2(r2.position, Vector2(3, ph)), Pal.heat(k, 1.2))
-	c.draw_string(font_b, r2.position + Vector2(14, 24), "DEV  ·  F12", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.heat(0.9 * k, 1.2))
-	for i in rs.size():
-		var row: Array = rs[i]
-		var y := r2.position.y + 50.0 + i * 24.0
-		var hr := Rect2(x + 6, y - 17, pw - 12, 23)
-		var over := hr.has_point(mouse) and k > 0.9
-		if over:
-			c.draw_rect(hr, Pal.ink(0.07))
-		var on = row[2]
-		c.draw_string(font, Vector2(x + 14, y), row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.5 * k))
-		c.draw_string(font, Vector2(x + 52, y), _row_label(row), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.ink((0.95 if on == true or over else 0.7) * k))
-		if on == true:
-			c.draw_circle(Vector2(r2.end.x - 16, y - 4), 3.5, Pal.heat(k, 1.4))
-		var n := i + 1
-		hits.append([hr, func(): run(n)])
-	if where == "game" and inspect and game != null:
+	if Txt.dev and not workbench_open:
+		var r := Rect2(c.size.x - 350, 18, 330, 36)
+		c.draw_rect(r, Color(0.025, 0.03, 0.035, 0.94))
+		c.draw_rect(Rect2(r.position, Vector2(3, 36)), Pal.heat(0.9))
+		c.draw_string(font_b, r.position + Vector2(12, 24), Growth.text(["DEV 在线 · F12 工作台", "DEV ACTIVE · F12 WORKBENCH"]), HORIZONTAL_ALIGNMENT_LEFT, 310, 15, Pal.ink(0.9))
+	if Txt.dev and inspect and game != null and not workbench_open:
 		_inspect_card()
-	if builder:
-		_draw_builder()
-
-
-# on site the panel sits under the takings and the machines' status
-func _panel_y() -> float:
-	return 360.0 if where == "game" else 130.0
-
-
-func _draw_builder() -> void:
-	var r := _builder_rect()
-	c.draw_rect(Rect2(Vector2.ZERO, c.size), Color(0, 0, 0, 0.55))
-	# rows behind the builder are not clickable through it
-	hits = hits.filter(func(h): return not r.intersects(h[0]))
-	c.draw_rect(r, Color(0.025, 0.025, 0.03, 1.0))
-	c.draw_rect(r, Pal.heat(0.8, 1.1), false, 1.0)
-	c.draw_string(font_b, r.position + Vector2(18, 28), Txt.t("dev_b_title"), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.heat(0.95, 1.2))
-	_button(Rect2(r.end.x - 34, r.position.y + 8, 26, 26), "×", false, func(): builder = false)
-	var x0 := r.position.x + 18.0
-	var lx := x0 + 96.0
-	var y := r.position.y + 50.0
-	var lab := func(key: String, yy: float) -> void:
-		c.draw_string(font, Vector2(x0, yy + 18), Txt.t(key), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.ink(0.5))
-	# ship type
-	lab.call("dev_b_ship", y)
-	var ships: Array = []
-	for sid in SHIPS:
-		if FileAccess.file_exists(Ship.DIR + sid + ".json"):
-			var ty: Dictionary = Market.type_of(sid)
-			var nm = ty.get("name", [sid, sid])
-			var label: String = "%s %s" % [ty.get("class", sid.to_upper()), nm[0] if Txt.zh else nm[1]] if nm is Array else sid
-			ships.append([label, b_ship == sid, func():
-				b_ship = sid
-				b_traps = b_traps.filter(func(tr): return tr in Traps.allowed(Ship.load_data(sid)))])
-	y = _chips(lx, y, ships, 0.0, r.end.x - 18.0) + 36.0
-	# accidents this type allows
-	lab.call("dev_b_traps", y)
-	var allowed: Array = Traps.allowed(Ship.load_data(b_ship))
-	var tx := lx
-	var ty2 := y
-	for tr in Traps.ALL + Traps.EXTRA:
-		var ok: bool = tr in allowed
-		if not ok:
-			continue
-		var label2 := Txt.t("dt_" + tr)
-		var tw := font.get_string_size(label2, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 18.0
-		if tx + tw > r.end.x - 18.0:
-			tx = lx
-			ty2 += 32.0
-		_button(Rect2(tx, ty2, tw, 26), label2, tr in b_traps, func():
-			if tr in b_traps:
-				b_traps.erase(tr)
-			else:
-				b_traps.append(tr))
-		tx += tw + 6.0
-	y = ty2 + 36.0
-	# stars, scope, goal
-	lab.call("dev_b_stars", y)
-	var st: Array = []
-	for n in [1, 2, 3]:
-		st.append(["★".repeat(n), b_stars == n, func(): b_stars = n])
-	_chips(lx, y, st, 52.0)
-	y += 36.0
-	lab.call("dev_b_scope", y)
-	var sc: Array = []
-	for scope in SCOPES:
-		sc.append([Txt.t("sc_" + scope), b_scope == scope, func(): b_scope = scope])
-	_chips(lx, y, sc)
-	y += 36.0
-	lab.call("dev_b_goal", y)
-	var gl: Array = []
-	for goal in GOALS:
-		gl.append([Txt.t("goal_" + goal) if goal != "" else Txt.t("dev_b_drawn"), b_goal == goal, func(): b_goal = goal])
-	_chips(lx, y, gl)
-	y += 36.0
-	# upgrades the contract is played with
-	lab.call("dev_b_kit", y)
-	var kx := lx
-	var ky := y
-	for kv in KIT:
-		var id: String = kv[0]
-		var label3 := Txt.t(kv[1])
-		var kw := font.get_string_size(label3, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 18.0
-		if kx + kw > r.end.x - 18.0:
-			kx = lx
-			ky += 32.0
-		_button(Rect2(kx, ky, kw, 26), label3, b_kit.has(id), func():
-			if b_kit.has(id):
-				b_kit.erase(id)
-			else:
-				b_kit[id] = 1)
-		kx += kw + 6.0
-	y = ky + 36.0
-	# the variant seed
-	lab.call("dev_b_seed", y)
-	_button(Rect2(lx, y, 30, 26), "◀", false, func(): b_seed = maxi(1, b_seed - 1))
-	c.draw_string(font_b, Vector2(lx + 40, y + 18), str(b_seed), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Pal.ink(0.9))
-	_button(Rect2(lx + 110, y, 30, 26), "▶", false, func(): b_seed += 1)
-	_button(Rect2(lx + 148, y, 70, 26), Txt.t("dev_b_random"), false, func(): b_seed = randi_range(1, 99999))
-	y += 44.0
-	# what the validator says, and what it would be worth
-	var res := _checked()
-	var o: Dictionary = res.offer
-	var line: String
-	if res.ok:
-		line = Txt.t("dev_b_ok") % [o.reg, Pal.money(float(o.value)), float(o.time) / 60.0, ", ".join(o.traps.map(func(tr): return Txt.t("dt_" + tr))) if not o.traps.is_empty() else "—"]
-	else:
-		line = Txt.t("dev_b_bad") % ", ".join(res.reasons.slice(0, 4))
-	c.draw_string(font, Vector2(x0, y + 4), line, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 36, 13, Pal.ink(0.85) if res.ok else Pal.heat(0.95, 1.2))
-	# start (a sandbox), or onto the first card at the terminal
-	var by := r.end.y - 46.0
-	_button(Rect2(x0, by, 210, 32), Txt.t("dev_b_start"), false, _start, 14)
-	if where == "terminal":
-		_button(Rect2(x0 + 222, by, 210, 32), Txt.t("dev_b_card"), false, _to_card, 14)
-	var note := Txt.t("dev_b_note")
-	c.draw_string(font, Vector2(r.end.x - 18 - font.get_string_size(note, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x, by + 21), note, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.4))
+	if toast_t < 2.5 and not workbench_open:
+		c.draw_string(font_b, Vector2(40, c.size.y - 45), toast, HORIZONTAL_ALIGNMENT_LEFT, c.size.x - 80, 17, Pal.ink(0.9))
 
 
 # what the pointer is on, the way the ship file and the systems see it

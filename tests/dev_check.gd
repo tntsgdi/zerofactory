@@ -4,7 +4,7 @@ extends SceneTree
 # upgrades asked for. A test contract played to its end settles nothing into
 # the career and writes no save over the career's contract. On site the F keys
 # do what the panel says (make safe, time steps, inspect, x-ray, this contract
-# again) and a click on a row does the same. At the terminal: every upgrade
+# again) and a focused native action card does the same. At the terminal: every upgrade
 # and facility, the opening skipped (market open), work plans forgotten, the
 # builder's contract onto the first card. Test files only.
 # godot --headless --path . --fixed-fps 60 -s tests/dev_check.gd
@@ -48,22 +48,26 @@ func _dev_of(node: Node) -> DevPanel:
 
 
 func _click(dev: DevPanel, label_key: String) -> bool:
-	dev.c.queue_redraw()
-	await process_frame
-	await process_frame
-	var rs: Array = dev.rows()
-	for i in rs.size():
-		if rs[i][1] == label_key:
-			for h in dev.hits:
-				var ry: float = dev._panel_y() + 50.0 + i * 24.0
-				if h[0].position.y > ry - 20.0 and h[0].position.y < ry:
-					var ev := InputEventMouseButton.new()
-					ev.button_index = MOUSE_BUTTON_LEFT
-					ev.pressed = true
-					ev.position = h[0].get_center()
-					dev._input(ev)
-					return true
-	return false
+	dev.set_open(true)
+	dev.bench.page = 0
+	dev.bench.refresh()
+	await _frames(3)
+	if not dev.bench.buttons.has(label_key):
+		return false
+	var button: Button = dev.bench.buttons[label_key]
+	button.grab_focus()
+	var ev := InputEventKey.new()
+	ev.keycode = KEY_ENTER
+	ev.physical_keycode = KEY_ENTER
+	ev.pressed = true
+	root.push_input(ev)
+	await _frames(1)
+	ev = ev.duplicate()
+	ev.pressed = false
+	root.push_input(ev)
+	await _frames(1)
+	dev.set_open(false)
+	return true
 
 
 func _run() -> void:
@@ -156,7 +160,7 @@ func _run() -> void:
 		all_up = all_up and Career.data.upgrades.has(kv[0])
 	check(all_up, "F4: every upgrade and facility")
 	td.run(8)
-	check(Career.data.market and int(Career.data.done) >= Career.OPENING.size() and Career.active().is_empty() and term.offers().size() == 3, "F8: the opening skipped, the market open with three offers")
+	check(Career.data.market and int(Career.data.done) >= Career.OPENING.size() and Career.active().is_empty() and term.next_job.is_empty() and term.offers().size() == 3, "F8: opening card removed; market open with three offers")
 	td.run(9)
 	check(Career.data.plans.is_empty(), "F9: the work plans forgotten")
 	DevPanel.b_ship = "h22"
@@ -164,9 +168,11 @@ func _run() -> void:
 	DevPanel.b_scope = "full"
 	td._to_card()
 	check(term.offers()[0].ship == "h22" and term.offers()[0].traps == ["second_source"] and not term.offers()[0].get("dev", false), "the builder's H-22 is on the first card, as a real contract")
-	td.builder = true
+	td.set_open(true)
+	td.bench.page = 2
+	td.bench.refresh()
 	await _frames(3)
-	check(td.hits.size() > 20, "the builder draws its choices (%d to click)" % td.hits.size())
+	check(td.bench.buttons.has("start_sandbox") and td.bench.buttons.has("ship_h22"), "the new contract lab exposes hull cards and a start button")
 	term.queue_free()
 	await _frames(2)
 	Txt.dev = false

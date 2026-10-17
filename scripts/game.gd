@@ -88,6 +88,7 @@ var testing := false
 var state := "intro"         # intro play ending
 var state_t := 0.0
 var paused_sim := false
+var dev_overlay_open := false
 var menu_open := false
 var contract_open := false
 
@@ -449,6 +450,8 @@ func cam_zoom() -> float:
 # ---------------------------------------------------------------- frame
 
 func _process(dt: float) -> void:
+	if dev_overlay_open:
+		return
 	var rdt := dt / maxf(Engine.time_scale, 0.01)
 	state_t += rdt
 	if state == "play" and not menu_open:
@@ -523,6 +526,8 @@ func _warp_k() -> float:
 
 
 func _physics_process(dt: float) -> void:
+	if dev_overlay_open:
+		return
 	_camera(dt / maxf(Engine.time_scale, 0.01))
 	if state == "play" and not menu_open:
 		tools.physics_step(dt)
@@ -567,7 +572,7 @@ func _read_input() -> void:
 
 func _unhandled_input(ev: InputEvent) -> void:
 	# a berth computer is open over the berth: it has the keys
-	if console_ui != null:
+	if console_ui != null or dev_overlay_open:
 		return
 	if ev is InputEventKey and ev.pressed and not ev.echo:
 		var k: int = ev.physical_keycode

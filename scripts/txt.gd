@@ -908,7 +908,7 @@ const S := {
 	"in_bio_breach": ["隔离舱 %s 负压阀失效：舱内 %d kPa，高于主廊，空气污染严重", "ISOLATION POD %s HAS LOST ITS NEGATIVE PRESSURE: %d kPa, ABOVE THE CORRIDOR, AIR BADLY CONTAMINATED"],
 	"in_fire_system": ["灭火剂储罐 FX-01 未释放，%d kPa", "FIRE BOTTLE FX-01 NEVER DISCHARGED: %d kPa"],
 	"in_none": ["没有发现隐藏状态", "NOTHING HIDDEN FOUND"],
-	"dev_on": ["开发者模式：开（F12 关闭）", "DEVELOPER MODE ON (F12 TO CLOSE)"],
+	"dev_on": ["开发者模式：开（F12 工作台）", "DEVELOPER MODE ON (F12 WORKBENCH)"],
 	"dev_off": ["开发者模式：关", "DEVELOPER MODE OFF"],
 	"dev_xray": ["透视真实状态", "X-RAY: TRUE STATE"],
 	"dev_safe": ["一键排空断电", "MAKE IT SAFE"],

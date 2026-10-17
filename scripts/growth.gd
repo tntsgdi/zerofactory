@@ -112,7 +112,10 @@ static func sync_kit(job: Dictionary) -> void:
 		if own.has("skill_" + id):
 			kit["skill_" + id] = level(own, id)
 			if LEGACY.has(id):
-				kit[LEGACY[id]] = 1
+				if level(own, id) > 0:
+					kit[LEGACY[id]] = 1
+				else:
+					kit.erase(LEGACY[id])
 	job.kit = kit
 
 static func progress() -> int:
