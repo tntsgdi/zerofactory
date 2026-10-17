@@ -645,17 +645,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 					say("mouth_moving", drone.global_position + Vector2(0, -44))
 				else:
 					say("mouth_fixed", drone.global_position + Vector2(0, -44))
-			"mark":
-				var under: Array = world.pieces_at(aim)
-				var mb = under[0].body if not under.is_empty() else null
-				var key := ""
-				# too heavy for the haulers (or none aboard): the crane's, if the berth has one
-				if crane != null and mb != null and (hauler == null or mb.total_mass() > Hauler.MAX_T or crane.queue.has(mb)):
-					key = crane.toggle(mb)
-				elif hauler != null:
-					key = hauler.toggle(mb)
-				if key != "":
-					say(key, aim + Vector2(0, -30))
+			"mark": mark_salvage()
 			"use":
 				if consoles != null and state == "play" and consoles.near() != "":
 					open_console(consoles.near())
@@ -674,20 +664,35 @@ func _unhandled_input(ev: InputEvent) -> void:
 			zoom_target = clampf(zoom_target * 1.1, 0.85, 2.6)
 		elif ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom_target = clampf(zoom_target / 1.1, 0.85, 2.6)
-		elif ev.button_index == MOUSE_BUTTON_RIGHT and state == "play":
-			# a right click lets go; a right drag pans the view (on release)
+		elif ev.button_index == MOUSE_BUTTON_RIGHT and state == "play" and not menu_open and not contract_open:
+			# A short click releases and marks; a drag only pans the view.
 			rmb_down = true
 			rmb_moved = 0.0
 	elif ev is InputEventMouseButton and not ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT:
-		if rmb_down and rmb_moved < 10.0 and state == "play":
+		if rmb_down and rmb_moved < 10.0 and state == "play" and not menu_open and not contract_open:
 			if tools.held_piece != null:
 				tools.release_grab(true)
 			tools.job = {}
+			if Keys.RIGHT_MOUSE in Keys.codes("mark"):
+				mark_salvage()
 		rmb_down = false
 	elif ev is InputEventMouseMotion and rmb_down:
 		rmb_moved += ev.relative.length()
 		if rmb_moved >= 10.0:
 			cam_pan -= ev.relative / maxf(zoom_now, 0.1)
+
+
+func mark_salvage() -> void:
+	var under: Array = world.pieces_at(aim)
+	var mb = under[0].body if not under.is_empty() else null
+	var key := ""
+	# too heavy for the haulers (or none aboard): the crane's, if the berth has one
+	if crane != null and mb != null and (hauler == null or mb.total_mass() > Hauler.MAX_T or crane.queue.has(mb)):
+		key = crane.toggle(mb)
+	elif hauler != null:
+		key = hauler.toggle(mb)
+	if key != "":
+		say(key, aim + Vector2(0, -30))
 
 
 func toggle_menu() -> void:

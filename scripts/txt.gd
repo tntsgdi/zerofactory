@@ -664,7 +664,7 @@ const S := {
 	"fa_hauler": ["初级搬运无人机", "BASIC HAULING DRONE"],
 	"fa_berth": ["船坞扩建（约 88 m）", "BERTH EXTENSION (ABOUT 88 m)"],
 	"fa_berth_d": ["地板、集料槽和吊臂延长到约 88 m，58–82 m 的船从此可以接；回收口挪到中段", "FLOOR, TROUGH AND BOOM TO ABOUT 88 m: SHIPS OF 58–82 m CAN BE TAKEN; MOUTHS MOVE MID-BERTH"],
-	"fa_hauler_d": ["现场按 G 给漂浮零件打标记，它自己送到该去的回收口（1.5 t 以内）", "PRESS G ON A FLOATING PIECE: IT TAKES IT TO THE RIGHT MOUTH (UP TO 1.5 t)"],
+	"fa_hauler_d": ["现场用 %s 给漂浮零件打标记，它自己送到该去的回收口（1.5 t 以内）", "USE %s ON A FLOATING PIECE: IT TAKES IT TO THE RIGHT MOUTH (UP TO 1.5 t)"],
 	"tm_facilities": ["船坞设施（买一次，永久生效）", "BERTH FACILITIES (BOUGHT ONCE, KEPT)"],
 	"mouth_moving": ["炉口沿导轨移动中", "FURNACE MOUTH MOVING"],
 	"mouth_fixed": ["炉口是固定的（船坞管理里可买导轨）", "THE MOUTH IS FIXED (A RAIL IS SOLD AT THE BERTH)"],
@@ -674,7 +674,7 @@ const S := {
 	"fa_hauler2": ["第二台搬运无人机", "SECOND HAULING DRONE"],
 	"fa_hauler2_d": ["和第一台分着搬同一张标记清单（需先有初级搬运无人机）", "WORKS THE SAME MARKS AS THE FIRST (NEEDS THE BASIC HAULER)"],
 	"fa_crane": ["重型起重机", "HEAVY CRANE"],
-	"fa_crane_d": ["船坞顶上的门式吊，12 t 以内整件吊走；按 G 标记超过 1.5 t 的件", "OVERHEAD GANTRY: LIFTS UP TO 12 t WHOLE; G MARKS ANYTHING OVER 1.5 t FOR IT"],
+	"fa_crane_d": ["船坞顶上的门式吊，12 t 以内整件吊走；用 %s 标记超过 1.5 t 的件", "OVERHEAD GANTRY: LIFTS UP TO 12 t WHOLE; USE %s TO MARK ANYTHING OVER 1.5 t FOR IT"],
 	"fa_port2": ["第二设备回收口", "SECOND EQUIPMENT BAY"],
 	"fa_port2_d": ["在船坞远端上方再开一个设备口，长船后半截不用绕远", "A SECOND EQUIPMENT MOUTH OVER THE FAR END: NO LONG TRIP FROM A LONG SHIP'S STERN"],
 	"fa_buffer": ["缓冲平台", "BUFFER PLATFORM"],
@@ -1051,7 +1051,10 @@ static func t(key: String) -> String:
 	var v = S.get(key)
 	if v == null:
 		return key
-	return v[0] if zh else v[1]
+	var text: String = v[0] if zh else v[1]
+	if key in ["fa_hauler_d", "fa_crane_d"]:
+		return text % Keys.label("mark")
+	return text
 
 
 static func has(key: String) -> bool:
