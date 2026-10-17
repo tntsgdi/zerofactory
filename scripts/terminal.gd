@@ -277,6 +277,8 @@ func _gui_input(ev: InputEvent) -> void:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	if DevPanel.workbench_open and Txt.dev:
+		return
 	if not (ev is InputEventKey and ev.pressed and not ev.echo) or leaving >= 0.0:
 		return
 	if overlay:
