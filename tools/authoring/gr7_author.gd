@@ -19,6 +19,8 @@ const BOT_STATIONS := [33.0, 30.0, 27.0, 24.2, 21.0, 17.8, 14.6, 11.4, 8.0, 4.6]
 const STERN_STATIONS := [-4.0, -1.4, 0.6, 4.0]
 
 static var inner: Array = []
+const PLATE_Y := 3.07     # underside of the hold's floor plates
+const CHAN_Y := 3.25      # top of the keel under the hold: the harness channel runs between
 const SEAT_SHAPE := [Vector2(0.02, 1.0), Vector2(0.98, 1.0), Vector2(0.98, 0.92), Vector2(0.6, 0.92), Vector2(0.6, 0.75), Vector2(0.78, 0.72),
 	Vector2(1.0, 0.18), Vector2(1.0, 0.02), Vector2(0.86, 0.0), Vector2(0.82, 0.15), Vector2(0.6, 0.63), Vector2(0.02, 0.64),
 	Vector2(0.02, 0.75), Vector2(0.38, 0.75), Vector2(0.38, 0.92), Vector2(0.02, 0.92)]
@@ -28,6 +30,13 @@ static var by_tag := {}
 
 static func p(x: float, y: float) -> Vector2:
 	return Vector2(x * Geom.M, y * Geom.M)
+
+
+static func _mp(pts: Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for q in pts:
+		out.append(q * Geom.M)
+	return out
 
 
 static func R(x0: float, y0: float, x1: float, y1: float) -> PackedVector2Array:
@@ -193,12 +202,18 @@ static func _interior() -> void:
 	var keel_x := [4.7, 10.0, 18.6, 27.0, 32.55]
 	var keels: Array = []
 	for i in 4:
-		var k = w.add_piece("keel", R(keel_x[i], 2.95, keel_x[i + 1], 3.55), {"density": 1.1, "barrier": true, "cut_speed": 120.0, "tag": "K%d" % (i + 1)})
+		var kp := R(keel_x[i], 2.95, keel_x[i + 1], 3.55)
+		# under the hold the keel steps down to leave the harness channel below the floor plates
+		if i == 1:
+			kp = _mp([Vector2(10.0, 2.95), Vector2(10.15, 2.95), Vector2(10.15, CHAN_Y), Vector2(18.6, CHAN_Y), Vector2(18.6, 3.55), Vector2(10.0, 3.55)])
+		elif i == 2:
+			kp = _mp([Vector2(18.6, CHAN_Y), Vector2(26.85, CHAN_Y), Vector2(26.85, 2.95), Vector2(27.0, 2.95), Vector2(27.0, 3.55), Vector2(18.6, 3.55)])
+		var k = w.add_piece("keel", kp, {"density": 1.1, "barrier": true, "cut_speed": 120.0, "tag": "K%d" % (i + 1)})
 		_tagged(k)
 		keels.append(k)
 		if i > 0:
-			_bolt(keels[i - 1], k, keel_x[i], 3.1, "weld")
-			_bolt(keels[i - 1], k, keel_x[i], 3.4, "weld")
+			_bolt(keels[i - 1], k, keel_x[i], 3.1 if i != 2 else 3.32, "weld")
+			_bolt(keels[i - 1], k, keel_x[i], 3.45, "weld")
 		var x: float = keel_x[i] + 0.6
 		while x < keel_x[i + 1] - 0.3:
 			_bolt(k, hull_at(x, 3.75), x, 3.56)
@@ -232,10 +247,23 @@ static func _interior() -> void:
 	_bolt(rail, w.piece_at(p(27.0, -3.0), ["bulkhead"]), 26.85, -3.4)
 	for x in [11.4, 16.9, 22.4, 25.8]:
 		_bolt(rail, hull_at(x, -3.8), x, -3.55)
+	# the hold floor: four grating plates on stand-off bolts over the harness channel (not airtight)
+	var fx := [10.15, 14.55, 18.85, 23.2, 26.85]
+	var plates: Array = []
+	for i in 4:
+		var fp = w.add_piece("rail", R(fx[i], 2.95, fx[i + 1], PLATE_Y), {"density": 0.8, "cut_speed": 240.0, "tag": "FP-C%d" % (i + 1), "room": "C",
+			"art": "grating", "art_xf": Transform2D(0.0, p(fx[i], 2.95)), "art_size": p(fx[i + 1] - fx[i], PLATE_Y - 2.95), "name_key": "p_floor"})
+		_tagged(fp)
+		plates.append(fp)
+		var kl = keels[1] if fx[i] < 18.6 else keels[2]
+		_bolt(fp, kl, fx[i] + 0.35, PLATE_Y)
+		_bolt(fp, kl, fx[i + 1] - 0.35, PLATE_Y)
+		if i > 0:
+			_bolt(plates[i - 1], fp, fx[i], 3.01)
 	for x in [14.55, 18.85, 23.2]:
 		var r = w.add_piece("rib", R(x - 0.1, -3.25, x + 0.1, 2.95), {"density": 1.2, "cut_speed": 240.0, "room": "C"})
 		_bolt(r, rail, x, -3.25)
-		_bolt(r, keels[1] if x < 18.6 else keels[2], x, 2.95)
+		_bolt(r, w.piece_at(p(x + 0.05, 3.0), ["rail"]), x, 2.95)
 
 
 static func _bulkhead(x: float, spans: Array, left: String, right: String) -> void:
@@ -302,7 +330,7 @@ static func _sit_bolts(pc, r: Rect2, floor_piece, type: String = "bolt", n: int 
 static func _below(x: float, y: float) -> Array:
 	var d := 0.04
 	while d < 1.2:
-		var fp = w.piece_at(p(x, y + d), ["keel", "hull", "deck", "door"])
+		var fp = w.piece_at(p(x, y + d), ["keel", "hull", "deck", "door", "rail"])
 		if fp != null:
 			return [fp, y + d - 0.04]
 		d += 0.04
@@ -385,8 +413,8 @@ static func _equipment() -> void:
 	_sit_bolts(c1, r, null, "lock", 4)
 	r = sit(15.7, 18.3, 1.9)
 	var c2 = _equip("C-02", "cargo", r, {"mass": 1.7, "value": 11000.0, "fragile": 0.9, "room": "C", "name_key": "p_cargo2"}, deg_to_rad(5.0), Vector2(18.3, 2.95))
-	_bolt(c2, w.piece_at(p(17.9, 3.1), ["keel"]), 17.9, 2.94, "lock")
-	_bolt(c2, w.piece_at(p(17.2, 3.1), ["keel"]), 17.25, 2.9, "lock")
+	_bolt(c2, w.piece_at(p(17.9, 3.0), ["rail"]), 17.9, 2.94, "lock")
+	_bolt(c2, w.piece_at(p(17.2, 3.0), ["rail"]), 17.25, 2.9, "lock")
 	r = sit(19.4, 21.8, 1.8)
 	var c3 = _equip("C-03", "cargo", r, {"mass": 1.2, "value": 7000.0, "fragile": 0.6, "room": "C", "name_key": "p_cargo3"})
 	_sit_bolts(c3, r, null, "lock", 4)
@@ -396,6 +424,25 @@ static func _equipment() -> void:
 		var hk = _equip("HOOK-%d" % (i + 1), "hook", r, {"cls": "metal", "dest": "metal", "mass": 0.4, "room": "C", "cut_speed": 220.0, "name_key": "p_hook"})
 		_bolt(hk, by_tag["RAIL-C"], hx + 0.3, -3.25)
 	_lamp("LAMP-C", 17.6, "C", -3.25)
+	# under the floor plates: the hold's lighting and sensor harness, in two runs (lift a plate to reach it)
+	for i in 2:
+		var hx0: float = [10.3, 18.75][i]
+		var hx1: float = [18.45, 26.7][i]
+		r = Rect2(hx0, PLATE_Y + 0.03, hx1 - hx0, 0.12)
+		var har = _equip("HAR-C%d" % (i + 1), "harness", r, {"mass": 0.08, "value": 600.0, "fragile": 0.6, "room": "C", "name_key": "p_harness"})
+		var x := hx0 + 0.4
+		while x < hx1:
+			_bolt(har, w.piece_at(p(x, CHAN_Y + 0.1), ["keel"]), x, CHAN_Y)
+			x += 3.6
+		har.hidden_by = by_tag["FP-C1" if i == 0 else "FP-C4"].id
+	# inspection panels on the hold's end walls: a test point on the hold's circuit each
+	for i in 2:
+		r = Rect2(10.15, -1.6, 0.3, 1.2) if i == 0 else Rect2(26.55, -0.5, 0.3, 1.0)
+		var ins = _equip("INSP-%d" % (i + 1), "insp", r, {"mass": 0.06, "value": 700.0, "fragile": 0.4, "room": "C", "name_key": "p_insp"})
+		var wx := 10.0 if i == 0 else 27.0
+		var wall = w.piece_at(p(wx, r.get_center().y), ["bulkhead"])
+		_bolt(ins, wall, wx + (0.15 if i == 0 else -0.15), r.position.y + 0.2)
+		_bolt(ins, wall, wx + (0.15 if i == 0 else -0.15), r.end.y - 0.2)
 	# D — power room on the deck
 	r = sit(27.5, 29.7, 1.95, -0.15)
 	var gen = _equip("G-01", "gen", r, {"mass": 2.8, "value": 16000.0, "fragile": 0.35, "room": "D", "mandatory": true, "hazard": "gen", "name_key": "p_gen", "temp": 96.0})
@@ -521,7 +568,10 @@ static func _lines() -> void:
 	_line("q2", "pipe", "coolant", "G-01", Vector2(29.7, -0.5), "ENG-F", Vector2(34.2, -1.1), [Vector2(30.0, -0.5), Vector2(30.0, -0.35), Vector2(32.4, -0.35), Vector2(33.6, -1.25), Vector2(34.2, -1.25)])
 	_line("q3", "pipe", "coolant", "ENG-F", Vector2(34.2, 1.1), "RAD", Vector2(32.35, 2.2), [Vector2(34.2, 1.4), Vector2(33.6, 1.4), Vector2(32.9, 1.5), Vector2(32.4, 1.5)])
 	_line("q4", "pipe", "coolant_broken", "RAD", Vector2(30.62, 2.5), "CP-E", Vector2(28.45, 2.5), [Vector2(30.0, 2.5), Vector2(29.95, 2.75), Vector2(28.6, 2.75)])
-	_line("q5", "pipe", "none", "C-03", Vector2(21.8, 2.3), "K3", Vector2(22.4, 2.95), [Vector2(22.2, 2.3)])
+	_line("q5", "pipe", "none", "C-03", Vector2(21.8, 2.3), "FP-C3", Vector2(22.4, 2.95), [Vector2(22.2, 2.3)])
+	# the hold harness: fed down the aft wall of the hold, through the floor, along the channel
+	_line("c10", "cable", "power", "SWB", Vector2(31.85, -2.45), "HAR-C2", Vector2(26.6, 3.16), [Vector2(31.4, -2.45), Vector2(31.4, -2.7), Vector2(27.6, -2.7), Vector2(26.62, -2.7), Vector2(26.62, 3.1)])
+	_line("c11", "cable", "power", "HAR-C2", Vector2(18.8, 3.16), "HAR-C1", Vector2(18.4, 3.16))
 	_line("p1", "pipe", "fuel", "T-F01", Vector2(35.6, -2.1), "ENG-F", Vector2(34.4, -1.1), [Vector2(35.2, -2.1), Vector2(35.2, -1.6), Vector2(34.4, -1.6)])
 	_line("g1", "pipe", "gas", "TK-B1", Vector2(5.85, 1.05), "ENV-B", Vector2(7.9, 2.1), [Vector2(5.85, 0.7), Vector2(7.5, 0.7), Vector2(7.5, 2.1)])
 	_line("g2", "pipe", "gas", "TK-B2", Vector2(6.85, 1.05), "ENV-B", Vector2(7.9, 2.4), [Vector2(6.85, 0.85), Vector2(7.35, 0.85), Vector2(7.35, 2.4)])
@@ -553,6 +603,8 @@ static func _controls() -> void:
 	_ctrl("TK-B1", "port", by_tag["TK-B1"], Vector2(5.85, 1.12), {"medium": "gas", "target": "T1", "hidden_room": "B"})
 	_ctrl("TK-B2", "port", by_tag["TK-B2"], Vector2(6.85, 1.12), {"medium": "gas", "target": "T2", "hidden_room": "B"})
 	_ctrl("EM-A", "port", by_tag["EM-A"], Vector2(4.4, -2.0), {"medium": "gas", "target": "T3", "hidden_room": "A"})
+	_ctrl("E-C01", "test", by_tag["INSP-1"], Vector2(10.3, -1.0), {"medium": "volt", "target": "bus", "hidden_room": "C"})
+	_ctrl("E-C02", "test", by_tag["INSP-2"], Vector2(26.7, 0.0), {"medium": "volt", "target": "bus", "hidden_room": "C"})
 	_ctrl("COOL-E", "port", by_tag["CP-E"], Vector2(27.7, 2.25), {"medium": "coolant", "target": "loop", "hidden_room": "E"})
 	_ctrl("V-E1", "valve", by_tag["K4"], Vector2(28.75, 2.85), {"target": "V-E1", "state": true, "hidden_room": "E"})
 	_ctrl("V-E2", "valve", by_tag["K4"], Vector2(30.25, 2.85), {"target": "V-E2", "state": true, "hidden_room": "E"})
@@ -571,7 +623,7 @@ static func _rooms() -> void:
 	var a_cut: Array = Geometry2D.intersect_polygons(ip, R(-1.0, -5.0, 4.85, 5.0))
 	w.add_room("A", a_cut[0] if a_cut.size() > 0 else R(0.6, -2.0, 4.85, 3.0))
 	w.add_room("B", R(5.15, -3.55, 9.85, 2.95))
-	w.add_room("C", R(10.15, -3.55, 26.85, 2.95))
+	w.add_room("C", R(10.15, -3.55, 26.85, CHAN_Y))
 	w.add_room("D", R(27.15, -3.55, 32.55, -0.15))
 	w.add_room("E", R(27.15, 0.15, 32.55, 2.95))
 	# the line between P-C01 and V-C01 is a tiny volume of its own
@@ -691,7 +743,7 @@ static func meta() -> Dictionary:
 		"name": "GR-7 GREY HERON",
 		"contract": "GR-001",
 		"length": 42.0,
-		"value": {"total": 122500.0, "metal": 12000.0},
+		"value": {"total": 125100.0, "metal": 12000.0},
 		"clamps": [[7.0, 4.0], [15.8, 4.0], [23.4, 4.0], [28.6, 4.0]],
 		"room_names": {"A": "room_A", "B": "room_B", "C": "room_C", "D": "room_D", "E": "room_E"},
 		"gas": {
@@ -787,7 +839,7 @@ static func meta() -> Dictionary:
 		},
 		"story": story(),
 		"blueprint": {
-			"hide": ["LAMP-A", "LAMP-B", "LAMP-C", "LAMP-D", "CTRL-D", "COV-A", "GUARD-F"],
+			"hide": ["LAMP-A", "LAMP-B", "LAMP-C", "LAMP-D", "CTRL-D", "COV-A", "GUARD-F", "FP-C1", "FP-C2", "FP-C3", "FP-C4"],
 			"design": {"C-02": [15.0, 1.05, 17.6, 2.95], "RAD": [30.6, 1.8, 32.3, 2.95]},
 			"runs": [[[11.2, -4.0], [11.2, -4.18], [11.85, -4.18], [11.85, -3.4]]],
 		},

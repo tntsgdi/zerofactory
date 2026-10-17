@@ -148,7 +148,7 @@ func _ready() -> void:
 		Copy.say(radio, "L_rep_" + lv)
 
 
-# the loan is gone (at a settlement, or paid off here): BERTH 07 is yours, once
+# the first time a debt from a botched job is cleared (at a settlement, or paid off here), once
 func _check_milestone() -> void:
 	var seen: Dictionary = Career.data.get("seen", {})
 	if not Career.data.get("paid_off", false) or seen.has("paid_off"):

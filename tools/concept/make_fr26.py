@@ -6,7 +6,7 @@ from mini import BG, HULLF, HULLS, EQF, EQ, DIM, FAINT, AIR, FLUID, HEAT, HAZ, V
 from sheet import sheet
 
 COLD = '#9fe3ff'
-k = Kit(110, 520, 22.0)
+k = Kit(110, 560, 22.0)
 KT, KB = -6.1, -5.3                       # the keel the tanks hang from
 # ---------------- radiator wings (behind): two pairs, over the front and rear equipment
 for x0, x1 in ((8.0, 14.0), (59.5, 65.0)):
@@ -111,9 +111,61 @@ for x in (21.8, 37.0, 52.2):
     a, b = k.P(x, 4.55)
     k.o.append(f'<polygon points="{a-16:.0f},{b+80:.0f} {a+16:.0f},{b+80:.0f} {a+8:.0f},{b+4:.0f} {a-8:.0f},{b+4:.0f}" fill="#222731" stroke="{FAINT}" stroke-dasharray="4 3"/>')
 
+# ---------------- v2 fill
+# inside each tank: pump tower with its submerged cargo pump, cool-down spray ring, level gauge, keyed supports
+for x0, x1, nm in tanks:
+    r = 4.55
+    px = x0 + 3.2
+    k.rect(px - 0.35, -r + 0.9, 0.7, 2 * r - 1.8, fill='none', stroke=COLD, sw=1.2)
+    k.line(px, -r + 0.9, px, r - 1.2, COLD, 0.8, 0.6)
+    k.eq(px - 0.55, r - 2.1, 1.1, 1.1, art="pump", col=COLD)
+    k.pline([(x0 + 1.4, -r + 1.35), (x1 - 1.4, -r + 1.35)], COLD, 1.0, 0.7, dash='2 2')
+    k.line(x1 - 1.6, -r + 1.0, x1 - 1.6, r - 1.0, VIO, 1.0)
+    for j in range(6):
+        k.circ(x1 - 1.6, -r + 1.5 + j * 1.2, 0.1, fill=VIO, stroke='none')
+    for xx in (x0 + 5.5, x1 - 4.5):
+        k.rect(xx - 0.3, r - 0.85, 0.6, 0.3, fill=EQF, stroke=DIM, sw=1.0)
+# the cargo-handling deck on the keel: boil-off compressors, the reliquefaction cold box, nitrogen, the vent mast
+for x0, x1 in ((16.0, 28.0), (31.0, 44.0), (46.0, 58.0)):
+    k.plate([(x0, KT), (x1, KT), (x1, KT - 0.25), (x0, KT - 0.25)], fill='#323844')
+cr = [(16.0, KT - 0.25), (28.0, KT - 0.25), (28.0, -10.0), (17.4, -10.0), (16.0, -8.6)]
+k.shell(cr, offset(cr, 0.3))
+k.room(offset(cr, 0.3))
+k.plate([(16.3, -8.0), (27.7, -8.0), (27.7, -7.82), (16.3, -7.82)])
+for i in range(3):                                                    # crew quarters over the forward tank
+    k.eq(17.0 + i * 2.5, -9.6, 2.3, 0.85, art="bunk")
+k.eq(24.6, -9.6, 2.8, 1.5, art="locker")
+k.eq(16.8, -7.7, 2.6, 1.3, art="console")
+k.eq(19.6, -7.7, 2.2, 1.3, art="cabinet")
+k.eq(22.0, -7.7, 2.2, 1.3, art="env", col=AIR)
+k.tank(24.5, -7.75, 0.7, 1.35, AIR, "")
+k.tank(25.4, -7.75, 0.7, 1.35, AIR, "")
+k.door(27.72, -7.7, 0.26, 1.3)
+for i in range(2):                                                    # boil-off gas compressors
+    k.eq(31.4 + i * 3.4, -9.3, 3.0, 2.9, art="pump", col=COLD)
+k.eq(38.4, -9.8, 3.0, 3.4, art="radiator", col=COLD)                  # reliquefaction cold box
+k.label(39.9, -10.1, "RELIQ", 8, COLD, 'middle')
+k.eq(41.7, -9.0, 2.0, 2.6, art="env", col=AIR)                        # nitrogen generator
+k.label(42.7, -9.3, "N₂", 8, AIR, 'middle')
+k.pipe([(32.9, -6.4), (32.9, -6.1)], COLD, 1.6)
+k.pipe([(36.3, -6.4), (36.3, -6.1)], COLD, 1.6)
+k.pipe([(52.0, KT), (52.0, -12.6)], COLD, 1.8)                        # vent mast
+k.rect(51.6, -13.2, 0.8, 0.6, fill=EQF, stroke=HAZ, sw=1.2)
+k.label(52.0, -13.5, "VENT MAST", 8, HAZ, 'middle')
+# power module aft on the keel: fuel cell generator, H2 / O2 tanks (the chillers' main supply)
+k.eq(46.4, -9.4, 3.4, 3.0, art="gen", col=HEAT)
+k.tank(53.0, -9.2, 1.2, 2.8, AIR, "H₂")
+k.tank(54.5, -9.2, 1.2, 2.8, AIR, "O₂")
+k.eq(56.0, -8.8, 1.8, 2.4, art="swb", col=HEAT)
+k.cable([(57.8, -7.0), (59.0, -7.0), (59.0, KT)], HEAT)
+# a walkway with handrail along the keel top and gas detectors
+k.line(14.5, KT - 0.35, 60.0, KT - 0.35, FAINT, 0.8)
+for x in (21.0, 37.5, 52.6):
+    k.circ(x, KT + 0.4, 0.2, fill=BG, stroke=HAZ, sw=1.1)
+
 calls = []
 def c(n, x, y, lx, row, kind, text):
-    calls.append((n, x, y, lx, 150 if row == 0 else 860, kind, text))
+    calls.append((n, x, y, lx, 150 if row == 0 else 830, kind, text))
 c(1, 2.0, -0.5, 80, 1, "sys", "驾驶台 + 驾驶座")
 c(2, 4.85, -2.5, 150, 1, "fluid", "温控总控面板")
 c(3, 6.4, -2.4, 220, 1, "energy", "货物监测终端")
@@ -135,9 +187,20 @@ c(18, 62.4, -0.1, 640, 1, "haz", "冻结应急加热装置（可能被错误启�
 c(19, 61.2, 2.7, 710, 1, "energy", "备用电池 + 开关")
 c(20, 69.5, -2.6, 710, 0, "sys", "常规推进器 ×2")
 c(21, 67.35, 0.1, 780, 1, "energy", "尾部电力配电箱")
+c(0, 18.0, 0.0, 0, 1, "fluid", "泵塔 + 潜液货泵（每罐一座）")
+c(0, 36.0, -3.2, 0, 0, "fluid", "冷却喷淋环")
+c(0, 42.4, 0.6, 0, 1, "energy", "液位计（每罐一根）")
+c(0, 20.0, 4.0, 0, 1, "struct", "内罐键式支座")
+c(0, 20.0, -9.2, 0, 0, "room", "船员舱：铺位 ×3 + 储物 + 餐桌 + 生命维持")
+c(0, 34.6, -7.8, 0, 0, "fluid", "蒸发气压缩机 ×2（停了罐压会慢慢涨）")
+c(0, 39.9, -8.2, 0, 0, "fluid", "再液化冷箱")
+c(0, 42.7, -7.7, 0, 0, "room", "制氮机")
+c(0, 52.0, -12.9, 0, 0, "haz", "排放塔")
+c(0, 48.1, -7.9, 0, 0, "haz", "燃料电池发电机 + 氢 / 氧罐（制冷机主电源）")
+c(0, 37.5, KT + 0.4, 0, 1, "haz", "可燃气体探测器")
 zones = [(0.4, 7.6, 7.6, "① 前控制舱（有压）", "room"), (7.6, 14.2, 7.6, "② 前设备段", "fluid"), (14.2, 59.6, 7.6, "③ 三联低温储罐", "fluid"),
          (59.6, 65.4, 7.6, "④ 后设备段", "fluid"), (65.4, 71.5, 7.6, "⑤ 尾推进", "struct")]
-sheet('fr26.html', 1800, 1150, 'FR-26「霜线」低温运输船 · 72 m · 结构图（设计稿）',
+sheet('fr26.html', 1800, 1300, 'FR-26「霜线」低温运输船 · 72 m · 结构图（设计稿 v2）',
       ['三个串联的大型圆柱冷藏罐挂在一根龙骨上，船体细长，两侧散热翼。',
-       '第一次把温度当成重要状态：只看电和压不够，还要看「低温是否失控」。'], k.svg(), k.P, calls, zones, legend_cols=2, auto=True, scale_at=(0.0, -11.6), scale_m=10)
+       '第一次把温度当成重要状态：只看电和压不够，还要看「低温是否失控」。'], k.svg(), k.P, calls, zones, legend_cols=2, auto=True, scale_at=(0.0, -16.0), scale_m=10)
 print('ok')

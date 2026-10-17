@@ -60,11 +60,11 @@ for row in range(7):
     x = 55.0 + row * 2.2
     k.seat(x, DECK - 0.22, 1.3)
 for x0 in (19.0, 30.0, 55.0):                                               # luggage bins overhead
-    k.eq(x0, -7.85, 9.0 if x0 < 50 else 12.0, 0.9, art="locker")
+    k.eq(x0, -4.12, 9.0 if x0 < 50 else 12.0, 0.62, art="locker")
 k.eq(43.0 - 2.4, -3.0, 2.2, 2.8, art="swb", col=AIR)                         # crew station
 k.label(41.7, -3.4, "CREW", 9, AIR, 'middle')
-k.cable([(19.0, -6.75), (70.0, -6.75)], HEAT)                               # ceiling wiring
-k.pipe([(19.0, -6.45), (70.0, -6.45)], AIR, 1.4)
+k.cable([(19.0, -4.15), (70.0, -4.15)], HEAT)                               # ceiling wiring, in the deck above
+k.pipe([(19.0, -3.42), (70.0, -3.42)], AIR, 1.2)
 # ---------------- lower deck: rest pods, sanitation, galley, a small equipment room
 for i in range(4):
     for j in range(3):
@@ -84,7 +84,7 @@ k.eq(53.0, 0.8, 4.0, 3.0, art="pump", col=FLUID)                             # s
 k.eq(57.6, 0.8, 4.4, 3.2, art="battery", col=VIO)
 k.label(59.8, 4.6, "AUX BATT (upper deck circuit)", 9, VIO, 'middle')
 k.eq(62.6, 0.8, 3.8, 3.0, art="radiator", col=FLUID)
-k.cable([(57.6, 2.0), (56.0, 2.0), (56.0, -6.75)], VIO)
+k.cable([(57.6, 2.0), (56.0, 2.0), (56.0, -4.15)], VIO)
 # ---------------- central service core: a shaft through both decks (stairs + lift), main power, HVAC, backup gen
 k.room([(44.3, -8.3), (51.7, -8.3), (51.7, 7.7), (44.3, 7.7)])
 k.plate([(46.2, -8.3), (46.5, -8.3), (46.5, 7.7), (46.2, 7.7)], fill='#2a3140')
@@ -122,17 +122,46 @@ for x in (30.0, 60.0, 85.0):
     a, b = k.P(x, 8.2 if x < 70 else 3.6)
     k.o.append(f'<polygon points="{a-12:.0f},{b+52:.0f} {a+12:.0f},{b+52:.0f} {a+6:.0f},{b+3:.0f} {a-6:.0f},{b+3:.0f}" fill="#222731" stroke="{FAINT}" stroke-dasharray="4 3"/>')
 
+# ---------------- v2 fill: a third level over the passenger cabins (suites forward, crew aft), escape pods, propellant
+for x0, x1 in ((18.65, 43.85), (52.15, 71.85)):
+    k.plate([(x0, -4.45), (x1, -4.45), (x1, -4.2), (x0, -4.2)])
+for i in range(6):                                                           # suites: bed, wardrobe, partition with a door
+    x = 19.0 + i * 4.1
+    k.eq(x, -5.45, 2.4, 1.0, art="bunk")
+    k.eq(x + 2.5, -6.5, 1.0, 2.05, art="cabinet")
+    k.plate([(x + 3.75, -8.3), (x + 3.9, -8.3), (x + 3.9, -4.45), (x + 3.75, -4.45)], fill='#2a3140')
+    k.door(x + 3.76, -6.3, 0.13, 1.8)
+k.label(31.0, -7.6, "SUITES ×6", 9, AIR, 'middle')
+for i in range(3):                                                           # crew quarters: two-high berths
+    for j in range(2):
+        k.eq(52.6 + i * 3.0, -7.0 + j * 1.25, 2.7, 1.1, art="bunk")
+k.eq(61.8, -5.9, 2.8, 1.4, art="console")                                    # crew mess
+k.eq(64.8, -6.4, 1.6, 1.95, art="cabinet")
+k.eq(66.6, -6.7, 2.6, 2.25, art="env", col=AIR)                              # upper-level air handler
+k.eq(69.4, -6.4, 2.0, 1.95, art="locker")
+k.label(57.0, -7.7, "CREW", 9, AIR, 'middle')
+for x in (20.0, 34.0, 55.0, 66.0):                                           # drop-down oxygen mask lines over the seats
+    k.pline([(x, -3.35), (x + 8.0 if x < 50 else x + 5.0, -3.35)], AIR, 0.8, 0.6, dash='1 4')
+for cx in (16.3, 36.3, 54.8, 65.3):                                          # escape pods under the hull, on launch clamps
+    k.rect(cx - 1.8, 8.55, 3.6, 1.55, fill=EQF, stroke=AIR, sw=1.3, rx=0.7)
+    k.rect(cx - 0.5, 8.8, 1.0, 0.5, fill='#1b3550', stroke=AIR, sw=0.9)
+    k.plate([(cx - 1.2, 8.15), (cx - 0.8, 8.15), (cx - 0.8, 8.55), (cx - 1.2, 8.55)], fill='#4a505c')
+    k.plate([(cx + 0.8, 8.15), (cx + 1.2, 8.15), (cx + 1.2, 8.55), (cx + 0.8, 8.55)], fill='#4a505c')
+    k.lock(cx, 8.35)
+for sg in (-1, 1):                                                           # propellant tanks on the service section
+    k.tank(72.6, sg * 4.4 - 0.8, 5.2, 1.6, HAZ, "PROP")
+
 calls = []
 def c(n, x, y, lx, row, kind, text):
-    calls.append((n, x, y, lx, 150 if row == 0 else 870, kind, text))
+    calls.append((n, x, y, lx, 150 if row == 0 else 890, kind, text))
 c(1, 2.8, -0.9, 80, 1, "sys", "驾驶舱：主驾 + 副驾")
 c(2, 8.3, -1.5, 150, 1, "energy", "领航站")
 c(3, 6.0, -5.0, 80, 0, "room", "前部观景窗（外侧可能已破损）")
 c(4, 13.5, -1.0, 150, 0, "sys", "观景大厅")
 c(5, 30.0, -1.0, 220, 0, "sys", "上层客舱：乘客座舱（10 + 7 排）")
 c(6, 41.7, -2.0, 290, 0, "room", "乘务站")
-c(7, 34.0, -7.4, 360, 0, "sys", "行李储物区（头顶）")
-c(8, 40.0, -6.75, 430, 0, "energy", "天花板内走线（电缆 + 风管）")
+c(7, 34.0, -3.8, 360, 0, "sys", "行李储物区（头顶）")
+c(8, 40.0, -4.15, 430, 0, "energy", "天花板内走线（电缆 + 风管，在上一层地板里）")
 c(9, 12.0, 3.5, 220, 1, "sys", "下层生活区：休息舱（12 个）")
 c(10, 23.4, 3.0, 290, 1, "fluid", "卫生模块")
 c(11, 29.5, 3.5, 360, 1, "sys", "厨房 / 供给站")
@@ -147,9 +176,15 @@ c(19, 84.7, -0.9, 710, 0, "room", "后部长维护通道")
 c(20, 86.0, -6.0, 780, 0, "fluid", "冷却器（上下散热翼）")
 c(21, 103.0, 0.0, 850, 0, "sys", "引擎 ×3")
 c(22, 96.6, 4.6, 710, 1, "sys", "姿态喷口")
-zones = [(0.6, 18.5, 10.2, "① 前上层驾驶与观景区", "room"), (18.5, 44.0, 10.2, "② 上层客舱 / ③ 下层生活区", "room"),
-         (44.0, 52.0, 10.2, "④ 中央服务核心", "haz"), (52.0, 72.4, 10.2, "上层客舱（后）/ 设备间", "room"), (72.4, 107.6, 10.2, "⑤ 后部推进与维护区", "struct")]
-sheet('ps12.html', 1800, 1180, 'PS-12「晨光」客运飞船 · 108 m · 结构图（设计稿）',
-      ['双层主船体，前部观景窗，中段鼓起（像民航客舱），后部细长服务与推进区。',
+c(0, 27.2, -5.0, 0, 0, "room", "顶层：套间 ×6（床 + 衣柜 + 隔墙门）")
+c(0, 55.0, -6.4, 0, 0, "room", "顶层：船员宿舍（双层铺 ×6）+ 船员餐厅")
+c(0, 67.9, -5.6, 0, 0, "room", "顶层空气处理机")
+c(0, 24.0, -3.35, 0, 0, "room", "氧气面罩线（座位上方）")
+c(0, 36.3, 9.3, 0, 1, "haz", "救生舱 ×4（发射夹 + 火工品，新危险品）")
+c(0, 75.2, -4.4, 0, 0, "haz", "推进剂罐（上下各一）")
+zones = [(0.6, 18.5, 11.6, "① 前上层驾驶与观景区", "room"), (18.5, 44.0, 11.6, "② 上层客舱 / ③ 下层生活区", "room"),
+         (44.0, 52.0, 11.6, "④ 中央服务核心", "haz"), (52.0, 72.4, 11.6, "上层客舱（后）/ 设备间", "room"), (72.4, 107.6, 11.6, "⑤ 后部推进与维护区", "struct")]
+sheet('ps12.html', 1800, 1290, 'PS-12「晨光」客运飞船 · 108 m · 结构图（设计稿 v2）',
+      ['三层主船体（顶层套间 / 船员、上层客舱、下层生活区），前部观景窗，中段鼓起（像民航客舱），后部细长服务与推进区。',
        '多层结构、多个气密分区互相嵌套 —— 拆起来像「解剖一栋会飞的楼」。'], k.svg(), k.P, calls, zones, legend_cols=2, auto=True, scale_at=(0.0, -10.6), scale_m=10)
 print('ok')

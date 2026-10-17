@@ -97,6 +97,22 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			ci.draw_arc(Vector2(w * 0.5, h * 0.78), w * 0.22, -0.3, PI + 0.6, 12, Pal.ink(0.6), 1.2, true)
 		"lamp":
 			L(ci, Vector2(3, h * 0.6), Vector2(w - 3, h * 0.6), 0.5)
+		"grating":
+			var n := maxi(3, int(w / 9.0))
+			for i in range(1, n):
+				L(ci, Vector2(w * i / n, 1), Vector2(w * i / n, h - 1), 0.25)
+		"harness":
+			L(ci, Vector2(0, h * 0.35), Vector2(w, h * 0.35), 0.45)
+			L(ci, Vector2(0, h * 0.7), Vector2(w, h * 0.7), 0.3)
+			var k := 14.0
+			while k < w - 4:
+				ring(ci, Vector2(k, h * 0.5), minf(h * 0.32, 3.0), 0.55)
+				k += 46.0
+		"insp":
+			box(ci, Rect2(w * 0.15, h * 0.08, w * 0.7, h * 0.84), 0.45)
+			for i in 3:
+				L(ci, Vector2(w * 0.28, h * (0.25 + i * 0.12)), Vector2(w * 0.72, h * (0.25 + i * 0.12)), 0.3)
+			ring(ci, Vector2(w * 0.5, h * 0.75), w * 0.14, 0.55)
 		"gen":
 			for i in 3:
 				var cx := w * (0.2 + i * 0.22)

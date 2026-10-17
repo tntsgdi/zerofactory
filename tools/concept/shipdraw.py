@@ -178,6 +178,18 @@ def _art(o, art, w, h, piece, sw):
         for i in range(3):
             t = 0.55 + i * 0.13
             L(w * t, h * (0.32 - i * 0.08), w * t, h * (0.68 + i * 0.08), 0.25)
+    elif art == "harness":
+        L(0, h * 0.35, w, h * 0.35, 0.45)
+        L(0, h * 0.7, w, h * 0.7, 0.3)
+        k = 0.4
+        while k < w - 0.1:
+            C(k, h * 0.5, min(h * 0.32, 0.08), 0.55)
+            k += 1.3
+    elif art == "insp":
+        B(w * 0.15, h * 0.08, w * 0.7, h * 0.84, 0.45)
+        for i in range(3):
+            L(w * 0.28, h * (0.25 + i * 0.12), w * 0.72, h * (0.25 + i * 0.12), 0.3)
+        C(w * 0.5, h * 0.75, w * 0.14, 0.55)
     elif art == "grating":
         n = max(3, int(w / 0.12))
         for i in range(1, n):

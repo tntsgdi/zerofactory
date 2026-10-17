@@ -5,7 +5,7 @@ from kit import Kit, arc, offset
 from mini import BG, HULLF, HULLS, EQF, EQ, DIM, FAINT, AIR, FLUID, HEAT, HAZ, VIO
 from sheet import sheet
 
-k = Kit(120, 480, 26.5)
+k = Kit(120, 500, 26.5)
 rnd = random.Random(4)
 # ---------------- the hull: head low, back high, a deep belly under the ore bin
 outer = [(5.2, -2.4), (9.0, -5.2), (13.0, -6.6), (47.5, -6.6), (51.0, -5.6), (51.0, 5.0), (46.0, 6.9), (17.0, 6.9), (12.0, 5.6), (5.6, 4.6)]
@@ -141,9 +141,45 @@ for x in (20.0, 34.0, 46.0):
     a, b = k.P(x, 6.9)
     k.o.append(f'<polygon points="{a-16:.0f},{b+70:.0f} {a+16:.0f},{b+70:.0f} {a+8:.0f},{b+4:.0f} {a-8:.0f},{b+4:.0f}" fill="#222731" stroke="{FAINT}" stroke-dasharray="4 3"/>')
 
+# ---------------- v2 fill
+# crew module on the roof behind the cab: berths, galley, life support, suit lockers
+cm = [(19.0, -6.6), (31.0, -6.6), (31.0, -9.4), (19.0, -9.4)]
+k.shell(cm, offset(cm, -0.25))
+k.room([(19.25, -9.15), (30.75, -9.15), (30.75, -6.85), (19.25, -6.85)])
+for i in range(3):
+    k.eq(19.6 + i * 2.4, -9.0, 2.2, 0.8, art="bunk")
+    k.eq(19.6 + i * 2.4, -8.1, 2.2, 1.1, art="locker")
+k.eq(26.9, -8.6, 1.6, 1.7, art="env", col=AIR)
+k.eq(28.7, -9.0, 0.6, 2.1, art="suit")
+k.eq(29.4, -9.0, 0.6, 2.1, art="suit")
+k.tank(30.1, -8.9, 0.5, 1.9, AIR, "")
+k.door(18.9, -8.9, 0.25, 1.8)
+# forward compartment: spare teeth, blasting charges (explosive), tool lockers, the assay bench
+for i in range(3):
+    k.eq(14.6 + i * 1.3, -5.85, 1.15, 1.3, art="cargo")
+k.label(16.5, -4.35, "SPARE TEETH", 7, DIM, 'middle')
+k.eq(18.7, -4.8, 1.3, 1.0, col=HAZ)
+k.label(19.35, -4.15, "CHARGES", 7, HAZ, 'middle')
+k.eq(17.4, 0.3, 2.0, 1.4, art="console")
+k.eq(19.6, 0.3, 1.6, 2.0, art="cabinet")
+k.label(18.5, 2.6, "ASSAY", 7, DIM, 'middle')
+k.eq(17.4, 1.9, 1.6, 0.9, art="locker")
+k.eq(6.6, 2.0, 1.6, 1.7, art="pump", col=FLUID)                          # drum lubrication pump
+# ore bin: dust-suppression spray header and a level radar
+k.pipe([(23.4, -5.2), (40.6, -5.2)], FLUID, 1.4)
+for x in range(24, 41, 2):
+    k.line(x, -5.2, x - 0.3, -4.6, FLUID, 0.8, 0.7)
+    k.line(x, -5.2, x + 0.3, -4.6, FLUID, 0.8, 0.7)
+k.eq(33.4, -5.66, 1.0, 0.45, col=VIO)
+k.line(33.9, -5.2, 33.9, -1.4, VIO, 0.8, 0.6, dash='2 3')
+# machine room: a lube-oil tank, an air compressor for the pneumatic hammers, a battery bank
+k.tank(42.8, 4.4, 2.4, 1.6, FLUID, "LUBE")
+k.eq(45.6, 3.4, 1.8, 2.0, art="pump", col=AIR)
+k.eq(47.6, 2.9, 2.5, 2.4, art="battery", col=VIO)
+
 calls = []
 def c(n, x, y, lx, row, kind, text):
-    calls.append((n, x, y, lx, 150 if row == 0 else 850, kind, text))
+    calls.append((n, x, y, lx, 150 if row == 0 else 760, kind, text))
 c(1, 2.7, 1.9, 80, 1, "haz", "破碎头（齿鼓，约 6 t：超过抓钩上限，要分段拆）")
 c(2, 4.6, 1.3, 150, 1, "struct", "破碎头支臂 ×2")
 c(3, 8.3, 0.2, 80, 0, "haz", "振动锤驱动器（可能未完全停机）")
@@ -169,9 +205,19 @@ c(22, 49.5, -6.95, 990, 0, "energy", "外部总闸 ×2")
 c(23, 55.0, -2.6, 1060, 0, "sys", "粗大型推进器 ×2")
 c(24, 52.0, 6.6, 710, 1, "struct", "稳定尾梁（上下）")
 c(25, 56.4, 7.2, 780, 1, "sys", "姿控喷口")
+c(0, 21.0, -8.6, 0, 0, "room", "船员舱：铺位 ×3 + 储物 + 生命维持 + 舱外服 ×2")
+c(0, 16.5, -5.2, 0, 0, "sys", "备用破碎齿箱")
+c(0, 19.35, -4.3, 0, 0, "haz", "爆破药柜（爆炸物）")
+c(0, 18.4, 1.0, 0, 1, "sys", "化验台 + 样品柜")
+c(0, 7.4, 2.8, 0, 1, "fluid", "齿鼓润滑泵")
+c(0, 30.0, -5.2, 0, 0, "fluid", "矿仓降尘喷淋")
+c(0, 33.9, -5.4, 0, 0, "energy", "料位雷达")
+c(0, 44.0, 5.2, 0, 1, "fluid", "润滑油箱")
+c(0, 46.5, 4.4, 0, 1, "room", "空压机（气动锤）")
+c(0, 48.8, 4.1, 0, 1, "energy", "电池组")
 zones = [(2.6, 12.6, 7.9, "① 破岩船首", "haz"), (12.6, 21.6, 7.9, "② 矿石输送段", "struct"), (21.6, 41.8, 7.9, "③ 主矿仓", "haz"),
          (41.8, 50.5, 7.9, "④ 设备段", "energy"), (50.5, 57.9, 7.9, "⑤ 推进段", "struct")]
-sheet('m14.html', 1800, 1200, 'M-14「鼹鼠」采矿船 · 58 m · 结构图（设计稿）',
+sheet('m14.html', 1800, 1240, 'M-14「鼹鼠」采矿船 · 58 m · 结构图（设计稿 v2）',
       ['船头楔形破岩头（低头），腹部厚大，中央纵向矿仓，后部厚重推进段 —— 一只低头钻洞的鼹鼠。',
        '第一次引入松散内容物：不只是拆结构，还要处理矿石；超重设备要分段拆。'], k.svg(), k.P, calls, zones, legend_cols=2, auto=True, scale_at=(0.0, -9.6), scale_m=10)
 print('ok')

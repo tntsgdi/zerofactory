@@ -113,9 +113,72 @@ for x in (29.0, 46.0, 63.0):
     a, b = k.P(x, SB + 0.6 + 7.0)
     k.o.append(f'<polygon points="{a-14:.0f},{b+60:.0f} {a+14:.0f},{b+60:.0f} {a+7:.0f},{b+4:.0f} {a-7:.0f},{b+4:.0f}" fill="#222731" stroke="{FAINT}" stroke-dasharray="4 3"/>')
 
+# ---------------- v2 fill: crew block, pressurant spheres, vent header, tank internals, aux power, more pump room
+TOP = ST - 1.65
+crew = [(10.0, TOP), (20.0, TOP), (20.0, -9.2), (11.6, -9.2), (10.0, -7.4)]
+k.shell(crew, offset(crew, 0.35))
+k.room(offset(crew, 0.35))
+k.plate([(10.4, -6.45), (19.6, -6.45), (19.6, -6.25), (10.4, -6.25)])
+for i in range(3):                                                                # crew berths (long hauls)
+    k.eq(12.0 + i * 2.6, -8.75, 2.4, 1.0, art="bunk")
+    k.eq(12.0 + i * 2.6, -7.6, 2.4, 1.0, art="locker")
+k.eq(10.8, -6.05, 2.0, 1.5, art="console")                                       # galley table
+k.eq(13.2, -6.05, 1.8, 1.5, art="cabinet")
+k.eq(15.3, -6.05, 2.0, 1.5, art="env", col=AIR)                                  # life support
+k.tank(17.6, -6.2, 0.8, 1.6, AIR, "")
+k.tank(18.6, -6.2, 0.8, 1.6, AIR, "")
+k.door(19.65, -8.6, 0.3, 1.6)                                                    # airlock out to the spine walkway
+# pressurant: nitrogen spheres on the spine keep the tanks pressurised; a line down to each tank
+for i, x in enumerate((24.0, 29.0, 41.0, 46.0, 58.0, 63.0)):
+    k.sphere(x, TOP - 1.7, 1.55, AIR, "N₂", jacket=0.25)
+    k.plate([(x - 0.9, TOP - 0.2), (x + 0.9, TOP - 0.2), (x + 0.5, TOP), (x - 0.5, TOP)], fill='#323844')
+k.pipe([(22.5, TOP - 3.6), (70.0, TOP - 3.6)], AIR, 1.4)
+for x in (24.0, 29.0, 41.0, 46.0, 58.0, 63.0):
+    k.pipe([(x, TOP - 3.25), (x, TOP - 3.6)], AIR, 1.0)
+for x0, x1, nm, lvl in pairs:
+    xm = (x0 + x1) / 2 + 3.0
+    k.pipe([(xm, TOP - 3.6), (xm + 0.6, TOP - 3.6), (xm + 0.6, SB + 0.65)], AIR, 1.0)
+    k.circ(xm + 0.6, SB - 0.3, 0.26, fill=EQF, stroke=AIR, sw=1.2)
+# the vent header: every tank's vent valve to one stack aft
+k.pline([(21.6, SB + 0.3), (86.8, SB + 0.3), (86.8, -6.6)], AIR, 1.2, 0.85, dash='7 3')
+k.rect(86.3, -7.6, 1.0, 1.0, fill=EQF, stroke=AIR, sw=1.2)
+for x0, x1, nm, lvl in pairs:
+    r = 3.5
+    cy = SB + 0.6 + r
+    k.rect(x0 + 6.5, cy - r - 0.35, 1.6, 0.4, fill='#2a3140', stroke=HAZ, sw=1.0)    # manhole
+    k.line(x0 + 1.2, cy - r + 0.6, x0 + 1.2, cy + r - 0.6, VIO, 1.0)                # level probe
+    for j in range(5):
+        k.circ(x0 + 1.2, cy - r + 1.1 + j * 1.2, 0.11, fill=VIO, stroke='none')
+    k.rect(x1 - 3.8, cy + r - 1.2, 1.2, 0.9, fill=EQF, stroke=HAZ, sw=1.0)          # sump well with its pump
+    k.eq(x1 - 2.4, cy - r + 0.6, 0.8, 2 * r - 1.2, art="ladder")
+    for xx in (x0 + 5.0, x0 + 8.0, x0 + 11.0):                                       # anti-slosh baffles (holed)
+        k.line(xx, cy - r + 0.2, xx, cy - 0.8, '#3d4654', 1.6)
+        k.line(xx, cy + 0.8, xx, cy + r - 0.2, '#3d4654', 1.6)
+# aux power over the pump room: APU, batteries, fire bottles
+ap = [(72.0, TOP), (85.5, TOP), (85.5, -8.6), (72.0, -8.6)]
+k.shell(ap, offset(ap, 0.35))
+k.room(offset(ap, 0.35))
+k.eq(72.6, -8.1, 3.6, 3.4, art="gen", col=HEAT)
+k.label(74.4, -8.4, "APU", 9, HEAT, 'middle')
+k.eq(76.6, -7.9, 3.6, 3.2, art="battery", col=VIO)
+k.tank(80.6, -8.1, 0.8, 3.3, HEAT, "")
+k.tank(81.6, -8.1, 0.8, 3.3, HEAT, "")
+k.label(82.0, -8.4, "CO₂", 9, HEAT, 'middle')
+k.eq(82.8, -8.0, 2.2, 3.3, art="swb", col=HEAT)
+k.cable([(83.9, -4.7), (83.9, ST - 0.7)], HEAT)
+# more in the pump room: a second transfer pump, a boost pump, a flow meter
+k.eq(72.8, 3.6 - 0.1, 1.6, 1.4, art="pump", col=HAZ)
+k.eq(76.9, 3.0, 2.4, 1.3, art="aux", col=HAZ)
+k.label(78.1, 4.5, "FLOW METER", 7, HAZ, 'middle')
+# the valve section: purge panel and pressure transmitters
+k.eq(10.9, -0.2, 1.6, 0.9, art="panel", col=AIR)
+k.label(11.7, -0.35, "N₂ PURGE", 7, AIR, 'middle')
+for x in (12.6, 14.6):
+    k.rect(x - 0.15, 0.1, 0.3, 0.5, fill=EQF, stroke=VIO, sw=1.0)
+
 calls = []
 def c(n, x, y, lx, row, kind, text):
-    calls.append((n, x, y, lx, 150 if row == 0 else 880, kind, text))
+    calls.append((n, x, y, lx, 150 if row == 0 else 800, kind, text))
 c(1, 2.0, -1.0, 80, 0, "sys", "驾驶位 + 驾驶台")
 c(2, 3.3, -1.0, 150, 0, "energy", "流体监控终端")
 c(3, 6.0, -3.5, 220, 0, "haz", "阀门图示面板（显示的是「指令」，不是阀门真实位置）")
@@ -138,9 +201,23 @@ c(19, 80.6, 1.6, 780, 0, "sys", "滤网组件")
 c(20, 82.9, 1.3, 850, 0, "energy", "泵控配电设备 + 开关")
 c(21, 91.0, -1.0, 920, 0, "sys", "尾部主推进器")
 c(22, 84.7, -4.55, 990, 0, "sys", "姿态喷口")
+c(0, 13.2, -8.25, 0, 0, "room", "船员舱：铺位 ×3 + 储物 + 餐桌 + 厨柜（长途航行）")
+c(0, 16.3, -5.3, 0, 0, "room", "生命维持 + 氧瓶 + 通往脊梁的气闸")
+c(0, 41.0, TOP - 1.7, 0, 0, "room", "增压氮气球罐 ×6（给推进剂罐保压）")
+c(0, 52.0, TOP - 3.6, 0, 0, "room", "增压管 → 每罐增压阀")
+c(0, 60.0, SB + 0.3, 0, 1, "room", "排气总管 → 尾部排气塔")
+c(0, 44.5, SB + 0.35, 0, 1, "haz", "人孔盖（每罐顶部）")
+c(0, 39.2, 2.5, 0, 1, "energy", "液位探杆")
+c(0, 49.7, 6.7, 0, 1, "haz", "罐底集液井 + 集液泵")
+c(0, 45.0, 1.5, 0, 1, "struct", "防晃隔板（带孔）+ 罐内检修梯")
+c(0, 74.4, -6.4, 0, 0, "haz", "辅助动力 APU + 电池")
+c(0, 81.0, -6.4, 0, 0, "haz", "灭火 CO₂ 瓶组")
+c(0, 73.6, 4.3, 0, 1, "haz", "第二台输送泵")
+c(0, 78.1, 3.6, 0, 1, "haz", "流量计")
+c(0, 11.7, 0.25, 0, 1, "room", "氮气吹扫面板 + 压力变送器")
 zones = [(0.4, 10.0, 13.6, "① 前控制舱", "room"), (10.0, 20.2, 13.6, "② 阀门与分配段", "haz"), (20.2, 72.0, 13.6, "③ 中央储罐群（三对）", "haz"),
          (72.0, 84.5, 13.6, "④ 泵房", "haz"), (84.5, 95.6, 13.6, "⑤ 尾推进", "struct")]
-sheet('vt80.html', 1800, 1160, 'VT-80「长鲸」推进剂运输船 · 96 m · 结构图（设计稿）',
+sheet('vt80.html', 1800, 1260, 'VT-80「长鲸」推进剂运输船 · 96 m · 结构图（设计稿 v2）',
       ['船体狭长，腹部挂着三对巨型推进剂罐，前后细梁 —— 一条拖着肚子游的长鲸。',
-       '「流体网络关」：罐与罐交叉连通，错误的隔离 / 泄放顺序会让别的罐出问题，要先做工程流程设计。'], k.svg(), k.P, calls, zones, legend_cols=2, auto=True, scale_at=(0.0, -6.8), scale_m=10)
+       '「流体网络关」：罐与罐交叉连通，错误的隔离 / 泄放顺序会让别的罐出问题，要先做工程流程设计。'], k.svg(), k.P, calls, zones, legend_cols=2, auto=True, scale_at=(0.0, -10.4), scale_m=10)
 print('ok')

@@ -51,6 +51,26 @@ def pod(cx, sg, kind, idx):
             k.tank(cx - 2.6 + i * 1.15, py0 + 0.6 if sg < 0 else py0 + 1.2, 0.9, 3.4, COLD)
         k.eq(cx + w / 2 - 2.45, fy + (-1.0 if sg < 0 else 1.0) * 0.0 - (0.0), 0.95, 0.8, art="pump", col=COLD)
         k.label(cx - 1.4, py0 + h / 2 + 0.25, "−80 °C", 9, COLD, 'middle')
+    # v2 fill: on the floor by the far wall a kind-specific unit, an oxygen bottle, a supply cabinet overhead
+    def stand(x, ww, hh):
+        return (x, floor - hh) if sg < 0 else (x, floor)
+    x, y = stand(cx + 2.05, 0.5, 1.6)
+    k.tank(x, y, 0.5, 1.6, AIR)
+    if kind == "emer":
+        x, y = stand(cx + 0.8, 1.0, 1.4)
+        k.eq(x, y, 1.0, 1.4, art="env", col=AIR)                               # ventilator
+        x, y = stand(cx - 0.3, 0.9, 0.7)
+        k.eq(x, y - up * 0.0, 0.9, 0.7, art="cap", col=HEAT)                   # defibrillator
+    elif kind == "surg":
+        x, y = stand(cx + 0.8, 1.1, 1.7)
+        k.eq(x, y, 1.1, 1.7, art="o2cab", col=AIR, hazard="gas_tank")          # anaesthesia machine
+    elif kind == "iso":
+        x, y = stand(cx + 0.8, 1.0, 1.1)
+        k.eq(x, y, 1.0, 1.1, col=HAZ)                                           # biohazard waste bin
+        k.label(cx + 1.3, y + 0.7, "BIO", 8, HAZ, 'middle')
+    elif kind == "cryo":
+        x, y = stand(cx + 0.9, 0.9, 1.3)
+        k.eq(x, y, 0.9, 1.3, art="panel", col=COLD)
     k.label(cx, (py0 - 0.4) if sg < 0 else (py0 + h + 0.9), NAMES[kind] + " %s%d" % ("U" if sg < 0 else "L", idx + 1), 10, AIR if kind != "cryo" else COLD, 'middle')
     k.port(cx - w / 2 + 0.6, py0 + (0.05 if sg < 0 else h - 0.05), AIR)
 
@@ -107,6 +127,21 @@ k.label(71.6, 3.9, "BACKUP GEN", 9, HEAT, 'middle')
 k.eq(72.2, -2.4, 1.6, 2.4, art="swb", col=HEAT)
 k.pipe([(68.25, -1.6), (68.25, -0.2), (62.4, -0.2)], FLUID)
 k.port(73.0, -5.45, AIR)
+# v2 fill: CO2 scrubber, O2 generator, medical gas bottles, biohazard waste tank, battery bank
+k.eq(72.6, -4.6, 2.2, 2.0, art="env", col=AIR)
+k.label(73.7, -2.3, "CO₂ SCRUB", 7, AIR, 'middle')
+for i in range(5):
+    k.tank(62.9 + i * 0.75, -1.35, 0.55, 1.0, AIR)
+k.label(64.7, -1.55, "MED GAS", 7, AIR, 'middle')
+k.eq(67.4, -1.4, 2.4, 1.0, art="o2cab", col=AIR, hazard="gas_tank")
+k.label(68.6, -1.55, "O₂ GEN", 7, AIR, 'middle')
+k.tank(73.1, 0.8, 1.6, 3.4, HAZ, "BIO")
+k.eq(70.0, -1.3, 2.0, 0.95, art="battery", col=VIO)
+# corridor: emergency lockers between the interfaces, a decontamination lock at the pressure door
+for x in (15.6, 24.1, 32.6, 41.1, 49.6, 58.1):
+    k.rect(x, -1.38, 0.62, 0.55, fill=EQF, stroke=AIR, sw=1.0)
+k.rect(33.6, -1.38, 3.3, 2.75, fill='none', stroke=HAZ, sw=1.2, dash='4 3')
+k.label(35.25, 1.85, "DECON", 8, HAZ, 'middle')
 k.switch(74.6, 4.9, HEAT)
 # ---------------- tail: small thrusters, the aft maintenance crawlway
 k.plate([(75.6, -1.2), (81.0, -1.2), (81.0, 1.2), (75.6, 1.2)], fill='#2a2f39')
@@ -122,7 +157,7 @@ for x in (18.25, 43.75):
 
 calls = []
 def c(n, x, y, lx, row, kind, text):
-    calls.append((n, x, y, lx, 150 if row == 0 else 900, kind, text))
+    calls.append((n, x, y, lx, 150 if row == 0 else 880, kind, text))
 c(1, 1.9, 0.1, 80, 1, "sys", "驾驶位 + 驾驶台")
 c(2, 5.1, 0.0, 150, 1, "sys", "医疗调度台")
 c(3, 6.7, -2.5, 80, 0, "room", "舱段状态总览屏（12 个医疗舱）")
@@ -144,9 +179,18 @@ c(18, 71.6, 2.0, 500, 1, "haz", "备用发电机（可能还在给局部生命�
 c(19, 73.0, -1.2, 850, 0, "energy", "生命维持段配电")
 c(20, 78.3, 0.0, 570, 1, "room", "后部维保通道")
 c(21, 79.0, -2.6, 920, 0, "sys", "小型推进器 ×2")
+c(0, 15.6, -6.8, 0, 0, "room", "每个医疗舱：氧瓶 + 专用设备（呼吸机 / 除颤仪 / 麻醉机 / 控制面板）")
+c(0, 31.8, -7.4, 0, 0, "haz", "隔离舱：生物危险废物箱（BIO，新危险品）")
+c(0, 49.0, -1.1, 0, 0, "room", "主廊应急柜（氧气面罩 / 灭火器）")
+c(0, 35.25, 0.8, 0, 1, "haz", "中段洗消气闸（隔离区 ↔ 清洁区）")
+c(0, 73.7, -3.6, 0, 0, "room", "CO₂ 洗涤器")
+c(0, 64.7, -0.8, 0, 1, "room", "医用气体瓶组 ×5")
+c(0, 68.6, -0.9, 0, 1, "room", "电解制氧机")
+c(0, 73.9, 2.5, 0, 1, "haz", "生物废液罐 BIO")
+c(0, 71.0, -0.8, 0, 1, "energy", "生命维持电池组")
 zones = [(0.4, 9.6, 14.0, "① 驾驶与调度舱", "room"), (9.6, 62.4, 14.0, "② 中央主廊 + ③ 两侧独立医疗舱阵列（12 个）", "room"),
          (62.4, 75.6, 14.0, "④ 生命维持段", "room"), (75.6, 81.0, 14.0, "⑤ 尾部", "struct")]
-sheet('med47.html', 1800, 1240, 'MED-47「缄默」医疗船 · 82 m · 结构图（设计稿）',
+sheet('med47.html', 1800, 1300, 'MED-47「缄默」医疗船 · 82 m · 结构图（设计稿 v2）',
       ['中央细长主船体，两侧像梳子一样伸出 12 个独立医疗舱，尾部一大块生命维持模块 —— 模块化、洁净、脆弱。',
        '第一次面对「每个舱都有一点不一样」：独立门、独立电源、独立空气循环，像剥洋葱一样一层层拆。'], k.svg(), k.P, calls, zones, legend_cols=2, auto=True, scale_at=(0.0, -12.6), scale_m=10)
 print('ok')
