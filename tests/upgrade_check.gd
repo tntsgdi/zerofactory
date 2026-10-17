@@ -1,8 +1,9 @@
 extends SceneTree
 # Roadmap 2.6 acceptance: the same contract, taken apart by the paced bot
 # (every operation and haul takes its time) with no upgrades and then with
-# each of the first four on its own. Each must change the contract's time or
-# its income by 10% or more. The contract is a market Heron chosen for the
+# each of the first four on its own. Each must show a real advantage (V2):
+# 5% or more off the contract's time or onto its income, and the other no
+# worse than 2%. The contract is a market Heron chosen for the
 # things the upgrades answer: an overloaded container (5 t grapple), a
 # cracked rib in the hold (precision kit), gas and fluids to draw (pump),
 # loose scrap (recovery arm).
@@ -94,7 +95,8 @@ func _run() -> void:
 		print("  %-14s %8.0f s  $%8d   %5d  %3d  %8d  %7d  %9d" % [",".join(kit), s.time, int(s.income), s.hauls, s.arm, s.scrapped, s.snapped, s.incidents])
 		var dt: float = (base.time - s.time) / base.time
 		var di: float = (s.income - base.income) / base.income
-		var ok: bool = s.ended and (absf(dt) >= 0.1 or absf(di) >= 0.1)
+		# a real advantage (V2): 5% or more off the time or onto the income, and the other no worse than 2%
+		var ok: bool = s.ended and (dt >= 0.05 or di >= 0.05) and dt >= -0.02 and di >= -0.02
 		if not ok:
 			fails += 1
 		print("  [%s] %s: time %+.1f%%, income %+.1f%%" % ["PASS" if ok else "FAIL", kit[0], -dt * 100.0, di * 100.0])

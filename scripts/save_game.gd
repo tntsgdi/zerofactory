@@ -70,6 +70,9 @@ static func _unxf(a: Array) -> Transform2D:
 static func save(g) -> void:
 	if (g.testing and not allow_test) or g.ended or g.state != "play":
 		return
+	# a developer's test contract is never written over the career's contract in progress
+	if g.dev_job():
+		return
 	var w = g.world
 	var s = g.sys
 	# a cut made this frame splits the body before it is written, as it would next physics step

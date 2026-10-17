@@ -43,7 +43,19 @@ func _frames(n: int) -> void:
 
 func _contract() -> Node:
 	Career.ensure_offers(Market.make)
-	Career.accept(0)
+	# the market has several ship types now: the card taken is a Heron
+	var at := -1
+	for i in Career.data.offers.size():
+		if at < 0 and Career.data.offers[i].ship == "gr7":
+			at = i
+	if at < 0:
+		for seed in range(900, 1000):
+			var o := Market.offer_for(seed + int(Career.data.done) * 100, Career.data, 1, "full", "gr7")
+			if ContractValidator.check(Variant.make(Ship.load_data("gr7"), o)).ok:
+				Career.data.offers[0] = o
+				break
+		at = 0
+	Career.accept(at)
 	Game.contract = Career.active()
 	SaveGame.load_requested = false
 	var scene: Node = load("res://scenes/main.tscn").instantiate()

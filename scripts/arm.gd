@@ -6,7 +6,7 @@ extends Node2D
 # not holding — carries it slowly round the ship to the furnace and lets go
 # over the mouth. It never touches equipment.
 # It waits its turn over the furnace mouth (the hauler may be dropping there),
-# holds back for the operator's drone (then edges past it slowly), and the
+# holds back for the operator's drone in its way (then edges past slowly), and the
 # automation key stops it: what it holds is let go where it is.
 
 const MAX_T := 1.0               # t it can lift
@@ -60,11 +60,11 @@ func _physics_process(dt: float) -> void:
 		return
 	# keep clear of the drone: wait for it to move on, then edge past slowly
 	var k := 1.0
-	if state in ["reach", "carry"] and game.drone_near(claw, CLEAR):
+	if state in ["reach", "carry"] and game.drone_near(claw, CLEAR, _heading()):
 		wait_t += dt
-		if wait_t < 2.0:
+		if wait_t < 1.0:
 			return
-		k = 0.3
+		k = 0.4
 	else:
 		wait_t = 0.0
 	dt *= k
@@ -130,6 +130,15 @@ func _physics_process(dt: float) -> void:
 				carried += 1
 				game.on_arm_drop(body)
 				_drop_it()
+
+
+# where it is making for now
+func _heading() -> Vector2:
+	if state == "carry" and not path.is_empty():
+		return path[0]
+	if state == "reach" and is_instance_valid(body):
+		return body.global_transform * body.center_of_mass
+	return claw
 
 
 # let go of what it holds, where it is, and stand by

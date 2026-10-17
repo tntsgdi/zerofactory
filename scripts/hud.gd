@@ -212,7 +212,10 @@ func ending_key(k: int) -> void:
 	if k == KEY_R:
 		game.restart()
 	elif k == KEY_M or k == KEY_ESCAPE:
-		game.to_title()
+		if game.dev_job():
+			game.leave()
+		else:
+			game.to_title()
 
 
 func _input(ev: InputEvent) -> void:
@@ -1413,7 +1416,7 @@ func _settlement(s: Vector2) -> void:
 	if ge > 0.0:
 		_stamp(Vector2(cx + 330, y + 100), ge)
 		var pulse := 0.5 + 0.4 * sin(t * 3.0)
-		var go: String = g.txt("st_go_on") if g.story != null and g.story.wants_epilogue() else g.txt("e_to_terminal" if g.career() else "e_again")
+		var go: String = g.txt("st_go_on") if g.story != null and g.story.wants_epilogue() else g.txt("e_to_terminal" if g.career() else ("e_again_dev" if g.dev_job() else "e_again"))
 		_text(go, Vector2(cx, s.y - 80), 16, Pal.ink(pulse), font_b, 0)
 
 

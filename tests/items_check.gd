@@ -72,12 +72,20 @@ func _run() -> void:
 				term.buy(it)
 	var cost := 3000.0 + 9000.0 + 15000.0 + 6000.0
 	check(absf(float(d.money) - (before - cost)) < 1.0 and d.items.repair == 1 and d.items.ring == 1 and d.items.spare == 1 and d.items.intel == 1, "bought one of each for %s" % Pal.money(cost))
+	# the market has several ship types now: the first card is made a Heron (the ring goes into its keel)
+	if term.offers()[0].ship != "gr7":
+		for seed in range(900, 1000):
+			var h := Market.offer_for(seed, Career.data, 1, "full", "gr7")
+			if ContractValidator.check(Variant.make(Ship.load_data("gr7"), h)).ok:
+				Career.data.offers[0] = h
+				term.dealt()
+				break
 	term.use_intel(0)
 	var o: Dictionary = term.offers()[0]
 	var text: String = term.intel_text(o)
 	check(o.has("intel") and text != "" and int(d.items.intel) == 0, "survey report on offer %s (%s): \"%s\"" % [o.id, str(o.traps), text])
 	# the report tells the truth about the ship that will come in
-	var ship := Variant.make(Ship.load_data("gr7"), o)
+	var ship := Variant.make(Ship.load_data(o.ship), o)
 	var truth := Traps.intel(ship, o.traps[0])
 	check(str(truth) == str(o.intel), "and it is the truth about that ship (%s)" % str(truth))
 	Career.data = {}

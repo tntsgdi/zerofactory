@@ -425,7 +425,7 @@ func _process(dt: float) -> void:
 	if state == "play" and bot == null:
 		_account(dt, rdt)
 	_read_input()
-	var dev_warp: bool = Txt.dev and DevPanel.warp and bot == null
+	var dev_warp: bool = DevPanel.warp_on() and bot == null
 	var want_warp: bool = state == "play" and not menu_open and (Keys.down("warp") or dev_warp or (bot != null and bot.get("warp", false)))
 	if want_warp != warp:
 		warp = want_warp
@@ -472,7 +472,7 @@ func _account(dt: float, rdt: float) -> void:
 
 
 func _warp_k() -> float:
-	return 8.0 if Txt.dev and DevPanel.warp and bot == null else WARP
+	return DevPanel.time_k if DevPanel.warp_on() and bot == null else WARP
 
 
 func _physics_process(dt: float) -> void:
@@ -812,11 +812,12 @@ func finish_contract(early: bool) -> void:
 	else:
 		hud.start_ending(early)
 	sfx.play("end")
-	if not testing or SaveGame.allow_test:
+	# a developer's test contract leaves the career's save and records alone
+	if (not testing or SaveGame.allow_test) and not dev_job():
 		SaveGame.clear()
-	if not testing:
+	if not testing and not dev_job():
 		best = SaveGame.record_best(recovery_rate(), net(), playtime, hud.grade())
-	if not job.is_empty() and Career.usable():
+	if career() and Career.usable():
 		Career.load_or_new()
 		Career.file_notes(ship_id, verified)
 		if plan != null and not early:
@@ -852,7 +853,7 @@ func standard_time() -> float:
 #   named    each named piece of equipment delivered whole (a rescue pays per piece already)
 #   safe     a safe-recovery job with no incident at all
 func bonuses() -> Array:
-	if not career() or training or exam != null:
+	if job.is_empty() or training or exam != null:
 		return []
 	var out: Array = []
 	var g: String = goal()
@@ -887,7 +888,12 @@ func goal() -> String:
 
 
 func career() -> bool:
-	return not job.is_empty()
+	return not job.is_empty() and not dev_job()
+
+
+# a contract the developer built and started (DevPanel): played like any other, settled into nothing
+func dev_job() -> bool:
+	return job.get("dev", false)
 
 
 func _ending(_dt: float) -> void:
@@ -895,6 +901,10 @@ func _ending(_dt: float) -> void:
 
 
 func restart() -> void:
+	# a developer's test contract comes back as it was built
+	if dev_job():
+		contract = job.duplicate(true)
+		start_ship = ship_id
 	Engine.time_scale = 1.0
 	get_tree().paused = false
 	get_tree().reload_current_scene()
@@ -946,6 +956,12 @@ func to_title() -> void:
 
 # the contract is over and settled: a career goes back to the berth terminal
 func leave() -> void:
+	if dev_job():
+		# back to where the developer started it from
+		Engine.time_scale = 1.0
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/terminal.tscn" if job.get("dev_from", "") == "terminal" and Career.usable() else "res://scenes/title.tscn")
+		return
 	if not career():
 		to_title()
 		return
@@ -2249,9 +2265,14 @@ func mouth_release(zone: String, who: String) -> void:
 		mouths.erase(zone)
 
 
-# a machine keeps clear of the operator's drone
-func drone_near(at: Vector2, r: float) -> bool:
-	return drone != null and drone.alive and drone.global_position.distance_to(at) < r
+# a machine keeps clear of the operator's drone: is the drone close and on the way it is going?
+func drone_near(at: Vector2, r: float, going: Vector2 = Vector2.ZERO) -> bool:
+	if drone == null or not drone.alive:
+		return false
+	var d: Vector2 = drone.global_position - at
+	if d.length() >= r:
+		return false
+	return going == Vector2.ZERO or d.dot(going - at) > 0.0
 
 
 # the automation key: every machine of the berth stops where it is, or goes on

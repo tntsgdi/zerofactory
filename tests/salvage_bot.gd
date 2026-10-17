@@ -453,14 +453,11 @@ func _strip() -> void:
 				order.append(id)
 
 
-# the heaviest plain scrap the berth's machines take by themselves (0: none)
+# the heaviest plain scrap worth cutting down for the berth's machines (0: don't):
+# the hauler takes it by itself and quickly; for the slow arm alone, more and
+# smaller loads only lengthen its queue
 func _machine_max() -> float:
-	var mx := 0.0
-	if g.arm != null:
-		mx = g.arm.MAX_T
-	if g.hauler != null:
-		mx = maxf(mx, g.hauler.MAX_T)
-	return mx
+	return g.hauler.MAX_T if g.hauler != null else 0.0
 
 
 # one operation at a time, each taking its time: haul a body that is free, else free the next piece
