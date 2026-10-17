@@ -101,7 +101,7 @@ func _run() -> void:
 	check(not cr.is_empty() and not cr.prepaid and int(Career.data.done) == 1 and Career.data.market, "GR-001 settled with the career; the market opens")
 	var expect_money: float = r1.sum.net + cr.bonus - cr.installment - cr.interest
 	check(absf(float(Career.data.money) - expect_money) < 1.0, "funds = net %d + bonuses %d − installment %d − interest %d = %d (%d)" % [r1.sum.net, cr.bonus, cr.installment, cr.interest, expect_money, Career.data.money])
-	check(absf(float(Career.data.loan) - (Career.LOAN_START - cr.installment)) < 1.0, "loan down by one installment: %d" % Career.data.loan)
+	check(float(Career.data.loan) == 0.0 and cr.installment == 0.0 and cr.interest == 0.0, "no debt from a clean first contract: loan %d" % Career.data.loan)
 	g1.queue_free()
 	await _frames(2)
 	# ---- contract 2, quit half way

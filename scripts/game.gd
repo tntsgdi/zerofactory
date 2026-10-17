@@ -2275,11 +2275,11 @@ func _age_messages(dt: float) -> void:
 
 
 # how the controls work: these stay on in the standard tier
-const RATE_BONUS := [[0.92, 0.07], [0.80, 0.04], [0.70, 0.02]]   # recovery rate -> share of what was earned
+const RATE_BONUS := [[0.92, 0.04], [0.80, 0.02], [0.70, 0.01]]   # recovery rate -> share of what was earned
 const MUST_SHARE := 0.10        # a named piece delivered whole: this share of its value...
-const MUST_VALUABLE := 0.30     # ...or this, on a valuable-equipment job
+const MUST_VALUABLE := 0.25     # ...or this, on a valuable-equipment job
 const MUST_MIN := 500.0
-const SAFE_SHARE := 0.08        # a safe-recovery job with no incident: this share of what was earned
+const SAFE_SHARE := 0.05        # a safe-recovery job with no incident: this share of what was earned
 const UI_HINTS := ["field", "hose", "measured", "drone_lost", "free_body", "equip_cut"]
 var hint_log: Array = []
 

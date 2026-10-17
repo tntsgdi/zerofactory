@@ -182,7 +182,10 @@ func career_rows() -> Array:
 	var r: Dictionary = game.career_result
 	if r.is_empty():
 		return []
-	var out: Array = [["e_inst", -float(r.installment), "money"], ["e_interest", -float(r.interest), "money"]]
+	# the installment and interest only while there is a debt
+	var out: Array = []
+	if float(r.installment) > 0.5 or float(r.interest) > 0.5:
+		out.append_array([["e_inst", -float(r.installment), "money"], ["e_interest", -float(r.interest), "money"]])
 	if float(r.short) > 0.5:
 		out.append(["e_short", float(r.short), "note"])
 	var used: Dictionary = r.get("used", {})
@@ -191,7 +194,8 @@ func career_rows() -> Array:
 		for k in used:
 			parts.append("%s ×%d" % [game.txt("it_" + k), int(used[k])])
 		out.append(["e_used", ", ".join(parts), "text"])
-	out.append(["e_loan_left", float(r.loan), "plain"])
+	if float(r.loan) > 0.5:
+		out.append(["e_loan_left", float(r.loan), "plain"])
 	out.append(["e_funds", float(r.money), "plain"])
 	return out
 

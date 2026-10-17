@@ -20,12 +20,11 @@ func _initialize() -> void:
 			csv = true
 		elif a.begins_with("file="):
 			file = a.substr(5)
-	var f := FileAccess.open(file if file != "" else Career.slot_files(slot)[0], FileAccess.READ)
-	if f == null:
+	var d = SaveGame.read_career(file if file != "" else Career.slot_files(slot)[0])
+	if not (d is Dictionary) or d.is_empty():
 		print("no career in slot %d" % slot)
 		quit()
 		return
-	var d = JSON.parse_string(f.get_as_text())
 	var hist: Array = d.get("history", []) if d is Dictionary else []
 	if csv:
 		print("id,ship,scope,goal,stars,net,bonus,grade,rate,time_s," + ",".join(TB) + ",manual,decision,machine,incidents")

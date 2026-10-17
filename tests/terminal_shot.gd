@@ -18,7 +18,8 @@ func _initialize() -> void:
 	Career.data.market = true
 	Career.data.done = 3
 	Career.data.money = 41250.0
-	Career.data.loan = 236000.0
+	Career.data.loan = 36000.0
+	Career.data.in_debt = true
 	Career.data.rep = 7
 	Career.data.seen = {"market": true}
 	root.add_child(preload("res://tests/test_window.gd").new())

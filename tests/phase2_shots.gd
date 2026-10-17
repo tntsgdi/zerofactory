@@ -43,6 +43,7 @@ func _run() -> void:
 	d.done = 6
 	d.money = 61500.0
 	d.loan = 18000.0
+	d.in_debt = true
 	d.rep = 17
 	d.items = {"intel": 2, "repair": 1}
 	d.upgrades = {"arm": 1, "grapple5": 1, "pump2": 1, "scan_kit": 1}

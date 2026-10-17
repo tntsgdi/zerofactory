@@ -7,11 +7,12 @@ class_name Career
 
 const PATH := "user://zeropower_career.json"
 const VERSION := 1
-const LOAN_START := 300000.0
+const LOAN_START := 0.0           # no debt at the start: debt only comes from a job gone wrong
+                                  # (a loss the funds can't cover, or a contract fee borrowed)
 const INSTALLMENT := 20000.0      # taken at every settlement
 const INTEREST := 0.02            # of the principal still owed, every settlement
 const BONUS := 0.2                # of the net profit, finished within the standard time
-const FAST_BONUS := 0.35          # the same on a fast-recovery job (its standard time is a quarter shorter)
+const FAST_BONUS := 0.30          # the same on a fast-recovery job (its standard time is a quarter shorter)
 const FIRST := "GR-001"           # the hand-made Heron; the market opens after it
 # The fixed contracts a new berth works through, in order, before the market
 # opens (design/体验打磨定案.md: training → the work tug → S-09 Swift → GR-001).
@@ -96,6 +97,8 @@ static func fresh() -> Dictionary:
 		"version": VERSION,
 		"money": 0.0,
 		"loan": LOAN_START,
+		"in_debt": false,
+		"debt_rule": 2,
 		"rep": 0,
 		"upgrades": {},
 		"items": {},
@@ -128,6 +131,12 @@ static func load_or_new() -> Dictionary:
 		if not d.is_empty() and not d.has("certified"):
 			data.certified = true
 		# and its story so far was kept in the settings, before each save had its own
+		# careers from before the debt rule began with a berth loan: that loan is written off
+		if not d.is_empty() and not d.has("debt_rule"):
+			data.loan = 0.0
+			data.erase("paid_off")
+			data.in_debt = false
+			data.debt_rule = 2
 		if not d.is_empty() and not d.has("clues"):
 			data.clues = Txt.clues.duplicate()
 			data.chapter_done = Txt.chapter_done
@@ -254,6 +263,8 @@ static func accept(i: int) -> Dictionary:
 	var short := maxf(0.0, fee - float(data.money))
 	data.money = float(data.money) - fee + short
 	data.loan = float(data.loan) + short
+	if short > 0.0:
+		data.in_debt = true
 	o.fee_paid = true
 	o.borrowed = short
 	# the berth goes to work with what it owns at signing
@@ -308,10 +319,14 @@ static func repay(amount: float) -> float:
 
 
 # the loan is gone: BERTH 07 is the operator's (once; later ship types hang on this)
+# (only a debt that was really run up: a career that never owed anything has nothing to clear)
 static func _paid_off() -> bool:
-	if float(data.loan) > 0.5 or data.get("paid_off", false):
+	if float(data.loan) > 0.5 or not data.get("in_debt", false):
 		return false
+	data.in_debt = false
 	data.loan = 0.0
+	if data.get("paid_off", false):
+		return false
 	data.paid_off = true
 	data.paid_off_at = int(data.get("done", 0))
 	return true
@@ -373,6 +388,8 @@ static func settle(r: Dictionary) -> Dictionary:
 	data.rep = maxi(0, int(data.rep) + REP_GAIN[clampi(grade, 0, 3)])
 	data.money = cash
 	data.loan = maxf(0.0, loan)
+	if float(data.loan) > 0.5:
+		data.in_debt = true
 	data.done = int(data.done) + 1
 	# consumables used on the contract come out of stock
 	var used: Dictionary = r.get("used", {})

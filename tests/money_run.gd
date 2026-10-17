@@ -1,9 +1,9 @@
 extends SceneTree
 # Roadmap 2.5 acceptance: twenty contracts in a row, twice, on test files.
 # Careful: the bot makes every ship safe, buys the shop's upgrades as funds
-# allow (keeping a reserve for the next fee) and pays the rest off the loan —
-# it should own the berth after 4–6 contracts. Careless: everything into the
-# furnace, nothing bought, nothing paid early — the loan should only grow.
+# allow (keeping a reserve for the next fee); a career starts with no debt and
+# a careful one never runs any up. Careless: everything into the furnace,
+# nothing bought — once the funds run out the fee is borrowed and the debt grows.
 # Every settlement takes the installment and 2% interest; what funds can't
 # cover goes back on the loan; fees are paid up front; the time bonus is +20%.
 # godot --headless --path . --fixed-fps 60 -s tests/money_run.gd -- [n=20] [only=careful|careless] [paced]
@@ -92,21 +92,29 @@ func _run() -> void:
 	if only != "careless":
 		print("CAREFUL")
 		var a: Array = await _career(false)
-		var off := -1
+		# a career starts with no debt; a careful one never runs one up and its funds keep growing
+		var clean := true
+		var grows := true
 		for i in a.size():
-			if a[i].loan <= 0.5:
-				off = i + 1
-				break
-		check(off >= 4 and off <= 6, "careful: the loan is paid off after contract %d (target 4–6)" % off)
-		check(Career.data.get("paid_off", false) and int(Career.data.paid_off_at) == off, "the milestone is on the books")
+			if a[i].loan > 0.5:
+				clean = false
+			if i > 0 and a[i].money + 1.0 < a[i - 1].money and a[i].bought.is_empty():
+				grows = false
+		check(clean, "careful: never in debt (loan $0 after every contract)")
+		check(grows, "careful: funds grow from contract to contract (apart from what it buys)")
 		check(Career.data.upgrades.size() == UPGRADES.size(), "and all four first upgrades bought on the way (%s)" % str(Career.data.upgrades.keys()))
 	if only != "careful":
 		print("CARELESS")
 		var b: Array = await _career(true)
-		var up := true
-		for i in range(1, b.size()):
+		# careless: the fee is borrowed once the funds run out, and the debt keeps growing
+		var first := -1
+		for i in b.size():
+			if b[i].loan > 0.5 and first < 0:
+				first = i
+		var up := first >= 0
+		for i in range(maxi(first, 0) + 1, b.size()):
 			if b[i].loan <= b[i - 1].loan:
 				up = false
-		check(up and b.back().loan > b[0].loan, "careless: the loan rises every contract, %d → %d" % [b[0].loan, b.back().loan])
+		check(up, "careless: in debt from contract %d, and it rises every contract after, to %d" % [first + 1, b.back().loan])
 	print("MONEY %s" % ("PASS" if fails == 0 else "FAIL"))
 	finished = true

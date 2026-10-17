@@ -20,7 +20,7 @@ static func snap(game) -> Dictionary:
 		# a body going down a recovery mouth is saved where the mouth took it
 		var c: Vector2 = taken[p.body] * Geom.centroid(p.poly) if taken.has(p.body) else p.center_world()
 		pieces[id] = {"kind": p.kind, "tag": p.tag, "cls": p.cls, "intact": p.intact, "open": p.door_open, "haz": p.hazard,
-			"dest": p.dest, "free": p.body != null, "n": p.poly.size(), "area": Geom.area(p.poly), "c": c,
+			"dest": p.dest, "free": p.body != null, "v": p.body.linear_velocity.length() if p.body != null and is_instance_valid(p.body) else 0.0, "n": p.poly.size(), "area": Geom.area(p.poly), "c": c,
 			"mass": p.mass, "cond": p.cond, "temp": p.temp, "contam": p.contam, "seen": p.seen, "val": p.value}
 	out.pieces = pieces
 	var joints := {}
@@ -102,7 +102,8 @@ static func diff(a: Dictionary, b: Dictionary) -> Array:
 			bad.append("piece %d mass" % id)
 		if not _near(pa.val, pb.val, 0.001, 0.5) or not _near(pa.cond, pb.cond, 0.001, 0.002):
 			bad.append("piece %d value/cond" % id)
-		var tol: float = 30.0 if pa.free else 2.0
+		# a body moving fast when saved has gone on moving for the frames between save and check
+		var tol: float = 30.0 + float(pa.get("v", 0.0)) * 0.12 if pa.free else 2.0
 		if (pa.c as Vector2).distance_to(pb.c) > tol:
 			bad.append("piece %d moved %.1f px" % [id, (pa.c as Vector2).distance_to(pb.c)])
 		if not _near(pa.temp, pb.temp, 0.05, 3.0):
@@ -112,7 +113,10 @@ static func diff(a: Dictionary, b: Dictionary) -> Array:
 			bad.append("piece %d appeared" % id)
 	if a.joints != b.joints:
 		bad.append("joints differ (%d vs %d)" % [a.joints.size(), b.joints.size()])
-	for k in ["lines", "ctrls", "rooms", "flags", "hoses", "leaks", "clouds", "debris"]:
+	# a fresh cut-off may reach the debris net in the frames between save and check (it is then gone from the pieces)
+	if int(b.debris) < int(a.debris) or int(b.debris) - int(a.debris) > 2:
+		bad.append("debris differ: %d vs %d" % [int(a.debris), int(b.debris)])
+	for k in ["lines", "ctrls", "rooms", "flags", "hoses", "leaks", "clouds"]:
 		if a[k] != b[k]:
 			bad.append("%s differ: %s vs %s" % [k, a[k], b[k]])
 	if a.blown.size() != b.blown.size():
