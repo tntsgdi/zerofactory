@@ -123,7 +123,7 @@ func clamp_range(p: Vector2) -> Vector2:
 # connector takes the wrench, a pressure port the meter, a floating piece the
 # grapple. Never while a job, a cut or a hold is going on, never in the
 # training course (it teaches the keys), never for a bot.
-const WRENCH_CTRLS := ["valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam", "degauss"]
+const WRENCH_CTRLS := ["valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam", "degauss", "seal"]
 
 
 func _context() -> Array:

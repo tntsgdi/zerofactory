@@ -1,13 +1,14 @@
 extends SceneTree
 # The salvage bot on one contract: GR-001 as built, or a random contract from a
 # seed (seed=N, stars=N), careless or not. Prints the books.
-# godot --headless --path . --fixed-fps 60 -s tests/bot_run.gd -- [seed=N] [ship=ID] [careless] [ledger]
+# godot --headless --path . --fixed-fps 60 -s tests/bot_run.gd -- [seed=N] [ship=ID] [careless] [ledger] [kit=a,b]
 
 const Bot = preload("res://tests/salvage_bot.gd")
 var game
 var bot
 var job := {}
 var show_ledger := false
+var kit := {}
 
 
 func _initialize() -> void:
@@ -26,6 +27,9 @@ func _initialize() -> void:
 			stars = int(a.substr(6))
 		elif a == "ledger":
 			show_ledger = true
+		elif a.begins_with("kit="):
+			for id in a.substr(4).split(","):
+				kit[id] = 1
 	if seed >= 0:
 		job = Market.offer_for(seed, {"rep": 20, "done": 1}, stars)
 		print("contract ", job)
@@ -33,7 +37,7 @@ func _initialize() -> void:
 	if ship != "":
 		Game.start_ship = ship
 	var scene: Node = load("res://scenes/main.tscn").instantiate()
-	scene.bot = {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "lmb": false, "move": Vector2.ZERO}
+	scene.bot = {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "lmb": false, "move": Vector2.ZERO, "kit": kit}
 	root.add_child(scene)
 	game = scene
 	bot = Bot.new(game, {"careless": careless})

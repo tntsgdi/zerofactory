@@ -17,7 +17,7 @@ const CHECKS := [
 	["story", "剧情物件", "STORY ITEMS"],
 	["settle", "可结算", "SETTLEABLE"],
 ]
-const CTRL_KINDS := ["port", "test", "valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam", "degauss", "probe"]
+const CTRL_KINDS := ["port", "test", "valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam", "degauss", "probe", "seal"]
 const REACH := 4.0         # metres, the tool reach of the drone
 const NEAR := 0.3          # how far a fixing / control / line end may sit from its piece
 

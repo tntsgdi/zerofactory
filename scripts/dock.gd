@@ -5,22 +5,31 @@ extends Node2D
 # the drone bay and the hose masts. Recovery mouths pull in whatever drifts
 # close, judge it, and either swallow it or spit it back out.
 
-const ZONES := {
+const BASE_ZONES := {
 	"equip": {"pos": Vector2(14.0, -8.4), "face": Vector2(0, 1), "w": 4.2},
 	"metal": {"pos": Vector2(21.0, 7.7), "face": Vector2(0, -1), "w": 4.6},
 	"hazard": {"pos": Vector2(43.6, 6.9), "face": Vector2(0, -1), "w": 3.2},
 }
 const NET := Vector2(2.8, 8.3)
 const BAY := Vector2(-5.0, -6.0)
-const MASTS := [Vector2(5.0, -10.0), Vector2(23.0, -10.0), Vector2(38.0, 6.6)]
+# The berth's length (roadmap 4.1): the standard berth's floor ends at 50 m;
+# the extension (a career purchase) takes it to EXTENDED. Everything along
+# the berth follows its end: the hazard bay and the far mast stay at the far
+# end, the trough runs on to it, the equipment bay and the furnace move to the
+# middle third, the boom reaches further. Set once per contract (configure).
+const STANDARD := 50.0
+const EXTENDED := 88.0
+static var floor_end := STANDARD
+static var ZONES := BASE_ZONES.duplicate(true)
+static var MASTS: Array = [Vector2(5.0, -10.0), Vector2(23.0, -10.0), Vector2(38.0, 6.6)]
 # semi-open berth: a floor platform, a tower on the left with an arm reaching
 # over the ship; the top and the right are open to space, held only by a
 # tractor field that eases strays back in
 const FLOOR_Y := 9.0
-const FLOOR_X1 := 50.0
+static var FLOOR_X1 := 50.0
 const TOWER_X := -7.4
-const ARM_X1 := 27.5
-const BOUNDS := Rect2(-6.8, -15.0, 63.0, 24.0)
+static var ARM_X1 := 27.5
+static var BOUNDS := Rect2(-6.8, -15.0, 63.0, 24.0)
 const FIELD := 3.4
 const CATCH := 1.3
 # the furnace reaches further for scrap that has been let go (aim and throw):
@@ -30,11 +39,35 @@ const CATCH := 1.3
 const SCRAP_FIELD := 7.0
 const TROUGH_Y := 8.2               # m: the trough's lip; below it a body is in the trough
 const TROUGH_X0 := 5.5
-const TROUGH_X1 := 40.5             # stops short of the hazard mouth
+static var TROUGH_X1 := 40.5        # stops short of the hazard mouth
 const CONVEY := 7.0                 # m/s along the trough
 const RAIL_SPEED := 4.0             # m/s: the movable furnace mouth along its rail
 static var metal_x := 21.0          # where the furnace mouth sits (it moves only with the rail upgrade)
+static var metal_home := 21.0       # where it sits at the start
 var mouth_target := 21.0
+
+
+# lay the berth out for a floor ending at x (m): STANDARD or EXTENDED
+static func configure(x: float) -> void:
+	floor_end = x
+	var d := x - STANDARD
+	FLOOR_X1 = x
+	BOUNDS = Rect2(-6.8, -15.0, 63.0 + d, 24.0)
+	TROUGH_X1 = 40.5 + d
+	ARM_X1 = 27.5 + d * 0.6
+	ZONES = BASE_ZONES.duplicate(true)
+	ZONES.hazard.pos.x += d
+	ZONES.equip.pos.x += d * 0.45
+	ZONES.metal.pos.x += d * 0.45
+	metal_home = ZONES.metal.pos.x
+	MASTS = [Vector2(5.0, -10.0), Vector2(23.0 + d * 0.45, -10.0), Vector2(38.0 + d, 6.6)]
+	if d > 0.0:
+		MASTS.append(Vector2(23.0 + d * 1.1, -10.0))
+
+
+# the middle of the berth, where the overview looks
+static func centre() -> Vector2:
+	return Vector2((TOWER_X + FLOOR_X1) * 0.5, -2.0)
 
 var game: Game
 var world: World
@@ -59,8 +92,8 @@ var t := 0.0
 
 
 func _init() -> void:
-	metal_x = 21.0
-	mouth_target = 21.0
+	metal_x = metal_home
+	mouth_target = metal_home
 	z_index = -1
 	z_as_relative = false
 	font = Fonts.get_font("Regular")
@@ -74,15 +107,7 @@ func _init() -> void:
 	pm.bounce = 0.4
 	bounds_body.physics_material_override = pm
 	add_child(bounds_body)
-	var M := Geom.M
-	var segs := [[Vector2(TOWER_X, FLOOR_Y) * M, Vector2(FLOOR_X1, FLOOR_Y) * M], [Vector2(TOWER_X + 0.6, -12.6) * M, Vector2(TOWER_X + 0.6, FLOOR_Y) * M], [Vector2(TOWER_X, -10.0) * M, Vector2(ARM_X1, -10.0) * M]]
-	for s in segs:
-		var cs := CollisionShape2D.new()
-		var sh := SegmentShape2D.new()
-		sh.a = s[0]
-		sh.b = s[1]
-		cs.shape = sh
-		bounds_body.add_child(cs)
+	_bounds()
 	add_node = Node2D.new()
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -105,7 +130,28 @@ func _init() -> void:
 var stern := Vector2(42.0, 0.0)   # m: where the tug pushes, the ship's aft end
 
 
+# the floor, the tower and the boom as walls (the berth's length set by configure)
+func _bounds() -> void:
+	for ch in bounds_body.get_children():
+		ch.queue_free()
+	var M := Geom.M
+	var segs := [[Vector2(TOWER_X, FLOOR_Y) * M, Vector2(FLOOR_X1, FLOOR_Y) * M], [Vector2(TOWER_X + 0.6, -12.6) * M, Vector2(TOWER_X + 0.6, FLOOR_Y) * M], [Vector2(TOWER_X, -10.0) * M, Vector2(ARM_X1, -10.0) * M]]
+	for s in segs:
+		var cs := CollisionShape2D.new()
+		var sh := SegmentShape2D.new()
+		sh.a = s[0]
+		sh.b = s[1]
+		cs.shape = sh
+		bounds_body.add_child(cs)
+
+
 func set_ship(ship: Dictionary) -> void:
+	# the berth as configured for this contract
+	metal_x = metal_home
+	mouth_target = metal_home
+	_bounds()
+	if static_node != null:
+		static_node.queue_redraw()
 	# the tug sits right behind whatever ship this is
 	var x1 := -INF
 	var y0 := INF

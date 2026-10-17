@@ -242,7 +242,7 @@ func _draw() -> void:
 		match p[2]:
 			"valve":
 				draw_colored_polygon(PackedVector2Array([pos + Vector2(0, -s), pos + Vector2(s, 0), pos + Vector2(0, s), pos + Vector2(-s, 0)]), col)
-			"port", "test", "discharge", "socket", "probe", "degauss":
+			"port", "test", "discharge", "socket", "probe", "degauss", "seal":
 				draw_arc(pos, s, 0.0, TAU, 14, col, lw * 1.4, true)
 			"clamp":
 				draw_rect(Rect2(pos - Vector2(s, 0), Vector2(s * 2, s)), dim, false, lw)

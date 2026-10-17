@@ -13,6 +13,7 @@ const SHIP_CENTER := Vector2(21.0 * 48.0, 0.0)
 var world: World
 var sys: Systems
 var mech: Mech                # magnets and preloaded arms some ship types carry
+var bio: Bio                  # biological contamination some ship types carry
 var plan: WorkPlan            # the work plan of this ship type, recorded and replayed
 var auto_paused := false      # the operator stopped the berth's machines (arm, hauler, plan)
 var mouths := {}              # mouth zone -> the machine dropping into it now
@@ -185,6 +186,8 @@ func _ready() -> void:
 		_factory["c:" + c.id] = true
 	for l in base.get("lines", []):
 		_factory["l:" + l.id] = true
+	# the berth: extended once the career has paid for it, or for a ship too long for the standard one
+	Dock.configure(Dock.EXTENDED if has_upgrade("berth88") or float(ship.get("length", 0.0)) > Dock.STANDARD - 6.0 else Dock.STANDARD)
 	dock.set_ship(ship)
 	if not data.is_empty() and SaveGame.apply(self, data):
 		Ship.rooms(world, ship)
@@ -198,6 +201,9 @@ func _ready() -> void:
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
+	bio = Bio.new()
+	add_child(bio)
+	bio.setup(self, ship)
 	world.piece_freed.connect(on_body_freed)
 	add_child(fx)
 	blueprint = Blueprint.new()
@@ -306,6 +312,8 @@ func _ready() -> void:
 		SaveGame.apply_late(self, data)
 		if data.has("mech"):
 			mech.load_state(data.mech)
+		if data.has("bio"):
+			bio.load_state(data.bio)
 		if data.has("plan") and plan != null:
 			plan.load_state(data.plan)
 		if tutorial != null and data.has("tutorial"):
@@ -663,7 +671,7 @@ func _camera(dt: float) -> void:
 	if cam_override != null:
 		target = cam_override
 	elif overview:
-		target = SHIP_CENTER
+		target = Dock.centre() * Geom.M
 	elif drone != null and (drone.alive or state == "play"):
 		var dp: Vector2 = drone.global_position
 		var lead := drone.linear_velocity * 0.22
@@ -684,7 +692,7 @@ func _camera(dt: float) -> void:
 	if overview and zoom_override <= 0.0:
 		# the whole ship and the berth in view
 		var vs := get_viewport().get_visible_rect().size
-		zt = minf(vs.x / (50.0 * Geom.M), vs.y / (26.0 * Geom.M))
+		zt = minf(vs.x / ((Dock.FLOOR_X1 - Dock.TOWER_X + 3.0) * Geom.M), vs.y / (26.0 * Geom.M))
 	if state == "play" and drone.alive:
 		zt *= lerpf(1.0, 0.86, clampf(drone.linear_velocity.length() / 700.0, 0.0, 1.0))
 	zoom_now = Pal.damp(zoom_now, zt, 4.0 if zoom_override > 0.0 else 6.0, dt)
@@ -1274,6 +1282,8 @@ func _check_done() -> void:
 # ---------------------------------------------------------------- bodies
 
 func on_body_freed(b) -> void:
+	if bio != null:
+		bio.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -1431,6 +1441,8 @@ func on_laser_blocked(p, pos: Vector2) -> void:
 
 
 func on_cut_into(p, pos: Vector2) -> void:
+	if bio != null:
+		bio.on_cut(p)
 	breach(p, true, pos)
 	if p.cls != "equip":
 		return
@@ -1794,6 +1806,8 @@ func do_measure(tg: Dictionary) -> void:
 				sys.measure(c.id, "volts", c.id, "inst_volts", {"ctrl": c, "volts_fn": _ctrl_volts_fn(c)})
 			else:
 				match c.medium:
+					"bio":
+						sys.measure(c.id, "bio", c.id, "inst_bio", {"ctrl": c, "room": c.target})
 					"mag":
 						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
 					"gas":
@@ -1873,6 +1887,8 @@ func restore_reading(rd: Dictionary) -> void:
 				extra.temp_fn = func(): return sys.loop_T
 			"field":
 				extra.field_fn = func(): return mech.field(c.target)
+			"bio":
+				extra.room = c.target
 	var r := {"key": key, "kind": rd.kind, "at": rd.at, "inst": rd.inst, "t": rd.t, "val": rd.val, "text": rd.text, "ver": int(rd.ver), "vk": ""}
 	r.merge(extra, true)
 	sys.readings[key] = r
@@ -1885,6 +1901,10 @@ func _ctrl_volts_fn(c) -> Callable:
 		var cap_tag: String = sys.discharge_source(c.id)
 		var l3 = world.lines.get(sys.src[cap_tag].cable) if cap_tag != "" else null
 		return func(): return sys.line_volts(l3) if l3 != null and l3.alive else 0.0
+	# a test point on a piece with its own supply (a pod's battery) reads that piece
+	if c.kind == "test" and c.target != "" and c.target != "bus":
+		var tp = world.tag(c.target)
+		return func(): return sys.piece_volts(tp) if tp != null and not tp.gone else 0.0
 	return func(): return sys.bus_volts()
 
 
@@ -2173,6 +2193,18 @@ func _operate(c, at: Vector2) -> void:
 			say("degaussed", at)
 			sfx.play("discharge")
 			fx.ring(at, 6.0, 90.0, 0.6, Pal.tint(Pal.AIR, 0.8, 1.4), 2.0)
+		"seal":
+			if c.state:
+				say("bio_sealed_already", at)
+				return
+			if not bio.seal(c.target):
+				say("bio_seal_fail", at)
+				sfx.play("deny")
+				return
+			c.state = true
+			say("bio_sealed", at, c.target)
+			sfx.play("clamp_off")
+			fx.ring(at, 4.0, 40.0, 0.4, Pal.tint(Pal.FLUID, 0.8, 1.3), 1.5)
 		"jam":
 			if c.state:
 				return

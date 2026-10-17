@@ -13,20 +13,23 @@ const MAX_T := 1.0               # t it can lift
 const SPEED := 4.0 * 48.0        # px/s with a load
 const EMPTY := 9.0 * 48.0        # px/s back to the next one
 const RAIL_Y := -10.0 * 48.0     # the boom it runs on
-const HOME := Vector2(18.0 * 48.0, -10.0 * 48.0)
-const DROP := Vector2(21.0 * 48.0, 6.9 * 48.0)   # just above the furnace mouth
 const CLEAR := 2.5 * 48.0        # px it keeps from the operator's drone
 
 var game: Game
 var body = null                  # what it is carrying
 var path: Array = []             # waypoints still to go (px)
-var claw := HOME + Vector2(0, 40)
+var claw := Vector2.ZERO
 var state := "idle"              # idle reach carry release
 var hold_t := 0.0
 var off := Vector2.ZERO          # the body's position relative to the claw
 var carried := 0                 # bodies delivered this contract
 var t := 0.0
 var wait_t := 0.0               # s spent holding back for the drone
+
+
+# where it waits: over the berth, a little short of the furnace
+func home() -> Vector2:
+	return Vector2((Dock.metal_home - 3.0) * 48.0, -10.0 * 48.0 + 40.0)
 
 
 func _init() -> void:
@@ -53,10 +56,12 @@ func _physics_process(dt: float) -> void:
 	if game == null or game.paused_sim or game.state != "play":
 		return
 	t += dt
+	if claw == Vector2.ZERO:
+		claw = home()
 	if game.auto_paused:
 		if body != null:
 			halt()
-		claw = claw.move_toward(HOME + Vector2(0, 40), EMPTY * dt)
+		claw = claw.move_toward(home(), EMPTY * dt)
 		return
 	# keep clear of the drone: wait for it to move on, then edge past slowly
 	var k := 1.0
@@ -77,7 +82,7 @@ func _physics_process(dt: float) -> void:
 					state = "reach"
 					break
 			if state == "idle":
-				claw = claw.move_toward(HOME + Vector2(0, 40), EMPTY * dt)
+				claw = claw.move_toward(home(), EMPTY * dt)
 		"reach":
 			if not is_instance_valid(body) or body.capture != null:
 				_drop_it()
@@ -196,7 +201,7 @@ func _process(_dt: float) -> void:
 
 func _draw() -> void:
 	# the trolley on the boom, the cable, the claw
-	var trolley := Vector2(clampf(claw.x, -6.0 * 48.0, 27.0 * 48.0), RAIL_Y)
+	var trolley := Vector2(clampf(claw.x, -6.0 * 48.0, (Dock.ARM_X1 - 0.5) * 48.0), RAIL_Y)
 	draw_rect(Rect2(trolley + Vector2(-22, -14), Vector2(44, 16)), Color(0.07, 0.073, 0.082))
 	draw_rect(Rect2(trolley + Vector2(-22, -14), Vector2(44, 16)), Pal.ink(0.6), false, 1.2)
 	draw_line(trolley + Vector2(-14, 2), trolley + Vector2(-14, 6), Pal.ink(0.5), 2.0)

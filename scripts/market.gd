@@ -51,7 +51,7 @@ static func pick_ship(rng: RandomNumberGenerator, career: Dictionary) -> String:
 	var pool: Array = []
 	var total := 0
 	for e in POOL:
-		if rep >= int(e[2]) and FileAccess.file_exists(Ship.DIR + e[0] + ".json"):
+		if rep >= int(e[2]) and FileAccess.file_exists(Ship.DIR + e[0] + ".json") and fits(e[0], career):
 			pool.append(e)
 			total += int(e[1])
 	var k := r.randi_range(1, maxi(1, total))
@@ -60,6 +60,13 @@ static func pick_ship(rng: RandomNumberGenerator, career: Dictionary) -> String:
 		if k <= 0:
 			return e[0]
 	return "gr7"
+
+
+# a ship the berth can take: anything up to the standard berth, longer ones once it is extended
+static func fits(ship: String, career: Dictionary) -> bool:
+	if float(type_of(ship).get("length", 0.0)) <= Dock.STANDARD - 6.0:
+		return true
+	return career.get("upgrades", {}).has("berth88")
 
 
 # the highest risk the market will offer at this reputation

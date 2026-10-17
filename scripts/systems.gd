@@ -9,10 +9,11 @@ extends Node
 
 const SPACE := 0
 const CELL := 0.1                 # metres per gas cell
-const GX0 := -1.0
-const GY0 := -5.0
-const GW := 440
-const GH := 100
+# the gas grid: x -1..43 m, y -5..5 m, grown (on the same cells) for a ship that reaches further
+var GX0 := -1.0
+var GY0 := -5.0
+var GW := 440
+var GH := 100
 const K_OPEN := 8.0               # m²/s of exchange per contact cell
 const SAFE_KPA := 5.0
 
@@ -67,6 +68,12 @@ var heat: Dictionary = {}
 var leaks: Array = []             # {pos, dir, fluid, rate, src, t, piece, local}
 var clouds: Array = []            # {pos, r, amount, t}
 
+# biological contamination carried in a room's air (ship file "bio": {"rooms": {room: index}}):
+# room -> amount (index × volume); it moves with the gas between rooms, goes with it to
+# space, and the recovery hose's filter takes it out
+var bio := {}
+var bio_vented := 0.0
+
 # hoses: port id -> {"mode": "recover"|"vent", "t": age}
 var hoses := {}
 var readings := {}
@@ -79,6 +86,7 @@ func setup(g, w, ship: Dictionary) -> void:
 	var gas: Dictionary = cfg.get("gas", {})
 	room_ids = {}
 	room_names = [""]
+	_fit_grid(ship)
 	for n in world.rooms:
 		room_names.append(n)
 		room_ids[n] = room_names.size() - 1
@@ -111,6 +119,11 @@ func setup(g, w, ship: Dictionary) -> void:
 	for k in vols:
 		gas0 += vols[k].n
 		vol_ver[k] = 0
+	bio = {}
+	var b0: Dictionary = cfg.get("bio", {}).get("rooms", {})
+	for n in b0:
+		if vols.has(n):
+			bio[n] = float(b0[n]) * vols[n].V
 	# every control with two states starts as the ship file says
 	for id in world.ctrls:
 		var c = world.ctrls[id]
@@ -137,6 +150,27 @@ func setup(g, w, ship: Dictionary) -> void:
 	loop_T = _heat_target() if not heat.is_empty() else 20.0
 	_compute_now()
 	_step_elec(0.0)
+
+
+# a longer or taller ship than the standard grid holds: whole metres more, same cells
+func _fit_grid(ship: Dictionary) -> void:
+	var x1 := -INF
+	var y0 := INF
+	var y1 := -INF
+	for pd in ship.get("pieces", []):
+		for q in pd.get("poly", []):
+			x1 = maxf(x1, q[0])
+			y0 = minf(y0, q[1])
+			y1 = maxf(y1, q[1])
+	if x1 == -INF:
+		return
+	if x1 + 1.0 > GX0 + GW * CELL:
+		GW = ceili((ceilf(x1) + 1.0 - GX0) / CELL)
+	if y0 - 1.0 < GY0 or y1 + 1.0 > GY0 + GH * CELL:
+		var top := minf(GY0, floorf(y0) - 1.0)
+		var bot := maxf(GY0 + GH * CELL, ceilf(y1) + 1.0)
+		GY0 = top
+		GH = roundi((bot - top) / CELL)
 
 
 func _cell_px(gx: int, gy: int) -> Vector2:
@@ -332,6 +366,8 @@ func _step_gas(dt: float) -> void:
 			var g: float = l[2] * K_OPEN
 			var dn := g * (pa - pb) * h
 			dn = _limit(dn, a, b)
+			if not bio.is_empty():
+				_carry_bio(a, b, dn)
 			vols[a].n -= dn
 			if b == "space":
 				gas_lost += maxf(dn, 0.0)
@@ -354,6 +390,11 @@ func _step_gas(dt: float) -> void:
 			if hose.mode == "vent":
 				k *= 3.0
 			var take: float = minf(vols[v].n, k * P(v) * h)
+			if bio.get(v, 0.0) > 0.0 and vols[v].n > 1e-9:
+				var out: float = bio[v] * take / vols[v].n
+				bio[v] -= out
+				if hose.mode == "vent":
+					bio_vented += out
 			vols[v].n -= take
 			if hose.mode == "vent":
 				gas_lost += take
@@ -379,6 +420,33 @@ func _step_gas(dt: float) -> void:
 			var p := P(l[0])
 			if p > 1.5:
 				game.on_jet(l[0], l[3], l[4], p, l[2])
+
+
+# the contamination a flow of dn (a to b; negative: b to a) carries with it
+func _carry_bio(a: String, b: String, dn: float) -> void:
+	var src := a if dn > 0.0 else b
+	var dst := b if dn > 0.0 else a
+	if src == "space" or bio.get(src, 0.0) <= 0.0 or vols[src].n <= 1e-9:
+		return
+	var moved: float = minf(bio[src], bio[src] * absf(dn) / vols[src].n)
+	bio[src] -= moved
+	if dst == "space":
+		bio_vented += moved
+	else:
+		bio[dst] = bio.get(dst, 0.0) + moved
+
+
+# how contaminated a room's air is (1 = an isolation room as its patient left it)
+func bio_index(room: String) -> float:
+	if not vols.has(room) or vols[room].V <= 0.0:
+		return 0.0
+	return bio.get(room, 0.0) / vols[room].V
+
+
+# something spilt into a room's air
+func bio_add(room: String, index: float) -> void:
+	if vols.has(room):
+		bio[room] = bio.get(room, 0.0) + index * vols[room].V
 
 
 # the high-flow recovery pump draws gas and fluid twice as fast
@@ -866,7 +934,7 @@ func dest_of(p) -> String:
 		return "metal"
 	if not p.intact:
 		return "metal"
-	if p.hazard == "explosive":
+	if p.hazard in ["explosive", "bio"]:
 		return "hazard"
 	var fv := fluid_in_piece(p)
 	if fv != "" and fvol[fv].amount > float(fvol[fv].get("hazard", 0.02)):
@@ -941,6 +1009,9 @@ func _current(r: Dictionary) -> Array:
 		"field":
 			var fv2: float = r.get("field_fn").call()
 			return [fv2, "%d mT" % int(round(fv2)), 0, "field"]
+		"bio":
+			var bv: float = bio_index(r.get("room", ""))
+			return [bv, "%.2f" % bv, 0, "bio"]
 	return [0.0, "", 0, ""]
 
 
@@ -957,4 +1028,6 @@ func stale(r: Dictionary) -> bool:
 			return absf(cur[0] - r.val) > 8.0
 		"field":
 			return absf(cur[0] - r.val) > 2.0
+		"bio":
+			return absf(cur[0] - r.val) > maxf(0.05, absf(r.val) * 0.25)
 	return false

@@ -38,6 +38,7 @@ const BERTH := [
 	["mouth_rail", "facility", 30000.0, "fa_rail", "fa_rail_d", true],
 	["net05", "facility", 18000.0, "fa_net", "fa_net_d", true],
 	["hauler", "facility", 45000.0, "fa_hauler", "fa_hauler_d", true],
+	["berth88", "facility", 240000.0, "fa_berth", "fa_berth_d", true],
 ]
 # what berth management will offer later, named in one line
 const LATER := ["fa_drone2", "fa_mast", "fa_scan"]
@@ -511,7 +512,7 @@ func _item_rect(i: int) -> Rect2:
 
 func _facility_rect(j: int) -> Rect2:
 	var tr := _training_rect()
-	return Rect2(tr.position.x, tr.end.y + 52 + j * 106, tr.size.x, 94)
+	return Rect2(tr.position.x, tr.end.y + 52 + j * 90, tr.size.x, 80)
 
 
 # the shop: the drawing on the left (upgrades called out on it), stock below it, detail on the right
@@ -1282,17 +1283,17 @@ func _berth(s: Vector2, a: float) -> void:
 	# the facilities: bought once, kept
 	var d2 := Career.data
 	_text(Txt.t("tm_facilities"), Vector2(tr.position.x, tr.end.y + 36), 15, Pal.ink(0.6 * k1), font_b)
-	for j in 3:
+	for j in BERTH.size() - 2:
 		var it: Array = BERTH[2 + j]
 		var fcr := _facility_rect(j)
 		var fk := Pal.ease_out(clampf((deal_t - 0.14 - j * 0.05) / 0.35, 0.0, 1.0)) * a
 		UI.panel(self, fcr, fk, sel_k[2 + j].x)
-		_text(Txt.t(it[3]), fcr.position + Vector2(24, 34), 17, Pal.ink(0.95 * fk), font_b)
-		_text(Txt.t(it[4]), fcr.position + Vector2(24, 62), 13, Pal.ink(0.6 * fk), font)
+		_text(Txt.t(it[3]), fcr.position + Vector2(24, 30), 17, Pal.ink(0.95 * fk), font_b)
+		_text(Txt.t(it[4]), fcr.position + Vector2(24, 56), 13, Pal.ink(0.6 * fk), font)
 		if sel != 2 + j:
 			var have: bool = d2.upgrades.has(it[0])
 			_text("✓ " + Txt.t("tm_installed") if have else Pal.money(it[2]), Vector2(fcr.end.x - 24, fcr.position.y + 52), 17, Pal.tint(Pal.FLUID, 0.85 * fk, 1.1) if have else Pal.ink((0.9 if float(d2.money) >= float(it[2]) else 0.45) * fk), font_b, 1)
-	var lr := Rect2(tr.position.x, _facility_rect(2).end.y + 20, tr.size.x, 96)
+	var lr := Rect2(tr.position.x, _facility_rect(BERTH.size() - 3).end.y + 20, tr.size.x, 96)
 	var k2 := Pal.ease_out(clampf((deal_t - 0.16) / 0.35, 0.0, 1.0)) * a
 	UI.panel(self, lr, k2 * 0.6)
 	_text(Txt.t("tm_later_h"), lr.position + Vector2(32, 40), 14, Pal.ink(0.5 * k2), font)

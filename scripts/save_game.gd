@@ -154,6 +154,7 @@ static func save(g) -> void:
 		"version": VERSION,
 		"ship": g.ship_id,
 		"mech": g.mech.save_state() if g.mech != null else {},
+		"bio": g.bio.save_state() if g.bio != null else {},
 		"plan": g.plan.save_state() if g.plan != null else {},
 		"world": {"pieces": pieces, "joints": joints, "lines": lines, "ctrls": ctrls, "rooms": rooms, "bodies": bodies,
 			"next_id": w.next_id, "next_joint": w.next_joint, "metal_price": w.metal_price, "smass": w.structural_mass},

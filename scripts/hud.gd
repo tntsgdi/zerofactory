@@ -1097,6 +1097,7 @@ func _ctrl_action(ctrl) -> String:
 		"hatch": return g.txt("act_hatch")
 		"jam": return g.txt("act_jam")
 		"degauss": return g.txt("act_degauss")
+		"seal": return g.txt("act_seal")
 	return ""
 
 
