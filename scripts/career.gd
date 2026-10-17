@@ -14,6 +14,11 @@ const INTEREST := 0.02            # of the principal still owed, every settlemen
 const BONUS := 0.2                # of the net profit, finished within the standard time
 const FAST_BONUS := 0.30          # the same on a fast-recovery job (its standard time is a quarter shorter)
 const FIRST := "GR-001"           # the hand-made Heron; the market opens after it
+# 开局第一关（第一单合同）结算完，白送一台初级搬运无人机：新手第二单就能用上拖运，
+# 不用先攒 45,000。改这个数字就能挪到别的关后面（0 = 不送，2 = 第二关之后……）。
+# After this many settled contracts the basic hauling drone is fitted for free, once.
+const GIFT_HAULER_AFTER := 1
+const GIFT_HAULER := "hauler"
 # The fixed contracts a new berth works through, in order, before the market
 # opens (design/体验打磨定案.md: training → the work tug → S-09 Swift → GR-001).
 # intro / outro: Liang's lines when the ship comes in (_1.._3) and when it is done.
@@ -113,6 +118,7 @@ static func fresh() -> Dictionary:
 		"company": "",
 		"time": 0.0,               # seconds played on this slot (training included)
 		"certified": false,        # through the training course, or skipped it
+		"first_gift": false,       # the opening drone was handed over (GIFT_HAULER_AFTER)
 		"clues": [],               # story clues filed (each save has its own)
 		"chapter_done": false,
 		"exam_grade": "",
@@ -419,6 +425,14 @@ static func settle(r: Dictionary) -> Dictionary:
 	if float(data.loan) > 0.5:
 		data.in_debt = true
 	data.done = int(data.done) + 1
+	# 开局第一关过了：白送一台初级搬运无人机（一副生涯只送这一次）
+	var granted: Array = []
+	if GIFT_HAULER_AFTER > 0 and int(data.done) == GIFT_HAULER_AFTER and not data.get("upgrades", {}).has(GIFT_HAULER):
+		var up: Dictionary = data.get("upgrades", {})
+		up[GIFT_HAULER] = 1
+		data.upgrades = up
+		data.first_gift = true
+		granted.append(GIFT_HAULER)
 	# consumables used on the contract come out of stock
 	var used: Dictionary = r.get("used", {})
 	for k in used:
@@ -434,7 +448,7 @@ static func settle(r: Dictionary) -> Dictionary:
 	var paid_off := _paid_off()
 	save()
 	return {"installment": inst, "interest": interest, "paid": paid, "gross": gross, "prepaid": prepaid, "fee": fee, "bonus": bonus,
-		"short": short, "money": cash, "loan": data.loan, "level_up": level() != rep_before, "level": level(), "paid_off": paid_off, "used": used}
+		"short": short, "money": cash, "loan": data.loan, "level_up": level() != rep_before, "level": level(), "paid_off": paid_off, "used": used, "granted": granted}
 
 
 static func ensure_offers(make: Callable) -> void:

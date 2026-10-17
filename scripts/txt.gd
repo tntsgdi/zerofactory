@@ -645,6 +645,7 @@ const S := {
 	"nt_now": ["本次事故状态", "THIS SHIP'S ACCIDENT"],
 	"nt_unverified": ["尚未验证", "NOT YET VERIFIED"],
 	"e_used": ["消耗品", "CONSUMABLES USED"],
+	"e_gift": ["本单赠送（免费）", "INCLUDED FREE"],
 	"e_traps": ["本单招牌陷阱", "THIS CONTRACT'S SIGNATURE TRAPS"],
 	"e_trap_ok": ["避开", "AVOIDED"],
 	"e_trap_hit": ["中招", "CAUGHT OUT"],

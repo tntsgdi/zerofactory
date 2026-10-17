@@ -194,6 +194,13 @@ func career_rows() -> Array:
 		for k in used:
 			parts.append("%s ×%d" % [game.txt("it_" + k), int(used[k])])
 		out.append(["e_used", ", ".join(parts), "text"])
+	# 第一关结算时白送的设备（career.gd GIFT_HAULER_AFTER）
+	var granted: Array = r.get("granted", [])
+	if not granted.is_empty():
+		var gifts: Array = []
+		for id in granted:
+			gifts.append(game.txt("fa_" + str(id)))
+		out.append(["e_gift", ", ".join(gifts), "text"])
 	if float(r.loan) > 0.5:
 		out.append(["e_loan_left", float(r.loan), "plain"])
 	out.append(["e_funds", float(r.money), "plain"])
