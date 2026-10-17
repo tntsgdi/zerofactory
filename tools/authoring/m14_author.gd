@@ -273,16 +273,28 @@ static func _hopper() -> void:
 			xr = HOP_X1 - (0.62 if by_liner else 0.37)
 		var x := xl
 		while true:
-			var r := rng.randf_range(0.28, 0.38)
+			# (small enough that neighbouring rows never overlap: rows 0.74 apart)
+			var r := rng.randf_range(0.26, 0.34)
 			var cx := x + r
 			if cx + r > xr:
 				break
-			var cy := y + rng.randf_range(-0.06, 0.06)
+			var cy := y + rng.randf_range(-0.02, 0.02)
 			var pts: Array = []
 			var kk := rng.randi_range(6, 8)
 			for i in kk:
 				var a := TAU * i / kk + rng.randf_range(-0.2, 0.2)
 				pts.append(Vector2(cx, cy) + Vector2.from_angle(a) * r * rng.randf_range(0.82, 1.0))
+			# never into the hopper's own walls, funnel, liners or floor: a lump that would
+			# overlap them moves along until it is clear (else it is left out)
+			var tries := 0
+			while _hits_structure(pts) and tries < 12:
+				for i in pts.size():
+					pts[i] += Vector2(0.05, 0.0)
+				cx += 0.05
+				tries += 1
+			if tries >= 12 or cx + r > xr:
+				x = cx + r
+				continue
 			n += 1
 			var ch = _tagged(w.add_piece("ore", _mp(pts), {"cls": "metal", "dest": "metal", "density": 3.4, "cut_speed": 120.0, "tag": "ORE-%d" % n, "name_key": "p_ore"}))
 			placed.append([ch, Vector2(cx, cy), r])
@@ -331,6 +343,19 @@ static func _hopper() -> void:
 				var jp3: Vector2 = c + (f[1] - c).normalized() * (r + dd2 * 0.5)
 				_bolt(e[0], f[0], jp3.x, jp3.y, "pack")
 				break
+
+
+# does a lump's outline (m) overlap anything already built that is not ore?
+static func _hits_structure(pts: Array) -> bool:
+	var poly := _mp(pts)
+	var bb := Geom.bbox(poly).grow(2.0)
+	for id in w.order:
+		var q = w.pieces[id]
+		if q.kind == "ore" or not Geom.bbox(q.poly).intersects(bb):
+			continue
+		if not Geometry2D.intersect_polygons(poly, q.poly).is_empty():
+			return true
+	return false
 
 
 # ---------------------------------------------------------------- the bow: armour, the crusher on its arms
@@ -614,7 +639,7 @@ static func meta() -> Dictionary:
 			"drift": ["TEETH", "SAMPLES", "LOCKER-Q"],
 			"section_x": 22.0,
 			"slots": {
-				"hidden_damage": {"plates": ["TOP-1", "TOP-2", "TOP-3", "TOP-4", "TOP-5", "TOP-6"]},
+				"hidden_damage": {"plates": ["TOP-6"]},
 				"gate_jam": {"gates": ["GATE-1", "GATE-2"]},
 			},
 			"mechanisms": true,

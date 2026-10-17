@@ -11,7 +11,7 @@ extends SceneTree
 # plus the meta() sections of the authoring script (gas, power, fluids,
 # per-control settings, contract value, the factory drawing).
 
-const AUTHORS := {"gr7": "res://tools/authoring/gr7_author.gd", "s09": "res://tools/authoring/s09_author.gd", "tug": "res://tools/authoring/tug_author.gd", "pod": "res://tools/authoring/pod_author.gd", "h22": "res://tools/authoring/h22_author.gd", "med47": "res://tools/authoring/med47_author.gd", "m14": "res://tools/authoring/m14_author.gd", "ts1": "res://tools/authoring/ts1_author.gd",
+const AUTHORS := {"gr7": "res://tools/authoring/gr7_author.gd", "s09": "res://tools/authoring/s09_author.gd", "tug": "res://tools/authoring/tug_author.gd", "pod": "res://tools/authoring/pod_author.gd", "h22": "res://tools/authoring/h22_author.gd", "med47": "res://tools/authoring/med47_author.gd", "m14": "res://tools/authoring/m14_author.gd", "fr26": "res://tools/authoring/fr26_author.gd", "ts1": "res://tools/authoring/ts1_author.gd",
 	"e07a": "res://tools/authoring/e07_author.gd", "e07b": "res://tools/authoring/e07_author.gd",
 	"e07c": "res://tools/authoring/e07_author.gd", "e07d": "res://tools/authoring/e07_author.gd"}
 

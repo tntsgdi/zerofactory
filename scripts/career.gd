@@ -254,6 +254,22 @@ static func active() -> Dictionary:
 # ---------------------------------------------------------------- the market
 
 # take an offer: the contract fee is paid now (what money can't cover is borrowed)
+# the contract in hand goes to work with what the berth owns now (an opening
+# contract is not signed at the market, so it gets its kit when it is started)
+static func sign_active() -> Dictionary:
+	var a: Dictionary = active()
+	if a.is_empty() or a.has("kit"):
+		return a
+	a.kit = data.get("upgrades", {}).duplicate()
+	a.items = data.get("items", {}).duplicate()
+	a.notes = data.get("archive", {}).get(a.get("ship", ""), {}).duplicate(true)
+	a.desk = data.get("desk", {}).duplicate()
+	data.desk = {}
+	data.active = a
+	save()
+	return a
+
+
 static func accept(i: int) -> Dictionary:
 	var offers: Array = data.get("offers", [])
 	if i < 0 or i >= offers.size() or not active().is_empty():

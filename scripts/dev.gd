@@ -18,9 +18,10 @@ extends CanvasLayer
 # the career's contract); in the terminal it can also go on the first card.
 
 const TIME_STEPS := [1.0, 2.0, 4.0, 8.0, 0.25]
-const SHIPS := ["gr7", "s09", "tug", "pod", "h22"]
+const SHIPS := ["gr7", "s09", "tug", "pod", "h22", "m14", "med47", "fr26"]
 const KIT := [["scan_kit", "up_scan"], ["grapple5", "up_grapple"], ["pump2", "up_pump"], ["arm", "fa_arm"],
-	["mouth_rail", "fa_rail"], ["net05", "fa_net"], ["hauler", "fa_hauler"]]
+	["mouth_rail", "fa_rail"], ["net05", "fa_net"], ["hauler", "fa_hauler"],
+	["berth88", "fa_berth"], ["hauler2", "fa_hauler2"], ["crane", "fa_crane"], ["port2", "fa_port2"], ["buffer", "fa_buffer"], ["zones", "fa_zones"]]
 const GOALS := ["", "safe", "fast", "valuable"]
 const SCOPES := ["full", "section", "rescue"]
 
@@ -402,12 +403,17 @@ func _button(r: Rect2, text: String, on: bool, act: Callable, size_px: int = 13)
 
 
 # a row of choices; returns the x after it
-func _chips(x: float, y: float, items: Array, w: float = 0.0) -> float:
+# a row of chips from x; past x1 (if given) it wraps under itself. Returns the last row's y
+func _chips(x: float, y: float, items: Array, w: float = 0.0, x1: float = INF) -> float:
+	var x0 := x
 	for it in items:
 		var tw: float = w if w > 0.0 else font.get_string_size(it[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 18.0
+		if x + tw > x1 and x > x0:
+			x = x0
+			y += 32.0
 		_button(Rect2(x, y, tw, 26), it[0], it[1], it[2])
 		x += tw + 6.0
-	return x
+	return y
 
 
 func _draw_panel() -> void:
@@ -480,8 +486,7 @@ func _draw_builder() -> void:
 			ships.append([label, b_ship == sid, func():
 				b_ship = sid
 				b_traps = b_traps.filter(func(tr): return tr in Traps.allowed(Ship.load_data(sid)))])
-	_chips(lx, y, ships)
-	y += 36.0
+	y = _chips(lx, y, ships, 0.0, r.end.x - 18.0) + 36.0
 	# accidents this type allows
 	lab.call("dev_b_traps", y)
 	var allowed: Array = Traps.allowed(Ship.load_data(b_ship))
@@ -691,6 +696,10 @@ func _draw_xray() -> void:
 		mach.append("ARM %s" % g.arm.state)
 	if g.hauler != null:
 		mach.append("HAUL %s" % g.hauler.state)
+	if g.hauler2 != null:
+		mach.append("HAUL2 %s" % g.hauler2.state)
+	if g.crane != null:
+		mach.append("CRANE %s" % g.crane.state)
 	for z2 in g.mouths:
 		mach.append("%s←%s" % [z2, g.mouths[z2]])
 	if not mach.is_empty():

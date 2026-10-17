@@ -15,6 +15,7 @@ var sys: Systems
 var mech: Mech                # magnets and preloaded arms some ship types carry
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
+var cryo: Cryo                # cryogenic tanks some ship types carry
 var plan: WorkPlan            # the work plan of this ship type, recorded and replayed
 var auto_paused := false      # the operator stopped the berth's machines (arm, hauler, plan)
 var mouths := {}              # mouth zone -> the machine dropping into it now
@@ -70,6 +71,13 @@ var exam: Exam
 var settings_panel: SettingsPanel
 var arm: RecoveryArm
 var hauler: Hauler
+var hauler2: Hauler             # the second hauling drone (roadmap 4.4)
+var crane: Crane                # the heavy crane (roadmap 4.4)
+var keepout: Array = []         # Rect2 (px): keep-out zones the operator set; no machine goes in
+var consoles: Consoles          # the berth's two computers: shop and berth management, on site
+var console_ui: Control = null  # the terminal page open over the berth
+const KEEPOUT_MAX := 3
+const KEEPOUT_SIZE := Vector2(8.0, 8.0)   # m
 var radio := Radio.new()      # Liang and the berth terminal
 var player_moved := false
 var warp := false            # time runs x4 while the player holds =
@@ -159,8 +167,6 @@ func _ready() -> void:
 	# a contract plays its own ship type
 	if job.get("ship", "") != "" and not ship_id in ["exam"]:
 		ship_id = job.ship
-	if not job.is_empty() and job.has("opening") and int(Career.data.get("done", 1)) < Career.OPENING.size():
-		Txt.hint_tier = "guided"
 	var data := {}
 	if SaveGame.load_requested and (not testing or SaveGame.allow_test):
 		data = SaveGame.read(SaveGame.file_for_ship(Ship.load_data(ship_id)))
@@ -189,6 +195,8 @@ func _ready() -> void:
 		_factory["l:" + l.id] = true
 	# the berth: extended once the career has paid for it, or for a ship too long for the standard one
 	Dock.configure(Dock.EXTENDED if has_upgrade("berth88") or float(ship.get("length", 0.0)) > Dock.STANDARD - 6.0 else Dock.STANDARD)
+	if has_upgrade("port2"):
+		Dock.add_port2()
 	dock.set_ship(ship)
 	if not data.is_empty() and SaveGame.apply(self, data):
 		Ship.rooms(world, ship)
@@ -208,6 +216,9 @@ func _ready() -> void:
 	ore = Ore.new()
 	world.add_child(ore)
 	ore.setup(self, ship)
+	cryo = Cryo.new()
+	add_child(cryo)
+	cryo.setup(self, ship)
 	world.piece_freed.connect(on_body_freed)
 	add_child(fx)
 	blueprint = Blueprint.new()
@@ -258,6 +269,23 @@ func _ready() -> void:
 		hauler.game = self
 		hauler.process_mode = Node.PROCESS_MODE_PAUSABLE
 		add_child(hauler)
+	if hauler != null and has_upgrade("hauler2"):
+		hauler2 = Hauler.new()
+		hauler2.game = self
+		hauler2.who = "hauler2"
+		hauler2.home_off = Vector2(2.2, -1.6)
+		hauler2.queue = hauler.queue
+		hauler2.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(hauler2)
+	if career() and Career.usable():
+		consoles = Consoles.new()
+		consoles.game = self
+		add_child(consoles)
+	if has_upgrade("crane"):
+		crane = Crane.new()
+		crane.game = self
+		crane.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(crane)
 	if has_upgrade("arm"):
 		arm = RecoveryArm.new()
 		arm.game = self
@@ -320,8 +348,12 @@ func _ready() -> void:
 			bio.load_state(data.bio)
 		if data.has("ore"):
 			ore.load_state(data.ore)
+		if data.has("cryo"):
+			cryo.load_state(data.cryo)
 		if data.has("plan") and plan != null:
 			plan.load_state(data.plan)
+		for r in data.get("keepout", []):
+			keepout.append(Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3])))
 		if tutorial != null and data.has("tutorial"):
 			tutorial.load_state(data.tutorial)
 		if story != null and data.has("story"):
@@ -533,6 +565,9 @@ func _read_input() -> void:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	# a berth computer is open over the berth: it has the keys
+	if console_ui != null:
+		return
 	if ev is InputEventKey and ev.pressed and not ev.echo:
 		var k: int = ev.physical_keycode
 		if state == "intro":
@@ -605,16 +640,26 @@ func _unhandled_input(ev: InputEvent) -> void:
 				else:
 					say("mouth_fixed", drone.global_position + Vector2(0, -44))
 			"mark":
-				if hauler != null:
-					var under: Array = world.pieces_at(aim)
-					var key: String = hauler.toggle(under[0].body if not under.is_empty() else null)
-					if key != "":
-						say(key, aim + Vector2(0, -30))
+				var under: Array = world.pieces_at(aim)
+				var mb = under[0].body if not under.is_empty() else null
+				var key := ""
+				# too heavy for the haulers (or none aboard): the crane's, if the berth has one
+				if crane != null and mb != null and (hauler == null or mb.total_mass() > Hauler.MAX_T or crane.queue.has(mb)):
+					key = crane.toggle(mb)
+				elif hauler != null:
+					key = hauler.toggle(mb)
+				if key != "":
+					say(key, aim + Vector2(0, -30))
+			"use":
+				if consoles != null and state == "play" and consoles.near() != "":
+					open_console(consoles.near())
+			"zone":
+				if has_upgrade("zones"):
+					say(toggle_keepout(aim), aim + Vector2(0, -30))
+					sfx.play("switch")
 			"hints":
 				if training:
 					toggle_hints()
-				else:
-					say("tier_now", drone.global_position + Vector2(0, -44), txt("tier_" + Txt.hint_tier))
 	elif ev is InputEventMouseButton and ev.pressed:
 		if state == "intro":
 			_end_intro()
@@ -644,6 +689,31 @@ func toggle_menu() -> void:
 	get_tree().paused = menu_open
 	paused_sim = menu_open
 	hud.menu_changed()
+	sfx.play("menu")
+
+
+# one of the berth's computers: its terminal page over the berth, play stopped
+# while it is open (the operator is at the desk, not at the controls)
+func open_console(which: String) -> void:
+	if console_ui != null or menu_open:
+		return
+	var term = load("res://scenes/terminal.tscn").instantiate()
+	term.overlay = true
+	term.tab = 1 if which == "shop" else 2
+	var layer := CanvasLayer.new()
+	layer.layer = 60
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	term.on_close = func():
+		console_ui = null
+		layer.queue_free()
+		get_tree().paused = false
+		paused_sim = false
+		sfx.play("menu")
+	get_tree().paused = true
+	paused_sim = true
+	layer.add_child(term)
+	console_ui = term
 	sfx.play("menu")
 
 
@@ -980,20 +1050,18 @@ func leave() -> void:
 		to_title()
 		return
 	Engine.time_scale = 1.0
-	# the screen closes on a heat line and the terminal opens out of it
+	# the screen closes on a heat line and the terminal opens out of it: after every
+	# contract, the opening ones too (the shop and the berth are there; an opening
+	# contract still to play waits on the market page)
 	hud.close_then(func():
 		get_tree().paused = false
-		# the next opening contract is towed straight in; after the last, the terminal
-		if not Career.active().is_empty():
-			Game.play_career(get_tree())
-		else:
-			get_tree().change_scene_to_file("res://scenes/terminal.tscn"))
+		get_tree().change_scene_to_file("res://scenes/terminal.tscn"))
 
 
 # the career's contract in hand (the first one after training), or the terminal when there is none
 static func play_career(tree: SceneTree) -> void:
 	Career.load_or_new()
-	var a: Dictionary = Career.active()
+	var a: Dictionary = Career.sign_active()
 	if a.is_empty():
 		tree.change_scene_to_file("res://scenes/terminal.tscn")
 		return
@@ -1107,6 +1175,9 @@ var _ore_t := 0.0
 
 
 func on_ore_in(v: float) -> void:
+	# a part-ship contract buys pieces: the hopper's fines run out unpaid
+	if scope() != "full":
+		return
 	_ore_due += v
 	if playtime - _ore_t < 1.0:
 		return
@@ -1193,11 +1264,13 @@ func on_reject(b, zone: String, verdict: Dictionary) -> void:
 
 
 func on_swallow_start(b, zone: String) -> void:
-	sfx.play("swallow_" + zone)
+	sfx.play("swallow_" + Dock.kind(zone))
 
 
-func on_swallowed(b, zone: String) -> void:
-	var at: Vector2 = Dock.zpos(zone) - Dock.ZONES[zone].face * 30.0
+func on_swallowed(b, mouth: String) -> void:
+	# a second equipment bay pays and counts as the first; the effects play where it is
+	var zone := Dock.kind(mouth)
+	var at: Vector2 = Dock.zpos(mouth) - Dock.ZONES[mouth].face * 30.0
 	var names: Array = []
 	var v := 0.0
 	var boom := false
@@ -1244,21 +1317,21 @@ func on_swallowed(b, zone: String) -> void:
 		exam.on_delivered(b, zone)
 	gain("equip" if zone == "equip" else ("hazard" if zone == "hazard" else "metal"), v, at, label)
 	var col := Pal.heat(1.0, 2.2) if zone == "metal" else (Pal.tint(Pal.FLUID, 0.9, 1.4) if zone == "hazard" else Pal.ink(0.9, 1.5))
-	fx.flash(Dock.zpos(zone), 140.0, 0.5, col)
-	fx.ring(Dock.zpos(zone), 20.0, 140.0, 0.5, col, 2.0)
-	fx.sparks(Dock.zpos(zone), -Dock.ZONES[zone].face, 30, col, 480.0, 0.55, 0.9)
-	var face: Vector2 = Dock.ZONES[zone].face
+	fx.flash(Dock.zpos(mouth), 140.0, 0.5, col)
+	fx.ring(Dock.zpos(mouth), 20.0, 140.0, 0.5, col, 2.0)
+	fx.sparks(Dock.zpos(mouth), -Dock.ZONES[mouth].face, 30, col, 480.0, 0.55, 0.9)
+	var face: Vector2 = Dock.ZONES[mouth].face
 	match zone:
 		"metal":
 			for i in 46:
-				fx.molten(Dock.zpos(zone) + Vector2(randf_range(-80, 80), 0), (-face * randf_range(160, 520)).rotated(randf_range(-0.5, 0.5)), randf_range(1.2, 2.4))
-			fx.flash(Dock.zpos(zone) - face * 40.0, 320.0, 0.8, Pal.heat(0.7, 3.0))
+				fx.molten(Dock.zpos(mouth) + Vector2(randf_range(-80, 80), 0), (-face * randf_range(160, 520)).rotated(randf_range(-0.5, 0.5)), randf_range(1.2, 2.4))
+			fx.flash(Dock.zpos(mouth) - face * 40.0, 320.0, 0.8, Pal.heat(0.7, 3.0))
 		"equip":
 			for i in 3:
-				fx.ring(Dock.zpos(zone) - face * 30.0, 10.0 + i * 20.0, 150.0 + i * 50.0, 0.5 + i * 0.15, Pal.ink(0.7, 1.8), 1.6)
+				fx.ring(Dock.zpos(mouth) - face * 30.0, 10.0 + i * 20.0, 150.0 + i * 50.0, 0.5 + i * 0.15, Pal.ink(0.7, 1.8), 1.6)
 		"hazard":
 			for i in 24:
-				fx.puff(Dock.zpos(zone), (-face * 200.0).rotated(randf_range(-1.2, 1.2)), 0.9, 8.0, 40.0, Pal.tint(Pal.FLUID, 0.12))
+				fx.puff(Dock.zpos(mouth), (-face * 200.0).rotated(randf_range(-1.2, 1.2)), 0.9, 8.0, 40.0, Pal.tint(Pal.FLUID, 0.12))
 	hitstop(0.04)
 	shake(0.12 + minf(0.25, b.total_mass() * 0.06))
 	sfx.play("eat_" + zone)
@@ -1645,6 +1718,14 @@ func _leak(fluid: String, src: String, at: Vector2, piece = null) -> void:
 	sfx.play("leak")
 	say("leak_" + fluid, at)
 	hint("leak_" + fluid)
+	if fluid == "lng":
+		# a cryogenic spray: whatever equipment stands close freezes and cracks
+		for id in world.order:
+			var q = world.pieces[id]
+			if q.gone or q.cls != "equip" or not q.intact or q == piece:
+				continue
+			if (world.frame(q) * Geom.centroid(q.poly)).distance_to(at) < 3.0 * Geom.M:
+				_dent(q, q.cond * 0.7, "dv_frost")
 
 
 func leak_pos(lk: Dictionary) -> Vector2:
@@ -1735,7 +1816,7 @@ func cut_kerf(p, pl: PackedVector2Array) -> void:
 	if pl.is_empty():
 		return
 	log_op("cut")
-	if world.segment_cut(p, pl):
+	if world.segment_cut(p, pl) and not _holds(p):
 		# along its marked line: it comes apart as planned, nothing ruined
 		fx.sparks(pl[0], Vector2.UP, 10, Pal.heat(1.0, 2.0), 160.0, 0.3, PI)
 		say("seg_cut", pl[0], p.tag)
@@ -1745,6 +1826,13 @@ func cut_kerf(p, pl: PackedVector2Array) -> void:
 		for hit in world.cut_lines(pl):
 			on_line_cut(hit[0], hit[1])
 	on_kerf(p, world.commit_cut(p, world.frame(p).affine_inverse() * pl))
+
+
+# a marked line only takes an empty vessel apart cleanly: one still under
+# pressure or holding liquid is ruined like any other cut
+func _holds(p) -> bool:
+	var fv: String = sys.fluid_in_piece(p)
+	return sys.bursts(p) or (fv != "" and sys.fluid(fv) > 0.02)
 
 
 func on_kerf(p, res: Dictionary) -> void:
@@ -1838,6 +1926,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "bio", c.id, "inst_bio", {"ctrl": c, "room": c.target})
 					"mag":
 						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
+					"cryo":
+						sys.measure(c.id, "temp", c.id, "inst_cryo", {"ctrl": c, "temp_fn": func(): return cryo.temp(c.target)})
 					"tension":
 						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return mech.tension(c.target), "unit": "kN"})
 					"gas":
@@ -1914,7 +2004,10 @@ func restore_reading(rd: Dictionary) -> void:
 			"fluid":
 				extra.fluid_fn = func(): return sys.port_level(c.id)
 			"temp":
-				extra.temp_fn = func(): return sys.loop_T
+				if c.medium == "cryo":
+					extra.temp_fn = func(): return cryo.temp(c.target)
+				else:
+					extra.temp_fn = func(): return sys.loop_T
 			"field":
 				if c.medium == "tension":
 					extra.field_fn = func(): return mech.tension(c.target)
@@ -2340,6 +2433,49 @@ func mouth_release(zone: String, who: String) -> void:
 		mouths.erase(zone)
 
 
+# the hauling drones aboard (one or two)
+func haulers() -> Array:
+	var out: Array = []
+	for h in [hauler, hauler2]:
+		if h != null:
+			out.append(h)
+	return out
+
+
+# the keep-out key: a zone round the pointer, or off again if the pointer is in one
+func toggle_keepout(at: Vector2) -> String:
+	for r in keepout:
+		if r.has_point(at):
+			keepout.erase(r)
+			dock.queue_redraw()
+			return "keepout_off"
+	var sz := KEEPOUT_SIZE * Geom.M
+	keepout.append(Rect2(at - sz * 0.5, sz))
+	if keepout.size() > KEEPOUT_MAX:
+		keepout.pop_front()
+	dock.queue_redraw()
+	return "keepout_on"
+
+
+# would a machine at `from` making for `to` cross into a keep-out zone? (one already
+# inside is let out)
+func keepout_blocks(from: Vector2, to: Vector2) -> bool:
+	for r in keepout:
+		if r.has_point(from):
+			continue
+		if r.has_point(to) or _seg_rect(from, to, r):
+			return true
+	return false
+
+
+func _seg_rect(a: Vector2, b: Vector2, r: Rect2) -> bool:
+	var c := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+	for i in 4:
+		if Geometry2D.segment_intersects_segment(a, b, c[i], c[(i + 1) % 4]) != null:
+			return true
+	return false
+
+
 # a machine keeps clear of the operator's drone: is the drone close and on the way it is going?
 func drone_near(at: Vector2, r: float, going: Vector2 = Vector2.ZERO) -> bool:
 	if drone == null or not drone.alive:
@@ -2358,8 +2494,10 @@ func toggle_auto() -> void:
 			plan.cancel()
 		if arm != null and arm.has_method("halt"):
 			arm.halt()
-		if hauler != null and hauler.has_method("halt"):
-			hauler.halt()
+		for h in haulers():
+			h.halt()
+		if crane != null:
+			crane.halt()
 	say("auto_off" if auto_paused else "auto_on", drone.global_position + Vector2(0, -44))
 	sfx.play("switch")
 

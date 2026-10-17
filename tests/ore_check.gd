@@ -148,7 +148,8 @@ func _run() -> void:
 	await _frames(3)
 	var dr = g.world.tag("CRUSH-H")
 	var v0: float = dr.value
-	var sg: Array = dr.get_meta("segments")[0]
+	var segs: Array = dr.get_meta("segments").duplicate()
+	var sg: Array = segs[0]
 	g.cut_kerf(dr, PackedVector2Array([Vector2(sg[0], sg[1]) * Geom.M, Vector2(sg[2], sg[3]) * Geom.M]))
 	await _frames(3)
 	var parts: Array = []
@@ -164,7 +165,7 @@ func _run() -> void:
 		all_whole = all_whole and q.intact
 		heaviest = maxf(heaviest, q.mass)
 	check(parts.size() == 2 and all_whole and vsum > 0.85 * v0 and not _incident(g, "equip_cut"), "cut along a line: %d whole parts worth $%d of $%d" % [parts.size(), int(vsum), int(v0)])
-	var sg2: Array = dr.get_meta("segments")[1]
+	var sg2: Array = segs[1]
 	var on = g.world.piece_at(Vector2((sg2[0] + sg2[2]) * 0.5, (sg2[1] + sg2[3]) * 0.5) * Geom.M)
 	g.cut_kerf(on, PackedVector2Array([Vector2(sg2[0], sg2[1]) * Geom.M, Vector2(sg2[2], sg2[3]) * Geom.M]))
 	await _frames(3)

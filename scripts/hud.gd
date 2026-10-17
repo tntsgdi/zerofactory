@@ -224,11 +224,6 @@ func _input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		if game.contract_open and card_t > 0.35:
 			var cr := _card_rect(size())
-			for ti in 3:
-				if _tier_rect(cr, ti).has_point(c.get_local_mouse_position()):
-					game.set_tier(Txt.TIERS[ti])
-					get_viewport().set_input_as_handled()
-					return
 			# only the start button starts: a stray click on the card does nothing
 			if _start_rect(cr).has_point(c.get_local_mouse_position()):
 				game.close_contract()
@@ -766,7 +761,7 @@ func _credits(s: Vector2) -> void:
 func _machines(s: Vector2) -> void:
 	var g = game
 	var ps: Array = g.plan.status() if g.plan != null else []
-	if g.arm == null and g.hauler == null and ps.is_empty():
+	if g.arm == null and g.hauler == null and g.crane == null and ps.is_empty():
 		return
 	var x := s.x - 40.0
 	var y := 290.0
@@ -1108,10 +1103,6 @@ func _card_rect(s: Vector2) -> Rect2:
 	return Rect2(s.x * 0.5 - 450.0, s.y * 0.5 - 340.0 + (1.0 - k) * 60.0, 900.0, 680.0)
 
 
-func _tier_rect(r: Rect2, i: int) -> Rect2:
-	return Rect2(r.position.x + 560.0, r.position.y + 330.0 + i * 64.0, 300.0, 56.0)
-
-
 # the card's right column: the numbers that decide how to go about it
 func _card_numbers(r: Rect2, a: float) -> void:
 	var g = game
@@ -1150,7 +1141,9 @@ func _contract_card(s: Vector2) -> void:
 	var y := r.position.y + 58
 	var w := 470.0
 	_card_numbers(r, a)
-	var rows: Array = _offer_rows() if g.job.has("reg") else []
+	# one format for every contract: the hand-made GR-001 card keeps its own words,
+	# every other contract (the opening tug and Swift too) reads from its own ship
+	var rows: Array = _offer_rows() if g.job.has("reg") or str(g.ship.get("id", "gr7")) != "gr7" else []
 	if rows.is_empty():
 		rows.append(["h", g.txt("c_title"), 14])
 		rows.append(["t", g.txt("ship"), 30])
@@ -1194,19 +1187,75 @@ func _contract_card(s: Vector2) -> void:
 			"gap":
 				y += row[2]
 		i += 1
-	# the hint tier: chosen here, the same ship in all three
-	var tx := r.position.x + 560.0
-	_text(g.txt("tier_label") + "  ·  1 / 2 / 3", Vector2(tx, r.position.y + 318), 14, Pal.ink(0.6 * a), font)
+	# the ship's papers: what the manifest declares aboard
+	_manifest(r, a)
 	var m := c.get_local_mouse_position()
-	for ti in 3:
-		var tid: String = Txt.TIERS[ti]
-		var br := _tier_rect(r, ti)
-		var on: bool = Txt.hint_tier == tid
-		UI.panel(c, br, a, 1.0 if on else (0.4 if br.has_point(m) else 0.0))
-		_text(str(ti + 1) + "  " + g.txt("tier_" + tid), br.position + Vector2(16, 24), 16, Pal.ink((0.95 if on else 0.7) * a), font_b if on else font)
-		_text(g.txt("tier_desc_" + tid), br.position + Vector2(16, 45), 13, Pal.ink(0.55 * a), font)
-	c.draw_multiline_string(font, Vector2(tx, r.position.y + 540), g.txt("tier_rule"), HORIZONTAL_ALIGNMENT_LEFT, 300, 13, 2, Pal.ink(0.5 * a))
 	UI.button(c, font_b, _start_rect(r), g.txt("c_start_btn"), 1.0 if _start_rect(r).has_point(m) else 0.0, true, a, t)
+
+
+# The ship's manifest on the card's right column, the same for every ship: its
+# size, the pressurised compartments, the power supplies, the pressure vessels
+# and fluid tanks, the equipment aboard (count, worth, the most valuable) and the
+# declared hazards. Read from the ship's papers (its type's file), not from what
+# this particular ship really holds: what an accident changed is not on them.
+func _manifest(r: Rect2, a: float) -> void:
+	var g = game
+	var d: Dictionary = Ship.load_data(str(g.ship.get("id", "gr7")))
+	var x := r.position.x + 560.0
+	var w := 300.0
+	var y := r.position.y + 300.0
+	_text(g.txt("mf_title"), Vector2(x, y), 14, Pal.ink(0.6 * a), font)
+	y += 8.0
+	c.draw_line(Vector2(x, y), Vector2(x + w, y), Pal.ink(0.12 * a), 1.0)
+	var names := func(keys: Array, limit: int) -> String:
+		var out: Array = keys.slice(0, limit)
+		return "、".join(out) + (g.txt("mf_more") % keys.size() if keys.size() > limit else "")
+	var rooms: Array = []
+	for n in d.get("gas", {}).get("rooms", {}):
+		if float(d.gas.rooms[n]) > 1.0:
+			rooms.append(n)
+	var power: Array = []
+	for sp in d.get("power", {}).get("sources", []):
+		power.append(sp.piece)
+	for sp in d.get("power", {}).get("isolated", []):
+		power.append(sp.piece)
+	var vessels: Array = d.get("gas", {}).get("vessels", {}).keys()
+	var tanks: Array = []
+	for k in d.get("fluids", {}).get("volumes", {}):
+		if d.fluids.volumes[k].has("piece"):
+			tanks.append(d.fluids.volumes[k].piece)
+	var equip: Array = []
+	var hazards: Array = []
+	var worth := 0.0
+	for pd in d.get("pieces", []):
+		if pd.get("cls", "") != "equip":
+			continue
+		equip.append(pd)
+		worth += float(pd.get("value", 0.0))
+		if pd.get("hazard", "") != "" and pd.get("tag", "") != "":
+			hazards.append(pd.tag)
+	equip.sort_custom(func(p, q): return float(p.get("value", 0.0)) > float(q.get("value", 0.0)))
+	var top: Array = []
+	for pd in equip.slice(0, 3):
+		top.append("%s %s" % [str(pd.get("tag", "")), Pal.money(float(pd.get("value", 0.0)))])
+	var rows := [
+		[g.txt("mf_length"), "%d m" % int(float(d.get("length", 0.0)))],
+		[g.txt("mf_rooms"), (g.txt("mf_n") % rooms.size()) + ("  " + names.call(rooms, 6) if not rooms.is_empty() else "")],
+		[g.txt("mf_power"), names.call(power, 3) if not power.is_empty() else "—"],
+		[g.txt("mf_vessels"), names.call(vessels, 4) if not vessels.is_empty() else "—"],
+		[g.txt("mf_tanks"), names.call(tanks, 4) if not tanks.is_empty() else "—"],
+		[g.txt("mf_equip"), (g.txt("mf_n") % equip.size()) + "  " + Pal.money(worth)],
+		[g.txt("mf_top"), "\n".join(top)],
+		[g.txt("mf_hazard"), names.call(hazards, 5) if not hazards.is_empty() else "—"],
+	]
+	y += 22.0
+	for i in rows.size():
+		var ra := a * Motion.stagger(card_t, 6 + i, 0.03, 0.3)
+		_text(rows[i][0], Vector2(x, y), 12, Pal.ink(0.5 * ra), font)
+		var lines: PackedStringArray = str(rows[i][1]).split("\n")
+		for li in lines.size():
+			c.draw_string(font, Vector2(x + 76.0, y + li * 17.0), lines[li], HORIZONTAL_ALIGNMENT_LEFT, w - 76.0, 12, Pal.ink(0.88 * ra))
+		y += 21.0 + 17.0 * maxf(0.0, lines.size() - 1)
 
 
 # a contract from the market: its card is the offer the player took
@@ -1216,7 +1265,11 @@ func _offer_rows() -> Array:
 	var ty: Dictionary = Market.type_of(o.get("ship", ""))
 	var rows: Array = []
 	rows.append(["h", g.txt("c_title_n") % o.get("id", ""), 14])
-	rows.append(["t", "%s · %s" % [o.get("reg", ""), (ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else ""], 28])
+	if o.has("reg"):
+		rows.append(["t", "%s · %s" % [o.get("reg", ""), (ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else ""], 28])
+	else:
+		var ttl: Array = g.ship.get("title", ["", ""])
+		rows.append(["t", str(ttl[0] if Txt.zh else ttl[1]), 26])
 	rows.append(["gap", "", 12])
 	rows.append(["h", g.txt("c_req"), 13])
 	rows.append(["li", g.txt("c_req1"), 16])
@@ -1226,17 +1279,20 @@ func _offer_rows() -> Array:
 		must.append("%s %s" % [it[1], it[0]])
 	if not must.is_empty():
 		rows.append(["li", g.txt("c_req2_n") % "、".join(must), 16])
-	rows.append(["li", g.txt("c_req3_n") % Pal.money(float(o.get("value", 0.0))), 16])
+	rows.append(["li", g.txt("c_req3_n") % Pal.money(float(o.get("value", g.ship.get("value", {}).get("total", 0.0)))), 16])
 	if o.get("scope", "full") == "full":
 		rows.append(["li", g.txt("c_req4"), 16])
 	if Market.goal_text(o) != "":
 		rows.append(["li", Market.goal_text(o), 16])
 	rows.append(["gap", "", 10])
+	# why it was scrapped and its last log: the market's draw, or the opening contract's own slots
+	var reason: String = o.get("reason", "C_reason_" + str(o.get("id", "")))
 	rows.append(["h", g.txt("tm_reason"), 13])
-	rows.append(["p", Copy.slot(o.get("reason", "")), 15])
-	rows.append(["h", g.txt("c_log_n"), 13])
-	for lid in o.get("logs", []):
-		rows.append(["li", Copy.slot(lid), 16])
+	rows.append(["p", Copy.slot(reason), 15])
+	if not o.get("logs", []).is_empty():
+		rows.append(["h", g.txt("c_log_n"), 13])
+		for lid in o.get("logs", []):
+			rows.append(["li", Copy.slot(lid), 16])
 	rows.append(["gap", "", 6])
 	rows.append(["p", g.txt("c_drawing"), 15])
 	if o.get("scope", "full") != "full":
@@ -1268,7 +1324,6 @@ func _menu_items() -> Array:
 		["resume", g.txt("m_resume")],
 		["end", g.txt("m_end") if menu_confirm != 1 else g.txt("m_confirm")],
 		["settings", g.txt("m_settings")],
-		["hints", g.txt("m_tier") % g.txt("tier_" + Txt.hint_tier)],
 		["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
 	]
 

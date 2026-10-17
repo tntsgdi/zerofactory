@@ -27,6 +27,8 @@ var torn := false
 var forced := {}                 # gate tag -> true once it came open by force
 var t := 0.0
 var stream: Array = []           # [pos, vel, life] particles of the falling fines
+var flowing := {}                # ore piece -> the gate point (px) the flow carries it to
+const FLOW_V := 90.0             # px/s the flow carries a loose chunk at
 
 
 func setup(g, ship: Dictionary) -> void:
@@ -82,18 +84,21 @@ func _physics_process(dt: float) -> void:
 			if _forced(g) and not forced.has(g):
 				forced[g] = true
 				_check_surge(g)
-	if open.is_empty() or fines <= 0.0:
+	_carry()
+	if open.is_empty():
 		return
-	var take := minf(fines, float(cfg.get("flow", 1.0)) * open.size() * dt)
-	fines -= take
-	var v := take * float(cfg.get("price", 0.0))
-	paid += v
-	game.on_ore_in(v)
-	# the stream under each open gate
-	for g in open:
-		var at := _gate_point(g)
-		if randf() < 0.6:
-			stream.append([at + Vector2(randf_range(-30, 30), 0), Vector2(randf_range(-20, 20), randf_range(160, 260)), 0.0])
+	if fines > 0.0:
+		var take := minf(fines, float(cfg.get("flow", 1.0)) * open.size() * dt)
+		fines -= take
+		var v := take * float(cfg.get("price", 0.0))
+		paid += v
+		game.on_ore_in(v)
+		# the stream under each open gate
+		for g in open:
+			var at := _gate_point(g)
+			if randf() < 0.6:
+				stream.append([at + Vector2(randf_range(-30, 30), 0), Vector2(randf_range(-20, 20), randf_range(160, 260)), 0.0])
+	# (and once the fines are all out, what is still packed over a gate opened late comes loose too)
 	_release(open)
 
 
@@ -105,7 +110,9 @@ func _gate_point(tag: String) -> Vector2:
 	return Vector2((b[0] + b[2]) * 0.5, b[3]) * Geom.M
 
 
-# the chunks over an open gate come loose as the heap under them runs out
+# the chunks over an open gate come loose and go out with the heap; once the
+# fines are all gone, whatever is still packed anywhere slumps to the nearest
+# open gate and goes the same way
 func _release(open: Array) -> void:
 	if t < 0.4:
 		return
@@ -120,15 +127,38 @@ func _release(open: Array) -> void:
 		if p == null:
 			continue
 		var at: Vector2 = world.joint_world(j)
-		# above the heap's top: nothing under it any more
-		if at.y < level:
-			continue
-		var near := false
+		var best := ""
+		var bd := INF
 		for g in open:
-			if absf(at.x - _gate_point(g).x) < 5.0 * Geom.M:
-				near = true
-		if near:
-			world.kill_joint(j)
+			var d := absf(at.x - _gate_point(g).x)
+			if d < bd:
+				bd = d
+				best = g
+		# in the heap near an open gate, or anywhere once the heap is gone
+		if fines > 0.0 and (at.y < level or bd >= 5.0 * Geom.M):
+			continue
+		world.kill_joint(j)
+		for q in [p, world.pieces.get(j.b)]:
+			if q != null and q.kind == "ore" and not flowing.has(q):
+				flowing[q] = _gate_point(best)
+
+
+# a loose chunk rides the flow down through its gate and out of the hopper
+func _carry() -> void:
+	var b: Array = cfg.get("box", [0, 0, 0, 0])
+	var out_y := (float(b[3]) + 1.2) * Geom.M
+	for q in flowing.keys():
+		if q.gone or (q.body != null and q.body.capture != null):
+			flowing.erase(q)
+			continue
+		if q.body == null or q.body.get_meta("arm", false) or game.tools.held_body == q.body:
+			continue
+		var com: Vector2 = q.body.global_transform * q.body.center_of_mass
+		if com.y > out_y:
+			flowing.erase(q)
+			continue
+		var to: Vector2 = flowing[q] + Vector2(0, 2.0 * Geom.M)
+		q.body.linear_velocity = (to - com).normalized() * FLOW_V
 
 
 # a gate that came open by force with the hopper still full: it all goes one way

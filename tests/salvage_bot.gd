@@ -40,6 +40,7 @@ var snapped := 0
 var rec: Array = []        # what it did to make the ship safe, in order: ["w"|"h", ctrl] / ["o", room, ctrl] / ["g", guard]
 var replay = null          # a remembered order (rec of an earlier ship) done blindly, instead of reading this ship
 var replay_wait := 0.0     # sim s it waits after the remembered order before it strips (as long as it took then)
+var crane_hauls := 0         # loads too heavy for the grapple that the heavy crane took whole
 var safe_at := 0.0         # sim s when it judged the ship safe
 
 
@@ -191,6 +192,19 @@ func _prep() -> void:
 				_w(gt)
 				_note("open gate %s" % gt)
 				_work(2.5)
+				return
+	# a bent gate that will not open on its drive: torn out once the hopper is half empty (never before)
+	if g.ore != null and g.ore.active():
+		for gt in g.ore.cfg.get("gates", []):
+			if Ship.ctrl_cfg(g.ship, gt).get("stuck", false) and not g.ore._gate_open(gt) and g.ore.fines < 0.4 * g.ore.fines0 and _once("force " + gt):
+				var gp = w.tag(gt)
+				for j in w.joints_of(gp):
+					w.kill_joint(j)
+				for l in w.lines_of(gp):
+					w.kill_line(l)
+				g.log_op("cut")
+				_note("force bent gate %s" % gt)
+				_work(4.0)
 				return
 	# anything held under load: its locking pins out first (the tension let off)
 	if g.mech != null:
@@ -377,9 +391,13 @@ func _open_room(room: String, for_ctrl: String) -> void:
 
 # cut a heavy piece along its marked lines (each line on whichever part now holds it)
 func _cut_segments(p) -> bool:
-	if not p.has_meta("segments") or not p.intact or _once_done("seg " + str(p.id)):
+	if p.get_meta("segments", []).is_empty() or not p.intact or _once_done("seg " + str(p.id)):
 		return false
 	var w = g.world
+	# its pipes and cables off first: a line left on would tie the parts together again
+	for l in w.lines_of(p):
+		w.kill_line(l)
+		g.log_op("unplug")
 	for sg in p.get_meta("segments"):
 		var a := Vector2(sg[0], sg[1]) * M
 		var b := Vector2(sg[2], sg[3]) * M
@@ -421,6 +439,10 @@ func _unsafe() -> Array:
 	for k in s.fvol:
 		if s.fvol[k].amount > 0.02:
 			out.append("fluid %s %.3f" % [k, s.fvol[k].amount])
+	if g.ore != null and g.ore.active():
+		for gt in g.ore.cfg.get("gates", []):
+			if Ship.ctrl_cfg(g.ship, gt).get("stuck", false) and not g.ore._gate_open(gt):
+				out.append("bent gate %s" % gt)
 	if g.ore != null and g.ore.active() and g.ore.fines > 0.3:
 		var can := false
 		for gt in g.ore.cfg.get("gates", []):
@@ -504,7 +526,8 @@ func _strip() -> void:
 		var p = w.pieces.get(id)
 		if p == null or p.gone or p.body != null:
 			continue
-		if _cut_segments(p):
+		# with the heavy crane a piece it can lift goes out whole; without, along its marked lines
+		if not (g.crane != null and p.mass <= g.crane.MAX_T) and _cut_segments(p):
 			return
 		for j in w.joints_of(p):
 			w.kill_joint(j)
@@ -548,6 +571,16 @@ func _strip_paced() -> void:
 			snapped += 1
 			_work(3.0)
 			return
+		# still plugged into something by a line (a pipe between two parts): unplug it first
+		var plugged := false
+		for p in b.pieces:
+			for l in w.lines_of(p):
+				w.kill_line(l)
+				plugged = true
+		if plugged:
+			g.log_op("unplug")
+			_work(0.7)
+			return
 		var m: float = b.total_mass()
 		var zone := zone_for(b)
 		# plain scrap too heavy for the berth's machines: cut it down to their size and leave it to them
@@ -565,7 +598,10 @@ func _strip_paced() -> void:
 				_work(4.0)
 				return
 		var k := 1
-		if m > g.grab_max() + 0.001:
+		if m > g.grab_max() + 0.001 and g.crane != null and m <= g.crane.MAX_T:
+			# the crane's: whole, however heavy, at the crane's pace
+			crane_hauls += 1
+		elif m > g.grab_max() + 0.001:
 			# too heavy for the grapple: cut into pieces it can take (whole equipment becomes scrap)
 			k = ceili(m / g.grab_max())
 			g.log_op("cut", k - 1)
@@ -575,8 +611,13 @@ func _strip_paced() -> void:
 					p.intact = false
 					scrapped += 1
 			zone = zone_for(b)
-		sent[b] = zone
 		var mouth: Vector2 = Dock.zpos(zone)
+		# one load at a time into a mouth: the last one in first (two dropped on the same spot fly apart)
+		for o in sent:
+			if is_instance_valid(o) and o.capture == null and sent[o] == zone and g.sys.time - float(o.get_meta("sent_t", -99.0)) < 3.0 and (o.global_transform * o.center_of_mass).distance_to(mouth) < 4.0 * M:
+				return
+		sent[b] = zone
+		b.set_meta("sent_t", g.sys.time)
 		# a body that drifted off is fetched from the berth's edge, not from wherever it went
 		var com: Vector2 = b.global_transform * b.center_of_mass
 		var d: float = minf(com.distance_to(mouth) / M, 50.0)
@@ -600,7 +641,8 @@ func _strip_paced() -> void:
 		var p = w.pieces.get(id)
 		if p == null or p.gone or p.body != null:
 			continue
-		if _cut_segments(p):
+		# with the heavy crane a piece it can lift goes out whole; without, along its marked lines
+		if not (g.crane != null and p.mass <= g.crane.MAX_T) and _cut_segments(p):
 			return
 		var sec := 1.0
 		var cut := false
@@ -661,4 +703,4 @@ func zone_for(b) -> String:
 func summary() -> Dictionary:
 	return {"rate": g.recovery_rate(), "net": g.net(), "earned": g.earned(), "losses": g.losses, "grade": g.hud.grade(),
 		"incidents": g.incidents.size(), "time": g.playtime, "ended": g.state == "ending", "forced": forced,
-		"work": work, "hauls": hauls, "scrap_hauls": scrap_hauls, "arm": g.arm.carried if g.arm != null else 0, "hauler": g.hauler.carried if g.hauler != null else 0, "scrapped": scrapped, "snapped": snapped}
+		"work": work, "hauls": hauls, "scrap_hauls": scrap_hauls, "arm": g.arm.carried if g.arm != null else 0, "hauler": g.hauler.carried if g.hauler != null else 0, "scrapped": scrapped, "snapped": snapped, "crane": crane_hauls}

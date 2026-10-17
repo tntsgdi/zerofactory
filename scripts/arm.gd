@@ -63,6 +63,9 @@ func _physics_process(dt: float) -> void:
 			halt()
 		claw = claw.move_toward(home(), EMPTY * dt)
 		return
+	# never into a keep-out zone
+	if state in ["reach", "carry"] and game.keepout_blocks(claw, _heading()):
+		return
 	# keep clear of the drone: wait for it to move on, then edge past slowly
 	var k := 1.0
 	if state in ["reach", "carry"] and game.drone_near(claw, CLEAR, _heading()):

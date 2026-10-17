@@ -65,6 +65,44 @@ static func configure(x: float) -> void:
 		MASTS.append(Vector2(23.0 + d * 1.1, -10.0))
 
 
+# the second equipment bay (roadmap 4.4, "more ports"): over the berth's far
+# end, so a long ship's stern half has an equipment mouth near it too. It takes
+# what the first takes; "kind" says which mouth it stands for.
+static func add_port2() -> void:
+	ZONES["equip2"] = {"pos": Vector2(FLOOR_X1 - 10.0, -8.4), "face": Vector2(0, 1), "w": 4.2, "kind": "equip"}
+
+
+# what a mouth takes: "equip", "metal" or "hazard" (a second bay stands for the first)
+static func kind(id: String) -> String:
+	return ZONES[id].get("kind", id) if ZONES.has(id) else id
+
+
+# of the mouths that take k, the one nearest a point (px)
+static func nearest(k: String, from: Vector2) -> String:
+	var best := k
+	var bd := INF
+	for id in ZONES:
+		if kind(id) != k:
+			continue
+		var d := zpos(id).distance_to(from)
+		if d < bd:
+			bd = d
+			best = id
+	return best
+
+
+# the buffer platform (roadmap 4.4): a parking deck over the berth's near end,
+# on top of the boom, where the tractor field holds whatever is let go on it
+# until it is fetched (clear of the boom: what rests on it never touches it)
+const BUFFER := Rect2(-6.0, -14.2, 8.0, 3.8)
+
+
+func in_buffer(b) -> bool:
+	if game == null or not game.has_upgrade("buffer") or not is_instance_valid(b):
+		return false
+	return BUFFER.has_point((b.global_transform * b.center_of_mass) / Geom.M)
+
+
 # the middle of the berth, where the overview looks
 static func centre() -> Vector2:
 	return Vector2((TOWER_X + FLOOR_X1) * 0.5, -2.0)
@@ -147,6 +185,12 @@ func _bounds() -> void:
 
 func set_ship(ship: Dictionary) -> void:
 	# the berth as configured for this contract
+	for k in ZONES:
+		if not zone_state.has(k):
+			zone_state[k] = {"glow": 0.0, "busy": 0.0, "reject": 0.0, "eat": 0.0}
+	for k in zone_state.keys():
+		if not ZONES.has(k):
+			zone_state.erase(k)
 	metal_x = metal_home
 	mouth_target = metal_home
 	_bounds()
@@ -207,6 +251,11 @@ func _physics_process(dt: float) -> void:
 				b.rejected_t = 1.5
 				b.apply_central_impulse(Vector2(0, -260.0) * b.mass)
 				game.say("trough_only_scrap", com)
+		# parked on the buffer platform: held still until something fetches it
+		if not held and b.get_meta("arm", false) == false and in_buffer(b):
+			b.linear_velocity *= exp(-5.0 * dt)
+			b.angular_velocity *= exp(-5.0 * dt)
+			continue
 		# the tractor field eases strays back in over the open edges
 		var pull := field_pull(com)
 		if pull != Vector2.ZERO:
@@ -227,7 +276,7 @@ func _physics_process(dt: float) -> void:
 			b.linear_velocity *= exp(-1.6 * k * dt * pullk)
 			var catch_r: float = (CATCH * 1.5 if id == "metal" and scrap else CATCH)
 			if dist < catch_r * Geom.M:
-				var verdict: Dictionary = game.judge(b, id)
+				var verdict: Dictionary = game.judge(b, kind(id))
 				if verdict.ok:
 					_start_swallow(b, id)
 				else:
@@ -485,6 +534,11 @@ func _draw() -> void:
 	# recovery mouths
 	for id in ZONES:
 		_mouth(id)
+	if game != null and game.has_upgrade("buffer"):
+		_buffer()
+	if game != null:
+		for r in game.keepout:
+			_keepout(r)
 	# hoses
 	for id in hoses:
 		var pts := PackedVector2Array(hoses[id].pts)
@@ -672,6 +726,45 @@ func _tug(p: Vector2) -> void:
 	draw_string(font, p + Vector2(2.1 * M, -0.6 * M), "TUG-04", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.5))
 
 
+# the buffer platform: a grated deck with tractor emitters along its edge
+func _buffer() -> void:
+	var r := Rect2(BUFFER.position * Geom.M, BUFFER.size * Geom.M)
+	var deck := Rect2(Vector2(r.position.x, r.end.y - 10.0), Vector2(r.size.x, 10.0))
+	draw_rect(deck, Color(0.06, 0.064, 0.072))
+	draw_rect(deck, Pal.ink(0.45), false, 1.4)
+	var x := deck.position.x + 8.0
+	while x < deck.end.x - 4.0:
+		draw_line(Vector2(x, deck.position.y + 2.0), Vector2(x, deck.end.y - 2.0), Pal.ink(0.2), 1.0)
+		x += 12.0
+	for i in 6:
+		var ex := r.position.x + (i + 0.5) / 6.0 * r.size.x
+		var a := 0.12 + 0.06 * sin(t * 3.0 + i)
+		draw_line(Vector2(ex, deck.position.y), Vector2(ex, r.position.y), Pal.tint(Pal.AIR, a, 1.2), 1.0)
+		draw_circle(Vector2(ex, deck.position.y - 2.0), 2.4, Pal.tint(Pal.AIR, 0.6, 1.3))
+	draw_rect(r, Pal.tint(Pal.AIR, 0.18), false, 1.0)
+	draw_string(font_b, r.position + Vector2(8, 18), game.txt("dk_buffer"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.tint(Pal.AIR, 0.75, 1.1))
+
+
+# a keep-out zone the operator set: no machine goes in
+func _keepout(r: Rect2) -> void:
+	draw_rect(r, Pal.heat(0.05, 1.0))
+	var n := int(r.size.x / 24.0)
+	for i in n + 1:
+		var x0 := r.position.x + i * 24.0
+		draw_line(Vector2(x0, r.position.y), Vector2(x0 - 10.0, r.position.y + 10.0), Pal.heat(0.45, 1.2), 2.0)
+		draw_line(Vector2(x0, r.end.y - 10.0), Vector2(x0 - 10.0, r.end.y), Pal.heat(0.45, 1.2), 2.0)
+	var pts := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y), r.position])
+	for i in 4:
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[i + 1]
+		var L := a.distance_to(b)
+		var k := 0.0
+		while k < L:
+			draw_line(a.lerp(b, k / L), a.lerp(b, minf(k + 10.0, L) / L), Pal.heat(0.7, 1.3), 1.6)
+			k += 18.0
+	draw_string(font_b, r.position + Vector2(8, 28), game.txt("dk_keepout"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.heat(0.85, 1.3))
+
+
 # ---------------------------------------------------------------- the recovery mouths
 # Three mouths, three looks, one way of reading them: the colour says what it
 # takes (white: whole equipment, heat: scrap, green: hazards), the sign beside
@@ -741,7 +834,7 @@ func _mouth(id: String) -> void:
 		elif want:
 			on = 0.4 + 0.4 * sin(t * 4.0)
 		draw_circle(p, 2.6, zone_col(id, on, 1.3))
-	match id:
+	match kind(id):
 		"equip":
 			# padded cradle arms either side, guide rails down the throat
 			for s in [-1.0, 1.0]:
@@ -789,8 +882,8 @@ func _sign(id: String, c: Vector2, f: Vector2, side: Vector2, lip: float, st: Di
 	else:
 		draw_line(Vector2(r.position.x, r.get_center().y), c + Vector2(lip + 8.0, 0), zone_col(id, 0.35), 1.0)
 	_icon(id, r.position + Vector2(30, 33))
-	draw_string(font_b, r.position + Vector2(58, 28), game.txt("zone_" + id), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Pal.ink(0.95))
-	draw_string(font, r.position + Vector2(58, 50), game.txt("zone_" + id + "_d"), HORIZONTAL_ALIGNMENT_LEFT, sz.x - 66, 13, Pal.ink(0.6))
+	draw_string(font_b, r.position + Vector2(58, 28), game.txt("zone_" + kind(id)), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Pal.ink(0.95))
+	draw_string(font, r.position + Vector2(58, 50), game.txt("zone_" + kind(id) + "_d"), HORIZONTAL_ALIGNMENT_LEFT, sz.x - 66, 13, Pal.ink(0.6))
 	# status
 	var key := "dk_ready"
 	var lc := Pal.tint(Pal.FLUID, 0.9, 1.3)
@@ -807,7 +900,7 @@ func _sign(id: String, c: Vector2, f: Vector2, side: Vector2, lip: float, st: Di
 
 func _icon(id: String, p: Vector2) -> void:
 	var col := zone_col(id, 0.95, 1.2)
-	match id:
+	match kind(id):
 		"equip":
 			# a crate with a check
 			draw_rect(Rect2(p - Vector2(13, 11), Vector2(26, 22)), col, false, 1.8)

@@ -20,12 +20,16 @@ class_name Traps
 #                   above the corridor's, so opening its hatch blows it into the corridor
 #   gate_jam        one of a hopper's two discharge gates is bent: its drive will not open it;
 #                   forced while the hopper is still full, the load goes one way and tears it
+#   psv_stuck       a cryogenic tank's relief valve is frozen shut and the tank already over its
+#                   set pressure: it cannot relieve itself; warmed further, it ruptures
+#   heater_live     the anti-freeze heater left switched on, on its own supply, warming its tank
+#   jacket_loss     a tank's vacuum jacket has let air in: heat leaks in fast, the cargo is warmer
 
 const ALL := ["wrong_valve", "fake_stop", "hidden_tank", "live_cargo", "welded_hatch",
 	"rerouted_line", "second_source", "hidden_damage", "explosive_cargo", "fire_system"]
-const EXTRA := ["bio_breach", "gate_jam"]
+const EXTRA := ["bio_breach", "gate_jam", "psv_stuck", "heater_live", "jacket_loss"]
 const TIER := {
-	"gate_jam": 0,
+	"gate_jam": 0, "heater_live": 0, "jacket_loss": 0, "psv_stuck": 1,
 	"bio_breach": 0,
 	"wrong_valve": 0, "fake_stop": 0, "hidden_tank": 0, "live_cargo": 0, "welded_hatch": 0,
 	"explosive_cargo": 0, "fire_system": 0, "rerouted_line": 1, "second_source": 1, "hidden_damage": 1,
@@ -90,6 +94,14 @@ static func evidence(d: Dictionary, trap: String) -> Array:
 				return [["ctrl", "S-" + tg], ["ctrl", "P-" + tg]]
 			"gate_jam":
 				return [["piece", tg], ["ctrl", tg]]
+			"psv_stuck":
+				var n: String = tg.trim_prefix("T-")
+				return [["ctrl", "TT-" + n], ["ctrl", "VP-" + n], ["piece", "PSV-" + n]]
+			"heater_live":
+				return [["ctrl", sl.switch], ["ctrl", "E-HT"], ["piece", "HEATER"]]
+			"jacket_loss":
+				var n2: String = tg.trim_prefix("T-")
+				return [["ctrl", "JP-" + n2], ["ctrl", "TT-" + n2]]
 	match trap:
 		"wrong_valve":
 			return [["ctrl", "P-C01"], ["ctrl", "V-C01"]]
@@ -130,6 +142,12 @@ static func intel(d: Dictionary, trap: String) -> Array:
 			return ["in_bio_breach", [tg, int(float(gas.rooms.get(tg, 0.0)))]]
 		"gate_jam":
 			return ["in_gate_jam", [tg]]
+		"psv_stuck":
+			return ["in_psv_stuck", [tg, int(float(gas.vessels.get("TV" + tg.trim_prefix("T-"), {}).get("kpa", 0.0)))]]
+		"heater_live":
+			return ["in_heater_live", [tg]]
+		"jacket_loss":
+			return ["in_jacket_loss", [tg, int(float(gas.rooms.get("J" + tg.trim_prefix("T-"), 0.0)))]]
 		"live_cargo", "explosive_cargo":
 			return ["in_" + trap, [tg]]
 		"hidden_damage":
@@ -177,6 +195,17 @@ static func bit(trap: String, incidents: Array) -> bool:
 
 static func _reject(notes: Array, why: String) -> void:
 	notes.append("reject:" + why)
+
+
+static func _carries_equipment(d: Dictionary, key: String) -> bool:
+	var eq := {}
+	for pd in d.pieces:
+		if pd.get("cls", "") == "equip":
+			eq[pd.key] = true
+	for j in d.joints:
+		if (j.a == key and eq.has(j.get("b", ""))) or (j.get("b", "") == key and eq.has(j.a)):
+			return true
+	return false
 
 
 static func _target(d: Dictionary, trap: String, tg: String) -> void:
@@ -279,6 +308,13 @@ static func apply(d: Dictionary, trap: String, rng: RandomNumberGenerator, notes
 			pd.hazard = "explosive"
 
 
+# a cryogenic tank started dT warmer than it is kept: its vapour that much higher (scripts/cryo.gd)
+static func _warm(d: Dictionary, tank: String, dT: float) -> void:
+	var e: Dictionary = d.cryo.tanks[tank]
+	e.T = snappedf(float(e.T0) + dT, 0.01)
+	d.gas.vessels[e.vessel].kpa = snappedf(float(e.kpa0) * pow(2.0, dT / Cryo.DOUBLE), 0.1)
+
+
 # The same trap on another ship type, placed where its file's slot says
 # (market.slots[trap]). Same names and the same evidence as on the Heron;
 # what it does depends on where it sits on that ship.
@@ -290,6 +326,27 @@ static func _apply_slot(d: Dictionary, trap: String, sl: Dictionary, rng: Random
 			var cc: Dictionary = d.ctrls_cfg.get(gate, {})
 			cc.stuck = true
 			d.ctrls_cfg[gate] = cc
+		"psv_stuck":
+			# frozen shut, and the cargo already warm enough to be over the valve's set pressure
+			var tk: String = sl.tanks[rng.randi_range(0, sl.tanks.size() - 1)]
+			_target(d, trap, tk)
+			var e: Dictionary = d.cryo.tanks[tk]
+			e.stuck = true
+			_warm(d, tk, rng.randf_range(9.6, 11.6))
+		"heater_live":
+			# someone left the heater on: it has been warming its tank a while
+			var sw: String = sl.switch
+			_target(d, trap, d.cryo.heater.tank)
+			for c in d.ctrls:
+				if c.id == sw:
+					c.state = true
+			_warm(d, d.cryo.heater.tank, rng.randf_range(2.0, 4.0))
+		"jacket_loss":
+			# air has got into the vacuum jacket: it no longer insulates, the cargo is warmer
+			var tk2: String = sl.tanks[rng.randi_range(0, sl.tanks.size() - 1)]
+			_target(d, trap, tk2)
+			d.gas.rooms[d.cryo.tanks[tk2].jacket] = snappedf(rng.randf_range(18.0, 40.0), 0.1)
+			_warm(d, tk2, rng.randf_range(3.5, 6.0))
 		"bio_breach":
 			# the pod's air is dirtier than the patient left it, and above the corridor
 			var room: String = sl.rooms[rng.randi_range(0, sl.rooms.size() - 1)]
@@ -351,7 +408,14 @@ static func _apply_slot(d: Dictionary, trap: String, sl: Dictionary, rng: Random
 					out.append(st)
 				return out)
 		"hidden_damage":
-			var plate: String = _key(d, sl.plates[rng.randi_range(0, sl.plates.size() - 1)])
+			# a plate with nothing of value hung from it (else what drops with it is wrecked before anyone could know)
+			var free: Array = []
+			for pl in sl.plates:
+				if not _carries_equipment(d, _key(d, pl)):
+					free.append(pl)
+			if free.is_empty():
+				free = sl.plates
+			var plate: String = _key(d, free[rng.randi_range(0, free.size() - 1)])
 			_target(d, trap, plate)
 			_crack(d, plate, rng.randf_range(0.3, 0.7))
 		"welded_hatch":

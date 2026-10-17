@@ -10,7 +10,9 @@ extends Node2D
 # With nothing marked it fetches loose plain scrap by itself (whatever the arm
 # is not taking). Like the arm it waits its turn over a mouth, holds back for
 # the operator's drone, and the automation key stops it (what it holds is let
-# go there).
+# go there). A second hauler (roadmap 4.4) is another of these: it works the
+# same list of marks and never goes for what the first already has. Neither
+# goes into a keep-out zone the operator has set (game.keepout).
 
 const MAX_T := 1.5
 const SPEED := 5.0 * 48.0        # px/s with a load
@@ -19,7 +21,9 @@ const R := 12.0
 const CLEAR := 2.5 * 48.0        # px it keeps from the operator's drone
 
 var game: Game
-var queue: Array = []            # marked bodies, in order
+var who := "hauler"              # its name over a mouth ("hauler", "hauler2")
+var home_off := Vector2(0.6, -1.6)
+var queue: Array = []            # marked bodies, in order (shared by both haulers)
 var body = null
 var path: Array = []
 var pos := Vector2.ZERO
@@ -38,7 +42,7 @@ func _init() -> void:
 
 
 func home() -> Vector2:
-	return (Dock.BAY + Vector2(0.6, -1.6)) * Geom.M
+	return (Dock.BAY + home_off) * Geom.M
 
 
 func can_take(b) -> bool:
@@ -55,7 +59,17 @@ func auto_takes(b) -> bool:
 		return false
 	if game.arm != null and (game.arm.body == b or game.arm.takes(b)):
 		return false
+	if _other_has(b) or game.dock.in_buffer(b):
+		return false
 	return game.dock.is_scrap(b)
+
+
+# the other hauler is already after it
+func _other_has(b) -> bool:
+	for h in game.haulers():
+		if h != self and h.body == b:
+			return true
+	return false
 
 
 # the mark key: on a floating piece it goes on the list (or comes off it)
@@ -90,13 +104,17 @@ func _physics_process(dt: float) -> void:
 	t += dt
 	if pos == Vector2.ZERO:
 		pos = home()
-	queue = queue.filter(func(b): return is_instance_valid(b) and b.capture == null)
+	for b in queue.duplicate():
+		if not is_instance_valid(b) or b.capture != null:
+			queue.erase(b)
 	if game.auto_paused:
 		if body != null:
 			halt()
 		pos = pos.move_toward(home(), EMPTY * dt)
 		return
 	var k := 1.0
+	if state in ["reach", "carry"] and game.keepout_blocks(pos, _heading()):
+		return
 	if state in ["reach", "carry"] and game.drone_near(pos, CLEAR, _heading()):
 		wait_t += dt
 		if wait_t < 1.0:
@@ -105,13 +123,13 @@ func _physics_process(dt: float) -> void:
 	else:
 		wait_t = 0.0
 	# and out of the arm's way while that carries (unless it already has the mouth: then the arm waits)
-	if state == "carry" and game.mouths.get(zone, "") != "hauler" and game.arm != null and game.arm.state == "carry" and game.arm.claw.distance_to(pos) < 2.0 * Geom.M:
+	if state == "carry" and game.mouths.get(zone, "") != who and game.arm != null and game.arm.state == "carry" and game.arm.claw.distance_to(pos) < 2.0 * Geom.M:
 		return
 	dt *= k
 	match state:
 		"idle":
 			for b in queue:
-				if can_take(b):
+				if can_take(b) and not _other_has(b):
 					body = b
 					queue.erase(b)
 					state = "reach"
@@ -138,7 +156,7 @@ func _physics_process(dt: float) -> void:
 				body.collision_mask = 0
 				body.set_meta("arm", true)
 				off = body.global_position - pos
-				zone = _zone_for(body)
+				zone = Dock.nearest(_zone_for(body), pos)
 				path = _route(pos, _drop_point(zone))
 				state = "carry"
 				game.sfx.play("grab", pos, 0.5)
@@ -152,7 +170,7 @@ func _physics_process(dt: float) -> void:
 				state = "release"
 				hold_t = 0.0
 				return
-			if path.size() == 1 and not game.mouth_take(zone, "hauler"):
+			if path.size() == 1 and not game.mouth_take(zone, who):
 				return
 			pos = pos.move_toward(path[0], SPEED * dt)
 			if pos.distance_to(path[0]) < 2.0:
@@ -198,7 +216,7 @@ func halt() -> void:
 
 
 func _done() -> void:
-	game.mouth_release(zone, "hauler")
+	game.mouth_release(zone, who)
 	body = null
 	path = []
 	state = "idle"

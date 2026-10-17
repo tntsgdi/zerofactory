@@ -164,7 +164,11 @@ func _play(o: Dictionary) -> Array:
 	var s: Dictionary = bot.summary()
 	res.rates.append(snappedf(s.rate, 0.001))
 	if not s.ended:
-		bad.append("bot did not finish (%s)" % str(bot.notes.slice(-3)))
+		var left: Array = []
+		for b in g.world.bodies:
+			if is_instance_valid(b) and left.size() < 3:
+				left.append("%s at %s%s" % [str(b.pieces.map(func(p): return p.tag)), str(((b.global_transform * b.center_of_mass) / Geom.M).snapped(Vector2(0.1, 0.1))), " (taken)" if b.capture != null else ""])
+		bad.append("bot did not finish (%s; still loose: %s)" % [str(bot.notes.slice(-3)), str(left)])
 	if s.incidents > 0:
 		bad.append("incidents: %s" % str(g.incidents))
 	if s.forced > 0:

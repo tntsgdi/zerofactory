@@ -39,9 +39,16 @@ const BERTH := [
 	["net05", "facility", 18000.0, "fa_net", "fa_net_d", true],
 	["hauler", "facility", 45000.0, "fa_hauler", "fa_hauler_d", true],
 	["berth88", "facility", 240000.0, "fa_berth", "fa_berth_d", true],
+	["hauler2", "facility", 60000.0, "fa_hauler2", "fa_hauler2_d", true],
+	["crane", "facility", 150000.0, "fa_crane", "fa_crane_d", true],
+	["port2", "facility", 50000.0, "fa_port2", "fa_port2_d", true],
+	["buffer", "facility", 30000.0, "fa_buffer", "fa_buffer_d", true],
+	["zones", "facility", 20000.0, "fa_zones", "fa_zones_d", true],
 ]
+# a facility that only makes sense with another one bought first
+const REQUIRES := {"hauler2": "hauler"}
 # what berth management will offer later, named in one line
-const LATER := ["fa_drone2", "fa_mast", "fa_scan"]
+const LATER := ["fa_scan"]
 const REPAY_STEP := 5000.0
 
 var font: Font
@@ -86,6 +93,12 @@ var hover_minus := false
 var hover_plus := false
 var thumbs := {}           # offer id -> what its cross-section shows (worked out once)
 var leave_offer := {}      # the offer being taken (it leaves the market as it is signed)
+# opened on site from one of the berth's two consoles (game.open_console): only the
+# shop and berth pages, Esc closes it and play goes on; what is bought there
+# counts from the next contract
+var overlay := false
+var on_close: Callable
+var next_job := {}         # an opening contract still to play: the market shows it, alone
 
 
 func _ready() -> void:
@@ -94,6 +107,7 @@ func _ready() -> void:
 		Txt.load_settings(false)
 	Career.load_or_new()
 	Career.ensure_offers(Market.make)
+	next_job = Career.active() if not overlay and not Career.data.get("market", false) else {}
 	font = Fonts.get_font("Regular")
 	font_l = Fonts.get_font("Light")
 	font_b = Fonts.get_font("Medium")
@@ -114,7 +128,7 @@ func _ready() -> void:
 		Career.save()
 	for i in 90:
 		dust.append([Vector2(randf(), randf()), randf_range(0.002, 0.012), randf() * TAU, randf_range(0.6, 1.6)])
-	for i in 8:
+	for i in 16:
 		hover_k.append(Motion.Spring.new(0.0, 380.0, 0.7))
 		sel_k.append(Motion.Spring.new(0.0, 300.0, 0.8))
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -123,12 +137,17 @@ func _ready() -> void:
 	settings = SettingsPanel.new()
 	settings.testing = testing
 	add_child(settings)
+	if overlay:
+		process_mode = Node.PROCESS_MODE_ALWAYS
+		set_tab(maxi(tab, 1))
+		say(Txt.t("tm_onsite_note"))
+		return
 	var dev := DevPanel.new()
 	dev.terminal = self
 	dev.where = "terminal"
 	add_child(dev)
 	# the first time the market opens
-	if not Career.data.get("seen", {}).has("market"):
+	if Career.data.get("market", false) and not Career.data.get("seen", {}).has("market"):
 		var seen: Dictionary = Career.data.get("seen", {})
 		seen["market"] = true
 		Career.data.seen = seen
@@ -249,6 +268,8 @@ func _gui_input(ev: InputEvent) -> void:
 func _unhandled_input(ev: InputEvent) -> void:
 	if not (ev is InputEventKey and ev.pressed and not ev.echo) or leaving >= 0.0:
 		return
+	if overlay:
+		get_viewport().set_input_as_handled()
 	if milestone >= 0.0:
 		if milestone > 1.5:
 			milestone = -1.0
@@ -272,15 +293,28 @@ func _unhandled_input(ev: InputEvent) -> void:
 			if tab == 0:
 				use_intel(sel)
 		KEY_ESCAPE:
-			get_tree().change_scene_to_file("res://scenes/title.tscn")
+			if overlay:
+				close()
+			else:
+				get_tree().change_scene_to_file("res://scenes/title.tscn")
 		KEY_O:
 			settings.open()
 
 
+# the on-site console closes: back to the berth
+func close() -> void:
+	Career.save()
+	if on_close.is_valid():
+		on_close.call()
+	queue_free()
+
+
 func set_tab(i: int) -> void:
-	if clampi(i, 0, 2) != tab:
+	# on site the market is not open: contracts are signed between jobs
+	var lo := 1 if overlay else 0
+	if clampi(i, lo, 2) != tab:
 		deal_t = 0.0
-	tab = clampi(i, 0, 2)
+	tab = clampi(i, lo, 2)
 	sel = 0
 	qty = 1
 	repay_amt = _repay_default()
@@ -326,8 +360,8 @@ func _step_motion(dt: float) -> void:
 	tab_x.step(dt)
 	tab_w.step(dt)
 	var n := items().size()
-	if tab == 0 and not offers().is_empty():
-		go_x.target = _item_rect(clampi(sel, 0, offers().size() - 1)).position.x
+	if tab == 0 and (not offers().is_empty() or not next_job.is_empty()):
+		go_x.target = _item_rect(clampi(sel, 0, maxi(0, offers().size() - 1))).position.x
 		if go_x.x == 0.0:
 			go_x.snap(go_x.target)
 	go_x.step(dt)
@@ -371,7 +405,9 @@ func say(text: String) -> void:
 
 # take the selected contract, or buy the selected thing
 func act() -> void:
-	if tab == 0:
+	if tab == 0 and not next_job.is_empty():
+		start_next()
+	elif tab == 0:
 		take(sel)
 	elif tab == 1:
 		buy(SHOP[sel] if sel < SHOP.size() else [], qty if _has_qty() else 1)
@@ -391,6 +427,20 @@ func take(i: int) -> void:
 	Game.contract = o
 	Copy.say(radio, "T_contract_signed", "term")
 	SaveGame.load_requested = false
+	leaving = 0.0
+
+
+# the next opening contract: towed in from here, with what the berth owns now
+func start_next() -> void:
+	if next_job.is_empty() or leaving >= 0.0:
+		return
+	leave_from = _item_rect(0)
+	leave_offer = {}
+	var a: Dictionary = Career.sign_active()
+	Game.contract = a
+	Game.start_ship = a.get("ship", "gr7")
+	var saved := SaveGame.read(SaveGame.path) if SaveGame.exists() else {}
+	SaveGame.load_requested = not saved.is_empty() and saved.get("job", a).get("id", "") == a.get("id", "")
 	leaving = 0.0
 
 
@@ -429,6 +479,9 @@ func buy(it: Array, n: int = 1) -> void:
 	var id: String = it[0]
 	var price: float = it[2] * n
 	var d := Career.data
+	if overlay and it[1] in ["training"]:
+		_refuse(Txt.t("tm_onsite_no"))
+		return
 	if it[1] == "training":
 		# back to TS-1; finishing or leaving the course comes back here
 		leave_from = _item_rect(sel)
@@ -451,6 +504,9 @@ func buy(it: Array, n: int = 1) -> void:
 	if it[1] != "item" and d.upgrades.has(id):
 		_refuse(Txt.t("tm_owned"))
 		return
+	if REQUIRES.has(id) and not d.upgrades.has(REQUIRES[id]):
+		_refuse(Txt.t("tm_needs") % Txt.t(_facility_name(REQUIRES[id])))
+		return
 	if float(d.money) < price:
 		_refuse(Txt.t("tm_short") % Pal.money(price - float(d.money)))
 		return
@@ -464,7 +520,9 @@ func buy(it: Array, n: int = 1) -> void:
 		d.upgrades[id] = 1
 		install[id] = 0.0
 	if not d.get("seen", {}).has("bought"):
-		d.seen["bought"] = true
+		var seen: Dictionary = d.get("seen", {})
+		seen["bought"] = true
+		d.seen = seen
 		Copy.say(radio, "L_first_upgrade")
 	Career.save()
 	flash = 1.0
@@ -510,9 +568,18 @@ func _item_rect(i: int) -> Rect2:
 	return _finance_rect() if i == 0 else _training_rect()
 
 
+# the facilities in two columns under the training panel
 func _facility_rect(j: int) -> Rect2:
 	var tr := _training_rect()
-	return Rect2(tr.position.x, tr.end.y + 52 + j * 90, tr.size.x, 80)
+	var w := (tr.size.x - 16.0) * 0.5
+	return Rect2(tr.position.x + (j % 2) * (w + 16.0), tr.end.y + 52 + (j / 2) * 82, w, 74)
+
+
+func _facility_name(id: String) -> String:
+	for b in BERTH:
+		if b[0] == id:
+			return b[3]
+	return id
 
 
 # the shop: the drawing on the left (upgrades called out on it), stock below it, detail on the right
@@ -596,7 +663,7 @@ func _go_rect() -> Rect2:
 			return Rect2(r.position.x + 32, r.end.y - 100, r.size.x - 64, 68)
 	if sel >= 2:
 		var fr := _facility_rect(sel - 2)
-		return Rect2(fr.end.x - 250, fr.position.y + 18, 226, 58)
+		return Rect2(fr.end.x - 150, fr.position.y + 14, 136, 46)
 	var f := _finance_rect() if sel == 0 else _training_rect()
 	return Rect2(f.position.x + 36, f.end.y - 100, f.size.x - 72, 68)
 
@@ -738,6 +805,9 @@ func _stars(n: int, p: Vector2, a: float, delay: float) -> void:
 
 
 func _market(s: Vector2, a: float) -> void:
+	if not next_job.is_empty():
+		_next_card(s, a)
+		return
 	var os := offers()
 	if os.is_empty():
 		_text(Txt.t("tm_none"), Vector2(s.x * 0.5, s.y * 0.45), 18, Pal.ink(0.6 * a), font, 0)
@@ -1288,12 +1358,18 @@ func _berth(s: Vector2, a: float) -> void:
 		var fcr := _facility_rect(j)
 		var fk := Pal.ease_out(clampf((deal_t - 0.14 - j * 0.05) / 0.35, 0.0, 1.0)) * a
 		UI.panel(self, fcr, fk, sel_k[2 + j].x)
-		_text(Txt.t(it[3]), fcr.position + Vector2(24, 30), 17, Pal.ink(0.95 * fk), font_b)
-		_text(Txt.t(it[4]), fcr.position + Vector2(24, 56), 13, Pal.ink(0.6 * fk), font)
+		var have: bool = d2.upgrades.has(it[0])
+		var locked: bool = not have and REQUIRES.has(it[0]) and not d2.upgrades.has(REQUIRES[it[0]])
+		_text(Txt.t(it[3]), fcr.position + Vector2(20, 28), 16, Pal.ink(0.95 * fk), font_b)
+		# one that needs another bought first says so where its description goes
+		if locked:
+			_text(Txt.t("tm_needs") % Txt.t(_facility_name(REQUIRES[it[0]])), fcr.position + Vector2(20, 54), 12, Pal.heat(0.8 * fk, 1.1), font)
+		else:
+			_wrap(Txt.t(it[4]), fcr.position + Vector2(20, 50), fcr.size.x - (190.0 if sel == 2 + j else 40.0), 12, Pal.ink(0.6 * fk))
 		if sel != 2 + j:
-			var have: bool = d2.upgrades.has(it[0])
-			_text("✓ " + Txt.t("tm_installed") if have else Pal.money(it[2]), Vector2(fcr.end.x - 24, fcr.position.y + 52), 17, Pal.tint(Pal.FLUID, 0.85 * fk, 1.1) if have else Pal.ink((0.9 if float(d2.money) >= float(it[2]) else 0.45) * fk), font_b, 1)
-	var lr := Rect2(tr.position.x, _facility_rect(BERTH.size() - 3).end.y + 20, tr.size.x, 96)
+			var tag: String = "✓ " + Txt.t("tm_installed") if have else Pal.money(it[2])
+			_text(tag, Vector2(fcr.end.x - 20, fcr.position.y + 28), 15, Pal.tint(Pal.FLUID, 0.85 * fk, 1.1) if have else Pal.ink((0.9 if float(d2.money) >= float(it[2]) and not locked else 0.45) * fk), font_b, 1)
+	var lr := Rect2(tr.position.x, _facility_rect(BERTH.size() - 3).end.y + 16, tr.size.x, 80)
 	var k2 := Pal.ease_out(clampf((deal_t - 0.16) / 0.35, 0.0, 1.0)) * a
 	UI.panel(self, lr, k2 * 0.6)
 	_text(Txt.t("tm_later_h"), lr.position + Vector2(32, 40), 14, Pal.ink(0.5 * k2), font)
@@ -1314,6 +1390,11 @@ func _bottom(s: Vector2, a: float) -> void:
 	match tab:
 		0:
 			label = Txt.t("tm_take") + "   Enter"
+			if not next_job.is_empty():
+				label = Txt.t("tm_next_go") + "   Enter"
+				var gr := _go_rect()
+				UI.button(self, font_b, gr, label, 1.0 if hover_go else 0.0, true, a, t)
+				return
 			var o: Dictionary = offers()[sel] if sel < offers().size() else {}
 			if o.is_empty():
 				return
@@ -1358,7 +1439,7 @@ func _bottom(s: Vector2, a: float) -> void:
 	var bk := Pal.back(clampf((t - 0.3) / 0.35, 0.0, 1.0), 2.0)
 	r = Rect2(r.position + Vector2(0, (1.0 - bk) * 20.0), r.size)
 	UI.button(self, font_b, r, label, 1.0 if hover_go else 0.0, ok, a, t, shake, note)
-	_text(Txt.t("tm_keys"), Vector2(60, s.y - 34), 13, Pal.ink(0.45 * a), font)
+	_text(Txt.t("tm_keys_onsite") if overlay else Txt.t("tm_keys"), Vector2(60, s.y - 34), 13, Pal.ink(0.45 * a), font)
 	if msg != "" and msg_t < 3.0:
 		var mk := clampf((3.0 - msg_t) / 0.4, 0.0, 1.0) * Pal.ease_out(clampf(msg_t / 0.2, 0.0, 1.0))
 		_text(msg, Vector2(60 + (1.0 - Pal.ease_out(clampf(msg_t / 0.25, 0.0, 1.0))) * 20.0, s.y - 60), 17, Pal.ink(0.95 * a * mk), font_b)
@@ -1393,6 +1474,83 @@ func _leave(s: Vector2, lv: float) -> void:
 		draw_rect(Rect2(0, 0, s.x, h), Color(0, 0, 0, 1))
 		draw_rect(Rect2(0, s.y - h, s.x, h), Color(0, 0, 0, 1))
 		draw_rect(Rect2(0, s.y * 0.5 - 1, s.x, 2), Pal.heat(c, 2.0))
+
+
+# the opening contract waiting in the berth: one card, what it is and that the market opens after
+func _next_card(s: Vector2, a: float) -> void:
+	var r := _item_rect(0)
+	var k := Pal.ease_out(clampf((deal_t - 0.06) / 0.35, 0.0, 1.0)) * a
+	if leaving >= 0.0:
+		return
+	r.position.y += (1.0 - k) * 36.0
+	UI.panel(self, r, k, 1.0)
+	var x := r.position.x + 28
+	var y := r.position.y + 50
+	var ty: Dictionary = Market.type_of(str(next_job.get("ship", "gr7")))
+	var d := Ship.load_data(str(next_job.get("ship", "gr7")))
+	_text(Txt.t("tm_next_h"), Vector2(x, y), 14, Pal.ink(0.55 * k), font)
+	var nm: String = ((ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else str(d.get("name", "")))
+	_text(str(next_job.get("id", "")), Vector2(x, y + 44), 30, Pal.ink(0.96 * k), font_l)
+	_text(nm, Vector2(x, y + 76), 17, Pal.ink(0.8 * k), font_b)
+	var rows := [
+		[Txt.t("mf_length"), "%d m" % int(float(d.get("length", 0.0)))],
+		[Txt.t("tm_value"), Pal.money(float(d.get("value", {}).get("total", 0.0)))],
+		[Txt.t("tm_fee"), Pal.money(float(next_job.get("fee", 0.0)))],
+	]
+	for i in rows.size():
+		_text(rows[i][0], Vector2(x, y + 130 + i * 40), 14, Pal.ink(0.55 * k), font)
+		_text(rows[i][1], Vector2(r.end.x - 28, y + 130 + i * 40), 18, Pal.ink(0.92 * k), font_b, 1)
+	_wrap(Txt.t("tm_next_d"), Vector2(x, y + 270), r.size.x - 56, 14, Pal.ink(0.6 * k), 4)
+	# beside it: what the money is for, and what comes later
+	var hx := _item_rect(1).position.x
+	var hw := _item_rect(2).end.x - hx
+	_wrap(Txt.t("tm_next_side"), Vector2(hx, r.position.y + 30), hw, 15, Pal.ink(0.55 * a), 2)
+	_outlook(Rect2(hx, r.position.y + 80, hw, r.size.y - 80), a)
+
+
+# What there is to work for: the next things the money buys (cheapest first,
+# with what is still missing), and the ship types that open up later (the
+# reputation they need, and the berth extension for the long ones)
+func _outlook(r: Rect2, a: float) -> void:
+	var d := Career.data
+	var money := float(d.money)
+	var x := r.position.x
+	var colw := (r.size.x - 40.0) * 0.5
+	_text(Txt.t("tm_out_buy"), Vector2(x, r.position.y + 10), 15, Pal.ink(0.7 * a), font_b)
+	var buy: Array = []
+	for it in SHOP + BERTH:
+		if it[1] in ["upgrade", "facility"] and not d.upgrades.has(it[0]):
+			buy.append(it)
+	buy.sort_custom(func(p, q): return float(p[2]) < float(q[2]))
+	var y := r.position.y + 48.0
+	for i in mini(buy.size(), 9):
+		var it: Array = buy[i]
+		var k := Pal.ease_out(clampf((deal_t - 0.2 - i * 0.04) / 0.3, 0.0, 1.0)) * a
+		var can := money >= float(it[2])
+		_text(Txt.t(it[3]), Vector2(x, y), 15, Pal.ink(0.9 * k), font)
+		_text(Pal.money(float(it[2])), Vector2(x + colw - 120, y), 15, Pal.ink((0.95 if can else 0.6) * k), font_b, 1)
+		_text(Txt.t("tm_out_can") if can else Txt.t("tm_out_short") % Pal.money(float(it[2]) - money), Vector2(x + colw, y), 13, Pal.tint(Pal.FLUID, 0.85 * k, 1.1) if can else Pal.ink(0.45 * k), font, 1)
+		y += 34.0
+	var x2 := x + colw + 40.0
+	_text(Txt.t("tm_out_ships"), Vector2(x2, r.position.y + 10), 15, Pal.ink(0.7 * a), font_b)
+	y = r.position.y + 48.0
+	var i2 := 0
+	for e in Market.POOL:
+		var ty: Dictionary = Market.type_of(e[0])
+		if ty.is_empty():
+			continue
+		var k2 := Pal.ease_out(clampf((deal_t - 0.25 - i2 * 0.04) / 0.3, 0.0, 1.0)) * a
+		var open: bool = int(d.get("rep", 0)) >= int(e[2]) and Market.fits(e[0], d) and d.get("market", false)
+		_text("%s  %s · %d m" % [ty.get("class", ""), ty.name[0] if Txt.zh else ty.name[1], int(float(ty.get("length", 0.0)))], Vector2(x2, y), 15, Pal.ink((0.9 if open else 0.6) * k2), font)
+		var need: Array = []
+		if int(e[2]) > int(d.get("rep", 0)):
+			need.append(Txt.t("tm_out_rep") % int(e[2]))
+		if not Market.fits(e[0], d):
+			need.append(Txt.t("fa_berth"))
+		var note: String = (Txt.t("tm_out_now") if d.get("market", false) else Txt.t("tm_out_open")) if need.is_empty() else "、".join(need)
+		_text(note, Vector2(x2, y + 18), 12, Pal.tint(Pal.FLUID, 0.8 * k2, 1.1) if need.is_empty() else Pal.ink(0.45 * k2), font)
+		y += 42.0
+		i2 += 1
 
 
 # the loan paid off: the berth's name stamped across the terminal

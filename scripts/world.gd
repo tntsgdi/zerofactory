@@ -770,6 +770,14 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 		res.split = parts.size()
 		if whole:
 			p.value = value0 * SEGMENT_KEEP * Geom.area(parts[0]) / old_area
+			# each part keeps only the marked lines that still run through it
+			for q in all_parts:
+				var left: Array = []
+				for sgm in p.get_meta("segments", []):
+					var mid := Vector2(float(sgm[0]) + float(sgm[2]), float(sgm[1]) + float(sgm[3])) * 0.5 * Geom.M
+					if Geometry2D.is_point_in_polygon(mid, q.poly) and Geom.dist_to_polyline(mid, pl) > SEGMENT_NEAR * Geom.M:
+						left.append(sgm)
+				q.set_meta("segments", left)
 	for q in all_parts:
 		var a := Geom.area(q.poly)
 		if q.cls == "metal":

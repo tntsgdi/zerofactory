@@ -282,5 +282,20 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			for k in 3:
 				L(ci, Vector2(w * 0.12, h * (0.55 + k * 0.12)), Vector2(w * 0.88, h * (0.55 + k * 0.12)), 0.2)
 			ci.draw_string(font, Vector2(w * 0.2, h * 0.5), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.45))
+		"cryotank":
+			# the inner tank: its long walls, the pump tower down one end, the spray ring along the top, the level gauge's well
+			var rr := minf(h * 0.3, w * 0.12)
+			box(ci, Rect2(rr, h * 0.06, w - 2.0 * rr, h * 0.88), 0.25)
+			L(ci, Vector2(w * 0.12, h * 0.08), Vector2(w * 0.12, h * 0.9), 0.45, 1.4)
+			L(ci, Vector2(w * 0.14, h * 0.08), Vector2(w * 0.14, h * 0.9), 0.3)
+			box(ci, Rect2(w * 0.1, h * 0.84, w * 0.06, h * 0.08), 0.5)
+			for k in 9:
+				ci.draw_circle(Vector2(w * (0.2 + k * 0.075), h * 0.12), 1.3, Pal.ink(0.4))
+			L(ci, Vector2(w * 0.88, h * 0.1), Vector2(w * 0.88, h * 0.9), 0.3)
+			for k in 6:
+				L(ci, Vector2(w * 0.86, h * (0.2 + k * 0.12)), Vector2(w * 0.9, h * (0.2 + k * 0.12)), 0.35)
+			L(ci, Vector2(w * 0.2, h * 0.55), Vector2(w * 0.8, h * 0.55), 0.18)
+			ci.draw_string(font, Vector2(w * 0.4, h * 0.48), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, int(h * 0.1)), Pal.ink(0.5))
+			ci.draw_string(font, Vector2(w * 0.4, h * 0.66), "-163°C", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(8, int(h * 0.07)), Pal.ink(0.4))
 		"guard":
 			L(ci, Vector2(w * 0.5, 3), Vector2(w * 0.45, h - 3), 0.3)
