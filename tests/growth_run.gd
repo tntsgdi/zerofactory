@@ -44,7 +44,7 @@ func _run() -> void:
 	Career.start_new()
 	var shares: Array = []
 	for i in n:
-		if i > 0:
+		if i > 0 and Career.active().is_empty():
 			# the contracts the careful player takes: the safest offer that pays best
 			Career.ensure_offers(Market.make)
 			var best := 0
@@ -53,6 +53,7 @@ func _run() -> void:
 					best = k
 			Career.accept(best)
 		Game.contract = Career.active()
+		Game.start_ship = Career.active().ship
 		SaveGame.load_requested = false
 		var scene: Node = load("res://scenes/main.tscn").instantiate()
 		scene.bot = BOT.duplicate()

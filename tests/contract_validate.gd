@@ -15,6 +15,7 @@ const BOT := {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "l
 var from := 0
 var count := 10
 var trap := ""
+var ship := "gr7"              # the type drawn: one type, or "mix" the way the market mixes them
 var shard := "a"
 var prefix := "contracts"
 var play_every := 1            # play only every n-th contract that passed the static checks
@@ -29,6 +30,8 @@ func _initialize() -> void:
 			from = int(a.substr(5))
 		elif a.begins_with("count="):
 			count = int(a.substr(6))
+		elif a.begins_with("ship="):
+			ship = a.substr(5)
 		elif a.begins_with("trap="):
 			trap = a.substr(5)
 		elif a.begins_with("shard="):
@@ -71,7 +74,8 @@ func draw(seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 	var stars := rng.randi_range(1, 3)
-	var o := Market.offer(rng, {"rep": 30, "done": 5}, stars)
+	var career := {"rep": 30, "done": 5}
+	var o := Market.offer(rng, career, stars, {}, "", Market.pick_ship(rng, career) if ship == "mix" else ship)
 	if trap != "":
 		# one trap on its own, on a fresh ship
 		o.traps = [trap]

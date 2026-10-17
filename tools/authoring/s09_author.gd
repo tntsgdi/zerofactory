@@ -489,7 +489,7 @@ static func _outside() -> void:
 		_bolt(q, at(hc.x, hc.y, ["hull"]), c.x, c.y - sg * 0.2)
 		var fa := deg_to_rad(-140.0 if i == 0 else 140.0)
 		var fc2 := C + Vector2(cos(fa), sin(fa)) * (RO + 0.15)
-		var fl = _equip("FL-%d" % (i + 1), "lamp", Rect2(fc2.x - 0.25, fc2.y - 0.15, 0.5, 0.3), {"cls": "metal", "dest": "metal", "mass": 0.03, "cut_speed": 260.0, "name_key": "p_flood"})
+		var fl = _equip("FLD-%d" % (i + 1), "lamp", Rect2(fc2.x - 0.25, fc2.y - 0.15, 0.5, 0.3), {"cls": "metal", "dest": "metal", "mass": 0.03, "cut_speed": 260.0, "name_key": "p_flood"})
 		var fh := C + Vector2(cos(fa), sin(fa)) * (RO - 0.12)
 		_bolt(fl, at(fh.x, fh.y, ["hull"]), fc2.x, fc2.y - sg * 0.12)
 
@@ -514,10 +514,10 @@ static func _lines() -> void:
 	_line("c5", "cable", "power", "LAMP-SL", Vector2(7.55, roof + 0.06), "LAMP-SB", Vector2(5.55, roof + 0.06), [])
 	_line("c6", "cable", "power", "LAMP-SB", Vector2(5.25, roof + 0.06), "LAMP-SA", Vector2(1.5, ball(1.25)[0] + 0.1), [Vector2(5.15, roof + 0.06), Vector2(5.15, NECK_TOP - 0.06), Vector2(4.05, NECK_TOP - 0.06), Vector2(4.05, ball(4.05)[0] + 0.12), Vector2(1.5, ball(4.05)[0] + 0.12)])
 	_line("c7", "cable", "power", "SWB-S", Vector2(8.55, roof + 0.55), "ARM-CTL", Vector2(18.7, yt + 0.5), [Vector2(9.2, roof + 0.55), Vector2(9.2, yt + 0.5)])
-	_line("c8", "cable", "arm", "ARM-CTL", Vector2(19.55, yt + 0.2), "ARM-01", Vector2(19.9, -0.55), [Vector2(19.9, yt + 0.2)])
+	_line("c8", "cable", "power", "ARM-CTL", Vector2(19.55, yt + 0.2), "ARM-01", Vector2(19.9, -0.55), [Vector2(19.9, yt + 0.2)])
 	_line("cn", "cable", "nav", "NAV-S", Vector2(2.37, FLOOR_Y - 1.3), "CON-S", Vector2(1.7, NECK_TOP - 0.3), [Vector2(2.37, NECK_TOP - 0.06), Vector2(1.75, NECK_TOP - 0.06)])
 	# the brake: its own supply in the tail, its cable forward in the open along the truss
-	_line("cb", "cable", "brake", "BRK-P", Vector2(21.7, mid + 0.3), "ARM-01", Vector2(20.3, -0.55), [Vector2(21.5, mid + 0.3), Vector2(21.5, yt + 0.12), Vector2(20.3, yt + 0.12)])
+	_line("cb", "cable", "power", "BRK-P", Vector2(21.7, mid + 0.3), "ARM-01", Vector2(20.3, -0.55), [Vector2(21.5, mid + 0.3), Vector2(21.5, yt + 0.12), Vector2(20.3, yt + 0.12)])
 	# gas to the fuel cell; propellant to the engine; the long fuel line forward to the ball's quads, in the open
 	_line("g1", "pipe", "gas", "H2-T", Vector2(12.55, yb - 0.65), "FC-01", Vector2(12.35, yb - 0.65), [])
 	_line("g2", "pipe", "gas", "O2-T", Vector2(14.3, yb - 1.1), "FC-01", Vector2(12.35, yb - 1.25), [Vector2(14.3, yb - 1.32), Vector2(12.45, yb - 1.32), Vector2(12.45, yb - 1.25)])
@@ -574,7 +574,7 @@ static func meta() -> Dictionary:
 		"title": ["S-09「雨燕」维修穿梭机 · 26 m", "S-09 SWIFT · MAINTENANCE SHUTTLE · 26 m"],
 		"contract": "S-09",
 		"length": 26.0,
-		"value": {"total": 77700.0, "metal": 6000.0},
+		"value": {"total": 82000.0, "metal": 6000.0},
 		"clamps": [[3.2, 3.15], [8.6, 2.35]],
 		"room_names": {"A": "room_sA", "B": "room_sB", "L": "room_sL"},
 		"gas": {
@@ -618,6 +618,27 @@ static func meta() -> Dictionary:
 		},
 		"labels": {"H2-T": "H₂", "O2-T": "O₂", "FC-01": "FUEL CELL", "RCS-T1": "RCS", "RCS-T2": "RCS", "SPRAY-T": "SPRAY", "CRATE-1": "SPARES", "CRATE-2": "SPARES"},
 		"hints": {},
+		# what a market contract may find changed on a Swift, and where the accident templates fit
+		"market": {
+			"class": "S", "name": ["雨燕级维修穿梭机", "SWIFT-CLASS SHUTTLE"], "time": 14.0,
+			"rooms": {"A,B": [0.2, 60.0, 101.0], "L": [0.3, 40.0, 101.0]},
+			"vessels": {"H2": [0.3, 20.0, 140.0, 1200.0, 1800.0], "O2": [0.3, 20.0, 140.0, 1100.0, 1700.0], "SP": [0.4, 10.0, 80.0, 500.0, 1000.0]},
+			"charge": {"PWR-B": [0.15, 1.0], "CAP-A": [0.4, 1.0], "BRK-P": [0.5, 1.0]},
+			"running": {"FC-01": 0.7},
+			"fluids": {"rcs1": [0.02, 0.1], "rcs2": [0.02, 0.1]}, "fill": {"rcs_line": "rcs1"},
+			"cargo": {"containers": ["CRATE-1", "CRATE-2"], "keep": 0.8, "scale": 0.12},
+			"knockable": ["CON-S", "NAV-S", "LIFE-S", "RAD-1", "RAD-2", "ATT-1", "ATT-2", "MAIN-E", "DOCK-S"],
+			"drift": ["CRATE-1", "CRATE-2", "LIFE-S", "H2-T"],
+			"section_x": 9.4,
+			"slots": {
+				"hidden_tank": {"x": [[17.3, "p47"], [20.4, "p51"]], "y0": 0.85, "y1": 1.85, "base_y": 1.85, "room": ""},
+				"fire_system": {"x": 17.4, "y0": -0.05, "y1": 0.75, "base": ["p46", -0.05], "room": "", "port": [17.8, 0.65]},
+				"second_source": {"at": [21.75, -0.2], "size": [0.65, 1.1], "base": [["POST-A", 21.68, 0.3], ["POST-A", 21.68, 0.7]], "room": "",
+					"bus": "SWB-S", "path": [[21.8, 0.1], [21.0, 0.1], [21.0, -0.15], [9.0, -0.15], [8.5, 0.3]], "switch_at": [22.0, 0.3], "proc": "ARM-01", "test": "E-S01", "volts": 120.0},
+				"hidden_damage": {"plates": ["p44", "p46", "p48"]},
+				"explosive_cargo": {},
+			},
+		},
 		# safe ways to take out the named equipment; VALIDATE SHIP has a bot walk each one
 		"procedures": {
 			"FDR-S": [
@@ -648,6 +669,6 @@ static func meta() -> Dictionary:
 			],
 		},
 		"blueprint": {
-			"hide": ["LAMP-SA", "LAMP-SB", "LAMP-SL", "FL-1", "FL-2", "FL-3", "FL-4", "EXT-S", "LADDER"],
+			"hide": ["LAMP-SA", "LAMP-SB", "LAMP-SL", "FL-1", "FL-2", "FLD-1", "FLD-2", "EXT-S", "LADDER"],
 		},
 	}

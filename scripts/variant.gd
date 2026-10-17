@@ -33,10 +33,17 @@ static func make(base: Dictionary, job: Dictionary) -> Dictionary:
 	rng.seed = int(job.get("variant", 0))
 	var traps: Array = job.get("traps", [])
 	var notes: Array = []
-	_hazards(d, rng, traps)
-	_cargo(d, rng, notes, int(job.get("stars", 1)))
-	_damage(d, rng, notes)
-	_drawing(d, rng)
+	if d.has("market"):
+		# any other type: its own file says what its life may have changed
+		_hazards_by(d, rng)
+		_cargo_by(d, rng, notes, int(job.get("stars", 1)))
+		_damage(d, rng, notes, d.market.get("knockable", []))
+		_drawing(d, rng, d.market.get("drift", []))
+	else:
+		_hazards(d, rng, traps)
+		_cargo(d, rng, notes, int(job.get("stars", 1)))
+		_damage(d, rng, notes)
+		_drawing(d, rng)
 	for t in traps:
 		Traps.apply(d, t, rng, notes)
 	revalue(d)
@@ -68,6 +75,16 @@ static func source(d: Dictionary, tag: String):
 		if s.piece == tag:
 			return s
 	return null
+
+
+# the containers a ship carries cargo in (the Heron's three, or its own file's)
+static func containers(d: Dictionary) -> Array:
+	return d.get("market", {}).get("cargo", {}).get("containers", CONTAINERS)
+
+
+# where a section job's boundary is (m from the bow); the part behind it is bought
+static func section_x(d: Dictionary) -> float:
+	return float(d.get("market", {}).get("section_x", AFT_X))
 
 
 # ---------------------------------------------------------------- hazards
@@ -108,6 +125,44 @@ static func _hazards(d: Dictionary, rng: RandomNumberGenerator, traps: Array) ->
 	fl.cool_broken.drip = snappedf(rng.randf_range(0.0008, 0.003), 0.0001)
 
 
+# A ship's hazards from its own rules (meta "market"):
+#   rooms    {"A,B": [chance empty, lo, hi]}  kPa, rooms in one key share a value
+#   vessels  {"H2": [chance low, low lo, low hi, lo, hi]}  kPa
+#   charge   {"PWR-B": [lo, hi]}       a battery's or capacitor's charge
+#   running  {"FC-01": chance}         a generator left running
+#   fluids   {"rcs1": [lo, hi]}        m³ left aboard; "fill" {"rcs_line": "rcs1"} caps a line at its tank
+static func _hazards_by(d: Dictionary, rng: RandomNumberGenerator) -> void:
+	var r: Dictionary = d.market
+	var gas: Dictionary = d.get("gas", {})
+	for k in r.get("rooms", {}):
+		var spec: Array = r.rooms[k]
+		var v := 0.0 if rng.randf() < float(spec[0]) else snappedf(rng.randf_range(spec[1], spec[2]), 0.1)
+		for n in str(k).split(","):
+			gas.rooms[n.strip_edges()] = v
+	for k in r.get("vessels", {}):
+		var spec: Array = r.vessels[k]
+		if gas.get("vessels", {}).has(k):
+			gas.vessels[k].kpa = snappedf(rng.randf_range(spec[1], spec[2]) if rng.randf() < float(spec[0]) else rng.randf_range(spec[3], spec[4]), 1.0)
+	for k in r.get("charge", {}):
+		var s = source(d, k)
+		if s != null:
+			s.charge = snappedf(rng.randf_range(r.charge[k][0], r.charge[k][1]), 0.01)
+		for iso in d.get("power", {}).get("isolated", []):
+			if iso.piece == k:
+				iso.charge = snappedf(rng.randf_range(r.charge[k][0], r.charge[k][1]), 0.01)
+	for k in r.get("running", {}):
+		var s = source(d, k)
+		if s != null:
+			s.running = rng.randf() < float(r.running[k])
+	var fl: Dictionary = d.get("fluids", {}).get("volumes", {})
+	for k in r.get("fluids", {}):
+		if fl.has(k):
+			fl[k].amount = snappedf(rng.randf_range(r.fluids[k][0], r.fluids[k][1]), 0.001)
+	for k in r.get("fill", {}):
+		if fl.has(k) and fl.has(r.fill[k]):
+			fl[k].amount = minf(float(fl[k].amount), float(fl[r.fill[k]].amount))
+
+
 # ---------------------------------------------------------------- cargo
 
 # riskier contracts come with richer holds: +15% cargo value a star
@@ -139,6 +194,51 @@ static func _cargo(d: Dictionary, rng: RandomNumberGenerator, notes: Array, star
 		d.labels[c] = cg[0]
 
 
+# A ship's cargo from its own rules: market.cargo = {containers, keep, scale,
+# fixed: {tag: "heavy" | "dg" | kind}}. Containers not kept are taken off;
+# the rest get a kind, a mass (× scale) and a value; "heavy" ones are too much
+# for the 3 t grapple, "dg" ones carry dangerous goods under their own stencil.
+static func _cargo_by(d: Dictionary, rng: RandomNumberGenerator, notes: Array, stars: int) -> void:
+	var cg: Dictionary = d.market.get("cargo", {})
+	var all: Array = cg.get("containers", [])
+	if all.is_empty():
+		return
+	var fixed: Dictionary = cg.get("fixed", {})
+	var keep: Array = []
+	for c in all:
+		if rng.randf() < float(cg.get("keep", 0.85)):
+			keep.append(c)
+	if keep.is_empty():
+		keep.append(all[rng.randi_range(0, all.size() - 1)])
+	for c in all:
+		if not c in keep:
+			_remove_piece(d, c)
+			notes.append("no " + c)
+	var scale := float(cg.get("scale", 1.0))
+	for c in keep:
+		var pd = piece(d, c)
+		if pd == null:
+			continue
+		var f: String = fixed.get(c, "")
+		var kind: String = f if CARGO.has(f) else ["metal", "precision", "electronic"][rng.randi_range(0, 2)]
+		var spec: Array = CARGO[kind]
+		var mass := rng.randf_range(spec[1][0], spec[1][1]) * scale
+		var value := rng.randf_range(spec[2][0], spec[2][1]) * scale
+		var label: String = spec[0]
+		if f == "heavy":
+			mass = rng.randf_range(3.5, 4.2)
+			value = rng.randf_range(spec[2][0], spec[2][1]) * 1.4
+			label = "HEAVY"
+			notes.append("heavy " + c)
+		elif f == "dg":
+			pd.hazard = "explosive"
+			label = "DG"
+		pd.mass = snappedf(mass, 0.01)
+		pd.value = snappedf(value * (1.0 + 0.15 * (stars - 1)), 100.0)
+		pd.fragile = spec[3]
+		d.labels[c] = label
+
+
 # a part that is not aboard: it, its fixings, its lines and its controls
 static func _remove_piece(d: Dictionary, key: String) -> void:
 	d.pieces = d.pieces.filter(func(pd): return pd.key != key)
@@ -150,16 +250,17 @@ static func _remove_piece(d: Dictionary, key: String) -> void:
 	d.lines = d.lines.filter(func(l): return not gone_lines.has(l.id))
 	d.ctrls = d.ctrls.filter(func(c): return c.piece != key)
 	d.labels.erase(key)
+	d.get("procedures", {}).erase(key)
 	var bp: Dictionary = d.get("blueprint", {})
 	bp.get("design", {}).erase(key)
 
 
 # ---------------------------------------------------------------- accident damage
 
-static func _damage(d: Dictionary, rng: RandomNumberGenerator, notes: Array) -> void:
+static func _damage(d: Dictionary, rng: RandomNumberGenerator, notes: Array, knockable: Array = KNOCKABLE) -> void:
 	var n := rng.randi_range(0, 3)
-	var pool: Array = KNOCKABLE.duplicate()
-	for i in n:
+	var pool: Array = knockable.duplicate()
+	for i in mini(n, pool.size()):
 		var t: String = pool.pop_at(rng.randi_range(0, pool.size() - 1))
 		var pd = piece(d, t)
 		if pd == null:
@@ -170,11 +271,13 @@ static func _damage(d: Dictionary, rng: RandomNumberGenerator, notes: Array) -> 
 
 # ---------------------------------------------------------------- the drawing is wrong
 
-static func _drawing(d: Dictionary, rng: RandomNumberGenerator) -> void:
+static func _drawing(d: Dictionary, rng: RandomNumberGenerator, drift: Array = DRIFT) -> void:
 	var bp: Dictionary = d.get("blueprint", {})
 	var design: Dictionary = bp.get("design", {})
 	for i in rng.randi_range(0, 2):
-		var t: String = DRIFT[rng.randi_range(0, DRIFT.size() - 1)]
+		if drift.is_empty():
+			break
+		var t: String = drift[rng.randi_range(0, drift.size() - 1)]
 		var pd = piece(d, t)
 		if pd == null or design.has(t):
 			continue
@@ -201,7 +304,8 @@ static func revalue(d: Dictionary) -> void:
 		sum += float(d.fluids.value[f])
 	for pd in d.pieces:
 		if pd.get("cls", "") == "equip":
-			sum += float(pd.get("value", 0.0))
+			# explosives only ever go to the hazard mouth, which pays 40 %
+			sum += float(pd.get("value", 0.0)) * (0.4 if pd.get("hazard", "") == "explosive" else 1.0)
 	d.value.total = snappedf(sum, 1.0)
 
 
@@ -238,8 +342,9 @@ static func _scope(d: Dictionary, job: Dictionary) -> void:
 	var pay := {}
 	match kind:
 		"section":
+			var sx := section_x(d)
 			for pd in d.pieces:
-				if _cx(pd) > AFT_X:
+				if _cx(pd) > sx:
 					keep[pd.key] = true
 		"rescue":
 			var pool: Array = []
@@ -265,7 +370,7 @@ static func _scope(d: Dictionary, job: Dictionary) -> void:
 			else:
 				total += float(pd.get("value", 0.0)) if pd.get("cls", "") == "equip" else _mass(pd) * price
 	d.value.total = snappedf(total, 1.0)
-	d.scope = {"kind": kind, "tags": picked, "pay": pay, "boundary": AFT_X if kind == "section" else -1.0}
+	d.scope = {"kind": kind, "tags": picked, "pay": pay, "boundary": section_x(d) if kind == "section" else -1.0}
 
 
 # a valuable-equipment job names two more pieces: the most valuable whole, safe equipment in scope

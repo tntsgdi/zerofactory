@@ -5,6 +5,9 @@ extends Node2D
 # body of metal up to 1 t with no whole equipment in it, that the grapple is
 # not holding — carries it slowly round the ship to the furnace and lets go
 # over the mouth. It never touches equipment.
+# It waits its turn over the furnace mouth (the hauler may be dropping there),
+# holds back for the operator's drone (then edges past it slowly), and the
+# automation key stops it: what it holds is let go where it is.
 
 const MAX_T := 1.0               # t it can lift
 const SPEED := 4.0 * 48.0        # px/s with a load
@@ -12,6 +15,7 @@ const EMPTY := 9.0 * 48.0        # px/s back to the next one
 const RAIL_Y := -10.0 * 48.0     # the boom it runs on
 const HOME := Vector2(18.0 * 48.0, -10.0 * 48.0)
 const DROP := Vector2(21.0 * 48.0, 6.9 * 48.0)   # just above the furnace mouth
+const CLEAR := 2.5 * 48.0        # px it keeps from the operator's drone
 
 var game: Game
 var body = null                  # what it is carrying
@@ -22,6 +26,7 @@ var hold_t := 0.0
 var off := Vector2.ZERO          # the body's position relative to the claw
 var carried := 0                 # bodies delivered this contract
 var t := 0.0
+var wait_t := 0.0               # s spent holding back for the drone
 
 
 func _init() -> void:
@@ -48,6 +53,21 @@ func _physics_process(dt: float) -> void:
 	if game == null or game.paused_sim or game.state != "play":
 		return
 	t += dt
+	if game.auto_paused:
+		if body != null:
+			halt()
+		claw = claw.move_toward(HOME + Vector2(0, 40), EMPTY * dt)
+		return
+	# keep clear of the drone: wait for it to move on, then edge past slowly
+	var k := 1.0
+	if state in ["reach", "carry"] and game.drone_near(claw, CLEAR):
+		wait_t += dt
+		if wait_t < 2.0:
+			return
+		k = 0.3
+	else:
+		wait_t = 0.0
+	dt *= k
 	match state:
 		"idle":
 			for b in game.world.bodies:
@@ -75,12 +95,17 @@ func _physics_process(dt: float) -> void:
 				state = "carry"
 				game.sfx.play("grab", claw, 0.5)
 		"carry":
-			if not is_instance_valid(body):
+			if not is_instance_valid(body) or body.capture != null:
+				# the mouth took it out of the claw on the way down: delivered all the same
+				carried += 1
 				_drop_it()
 				return
 			if path.is_empty():
 				state = "release"
 				hold_t = 0.0
+				return
+			# the last leg is over the mouth: only once nothing else is dropping there
+			if path.size() == 1 and not game.mouth_take("metal", "arm"):
 				return
 			claw = claw.move_toward(path[0], SPEED * dt)
 			if claw.distance_to(path[0]) < 2.0:
@@ -90,7 +115,8 @@ func _physics_process(dt: float) -> void:
 			body.angular_velocity = 0.0
 		"release":
 			hold_t += dt
-			if not is_instance_valid(body):
+			if not is_instance_valid(body) or body.capture != null:
+				carried += 1
 				_drop_it()
 			elif hold_t > 0.3:
 				# let go over the mouth: physics back on, a nudge down, the mouth does the rest
@@ -106,7 +132,20 @@ func _physics_process(dt: float) -> void:
 				_drop_it()
 
 
+# let go of what it holds, where it is, and stand by
+func halt() -> void:
+	if body != null and is_instance_valid(body) and state in ["carry", "release"]:
+		body.collision_layer = 1
+		body.collision_mask = 1 | 2 | 4
+		body.set_deferred("freeze", false)
+		body.linear_velocity = Vector2.ZERO
+	if body != null and is_instance_valid(body):
+		body.set_meta("arm", false)
+	_drop_it()
+
+
 func _drop_it() -> void:
+	game.mouth_release("metal", "arm")
 	body = null
 	path = []
 	state = "idle"

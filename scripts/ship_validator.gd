@@ -17,7 +17,7 @@ const CHECKS := [
 	["story", "剧情物件", "STORY ITEMS"],
 	["settle", "可结算", "SETTLEABLE"],
 ]
-const CTRL_KINDS := ["port", "test", "valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam"]
+const CTRL_KINDS := ["port", "test", "valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam", "degauss", "probe"]
 const REACH := 4.0         # metres, the tool reach of the drone
 const NEAR := 0.3          # how far a fixing / control / line end may sit from its piece
 
@@ -414,8 +414,9 @@ static func _mandatory(d: Dictionary, w, bad: Array) -> void:
 			continue
 		if p.cls != "equip" or p.value <= 0.0:
 			bad.append("mandatory %s is not valuable equipment" % p.tag)
-		# a rescue contract's named pieces are plain equipment (never a hazard): no procedure needed
-		if not procs.has(p.tag) and not (d.has("scope") and p.hazard == ""):
+		# a rescue contract's named pieces, and the ones a valuable-equipment order names, are
+		# plain equipment (never a hazard): no procedure needed
+		if not procs.has(p.tag) and not ((d.has("scope") or d.has("variant")) and p.hazard == ""):
 			bad.append("mandatory %s has no safe-removal procedure" % p.tag)
 	for k in procs:
 		for step in procs[k]:
@@ -438,7 +439,8 @@ static func _settle(d: Dictionary, w, bad: Array) -> void:
 	for id in w.order:
 		var p = w.pieces[id]
 		if p.cls == "equip":
-			sum += p.value
+			# explosives only ever go to the hazard mouth, which pays 40 %
+			sum += p.value * (0.4 if p.hazard == "explosive" else 1.0)
 	# part of a ship: only what is inside the scope is paid, gas and fluids not at all
 	if d.has("scope"):
 		sum = 0.0

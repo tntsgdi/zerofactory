@@ -97,6 +97,55 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			ci.draw_arc(Vector2(w * 0.5, h * 0.78), w * 0.22, -0.3, PI + 0.6, 12, Pal.ink(0.6), 1.2, true)
 		"lamp":
 			L(ci, Vector2(3, h * 0.6), Vector2(w - 3, h * 0.6), 0.5)
+		"arm":
+			var m := Geom.M
+			for x in [0.6, 2.4, 4.2, 6.0]:
+				if x * m < w:
+					L(ci, Vector2(x * m, h * 0.65), Vector2(x * m, h * 0.95), 0.3)
+			ring(ci, Vector2(w * 0.02 + 0.2 * m, h * 0.55), 0.18 * m, 0.6)
+			ring(ci, Vector2(w - 0.6 * m, h * 0.35), 0.22 * m, 0.6)
+		"brake":
+			box(ci, Rect2(w * 0.1, h * 0.1, w * 0.8, h * 0.8), 0.5)
+			ci.draw_string(font, Vector2(w * 0.14, h * 0.62), "BRK", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(6, int(h * 0.3)), Pal.ink(0.6))
+		"dock":
+			L(ci, Vector2(w * 0.08, 1), Vector2(w * 0.92, 1), 0.8, 1.6)
+			box(ci, Rect2(w * 0.2, h * 0.25, w * 0.6, h * 0.55), 0.45)
+		"engine_s":
+			for i in 5:
+				L(ci, Vector2(w * (0.08 + i * 0.08), h * 0.3), Vector2(w * (0.08 + i * 0.08), h * 0.7), 0.3)
+			for i in 3:
+				var t := 0.55 + i * 0.13
+				L(ci, Vector2(w * t, h * (0.32 - i * 0.08)), Vector2(w * t, h * (0.68 + i * 0.08)), 0.25)
+		"glove":
+			ring(ci, Vector2(w * 0.5, h * 0.3), w * 0.32, 0.6)
+			for gx in [0.32, 0.68]:
+				ci.draw_polyline(PackedVector2Array([Vector2(w * gx, h * 0.45), Vector2(w * (gx + 0.06), h * 0.68), Vector2(w * gx, h * 0.9)]), Pal.ink(0.5), 1.0, true)
+		"ladder":
+			L(ci, Vector2(w * 0.15, 0), Vector2(w * 0.15, h), 0.55)
+			L(ci, Vector2(w * 0.85, 0), Vector2(w * 0.85, h), 0.55)
+			var k := 0.2 * Geom.M
+			while k < h:
+				L(ci, Vector2(w * 0.15, k), Vector2(w * 0.85, k), 0.4)
+				k += 0.3 * Geom.M
+		"locker":
+			box(ci, Rect2(w * 0.08, h * 0.05, w * 0.84, h * 0.9), 0.45)
+			L(ci, Vector2(w * 0.75, h * 0.35), Vector2(w * 0.75, h * 0.55), 0.6, 1.4)
+			for k in 3:
+				L(ci, Vector2(w * 0.15, h * (0.72 + k * 0.06)), Vector2(w * 0.6, h * (0.72 + k * 0.06)), 0.3)
+		"rcs_quad":
+			for dx in [0.2, 0.5, 0.8]:
+				L(ci, Vector2(w * dx, h * 0.2), Vector2(w * dx, h * 0.8), 0.45)
+		"reel":
+			ring(ci, Vector2(w * 0.5, h * 0.5), minf(w, h) * 0.38, 0.55)
+			ring(ci, Vector2(w * 0.5, h * 0.5), minf(w, h) * 0.12, 0.45)
+		"sphere_tank":
+			ring(ci, Vector2(w * 0.5, h * 0.5), w * 0.36, 0.45)
+			L(ci, Vector2(w * 0.14, h * 0.5), Vector2(w * 0.86, h * 0.5), 0.3)
+			ci.draw_string(font, Vector2(w * 0.3, h * 0.42), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(7, int(w * 0.2)), Pal.ink(0.6))
+		"suit":
+			ci.draw_arc(Vector2(w * 0.5, h * 0.09), w * 0.36, 0.0, TAU, 20, Pal.ink(0.7), 1.0, true)
+			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.1, h * 0.22), Vector2(w * 0.9, h * 0.22), Vector2(w * 0.8, h * 0.62), Vector2(w * 0.62, h), Vector2(w * 0.38, h), Vector2(w * 0.2, h * 0.62), Vector2(w * 0.1, h * 0.22)]), Pal.ink(0.6), 1.0, true)
+			ci.draw_rect(Rect2(w * 0.25, h * 0.28, w * 0.5, h * 0.17), Pal.tint(Pal.AIR, 0.7, 1.0), false, 1.0)
 		"grating":
 			var n := maxi(3, int(w / 9.0))
 			for i in range(1, n):

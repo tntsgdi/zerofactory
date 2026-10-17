@@ -766,7 +766,7 @@ func _market(s: Vector2, a: float) -> void:
 		var w := r.size.x - 56
 		var y := r.position.y
 		var row_k := func(n: int) -> float: return Pal.ease_out(clampf((deal_t - 0.15 - i * 0.07 - n * 0.035) / 0.3, 0.0, 1.0)) * a
-		var ty: Dictionary = Market.TYPES.get(o.ship, {})
+		var ty: Dictionary = Market.type_of(o.ship)
 		var scope: String = o.get("scope", "full")
 		# 1 · what kind of job, how risky, which ship
 		var sct := Txt.t("sc_" + scope)
@@ -875,24 +875,39 @@ func _thumb(o: Dictionary, r: Rect2, a: float) -> void:
 		for pd in d.pieces:
 			if pd.get("tag", "") in want:
 				marks.append([Variant._cx(pd), _cy(pd), pd.tag, pd.tag in o.get("scope_tags", [])])
-		thumbs[o.id] = {"marks": marks, "len": float(d.get("length", 42.0))}
+		# the ship's own outline: its structure, as the file draws it
+		var outline: Array = []
+		var y0 := 0.0
+		var y1 := 0.0
+		for pd in d.pieces:
+			if pd.kind in ["hull", "hatch", "keel", "beam", "strut", "rail", "deck", "bulkhead"]:
+				var pts := PackedVector2Array()
+				for q in pd.poly:
+					pts.append(Vector2(q[0], q[1]))
+					y0 = minf(y0, q[1])
+					y1 = maxf(y1, q[1])
+				pts.append(pts[0])
+				outline.append(pts)
+		thumbs[o.id] = {"marks": marks, "len": float(d.get("length", 42.0)), "outline": outline, "h": maxf(8.0, y1 - y0 + 1.0), "mid": (y0 + y1) * 0.5,
+			"sx": Variant.section_x(d)}
 	var th: Dictionary = thumbs[o.id]
 	var L: float = th.len
-	var sc := minf(r.size.x / L, r.size.y / 9.0)
-	var org := Vector2(r.position.x + (r.size.x - L * sc) * 0.5, r.get_center().y)
+	var sc := minf(r.size.x / L, r.size.y / th.h)
+	var org := Vector2(r.position.x + (r.size.x - L * sc) * 0.5, r.get_center().y - th.mid * sc)
+	var SX: float = th.sx
 	var P := func(v: Vector2) -> Vector2: return org + v * sc
 	draw_rect(r, Color(0, 0, 0, 0.25 * a))
 	# the part the contract buys, shaded
 	match o.get("scope", "full"):
 		"section":
-			draw_rect(Rect2(P.call(Vector2(Variant.AFT_X, -4.0)), Vector2((L - Variant.AFT_X) * sc, 8.0 * sc)), Pal.heat(0.16 * a, 1.0))
-			draw_dashed_line(P.call(Vector2(Variant.AFT_X, -4.4)), P.call(Vector2(Variant.AFT_X, 4.4)), Pal.heat(0.9 * a, 1.2), 1.4, 5.0)
-	var hull := PackedVector2Array()
-	for v in [Vector2(0.2, 0.5), Vector2(0.9, -1.6), Vector2(2.4, -3.3), Vector2(4.6, -4.0), Vector2(33.0, -4.0), Vector2(33.0, -3.1), Vector2(40.6, -3.1), Vector2(40.6, 3.1), Vector2(33.0, 3.1), Vector2(33.0, 4.0), Vector2(4.6, 4.0), Vector2(2.4, 3.4), Vector2(0.8, 2.2), Vector2(0.2, 0.5)]:
-		hull.append(P.call(v))
-	draw_polyline(hull, Pal.ink(0.6 * a), 1.2, true)
-	for bx in [5.0, 10.0, 27.0]:
-		draw_line(P.call(Vector2(bx, -3.6)), P.call(Vector2(bx, 3.0)), Pal.ink(0.25 * a), 1.0)
+			var hh: float = th.h * 0.5
+			draw_rect(Rect2(P.call(Vector2(SX, th.mid - hh)), Vector2((L - SX) * sc, th.h * sc)), Pal.heat(0.16 * a, 1.0))
+			draw_dashed_line(P.call(Vector2(SX, th.mid - hh)), P.call(Vector2(SX, th.mid + hh)), Pal.heat(0.9 * a, 1.2), 1.4, 5.0)
+	for pts in th.outline:
+		var sp := PackedVector2Array()
+		for v in pts:
+			sp.append(P.call(v))
+		draw_polyline(sp, Pal.ink(0.45 * a), 1.0, true)
 	for m in th.marks:
 		var p: Vector2 = P.call(Vector2(m[0], m[1]))
 		var hot: bool = m[3]

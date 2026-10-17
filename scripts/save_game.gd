@@ -150,6 +150,8 @@ static func save(g) -> void:
 	var d := {
 		"version": VERSION,
 		"ship": g.ship_id,
+		"mech": g.mech.save_state() if g.mech != null else {},
+		"plan": g.plan.save_state() if g.plan != null else {},
 		"world": {"pieces": pieces, "joints": joints, "lines": lines, "ctrls": ctrls, "rooms": rooms, "bodies": bodies,
 			"next_id": w.next_id, "next_joint": w.next_joint, "metal_price": w.metal_price, "smass": w.structural_mass},
 		"sys": {"vols": vols, "switch": s.switch, "src": src, "iso": iso, "fluid": fluid, "frec": s.fluid_rec, "aux": s.aux,

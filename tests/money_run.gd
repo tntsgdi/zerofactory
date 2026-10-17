@@ -51,7 +51,7 @@ func _career(careless: bool) -> Array:
 	Career.start_new()
 	var rows: Array = []
 	for i in n:
-		if i > 0:
+		if i > 0 and Career.active().is_empty():
 			Career.ensure_offers(Market.make)
 			Career.accept(0)
 		Game.contract = Career.active()

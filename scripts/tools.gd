@@ -123,7 +123,7 @@ func clamp_range(p: Vector2) -> Vector2:
 # connector takes the wrench, a pressure port the meter, a floating piece the
 # grapple. Never while a job, a cut or a hold is going on, never in the
 # training course (it teaches the keys), never for a bot.
-const WRENCH_CTRLS := ["valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam"]
+const WRENCH_CTRLS := ["valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam", "degauss"]
 
 
 func _context() -> Array:
@@ -132,7 +132,7 @@ func _context() -> Array:
 	for h in [_near_ctrl(WRENCH_CTRLS, pick), _near_joint(pick * 0.9), _near_connector(pick * 0.9)]:
 		if not h.is_empty() and h.d < best[2]:
 			best = [4, "w%s%s" % [h.kind, h.get("label", "")] + str(h.pos.round()), h.d]
-	var hm := _near_ctrl(["port", "test"], pick)
+	var hm := _near_ctrl(["port", "test", "probe"], pick)
 	if not hm.is_empty() and hm.d < best[2]:
 		best = [1, "m%s" % hm.ctrl.id, hm.d]
 	if best[0] == 0 and _visible(aim):
@@ -216,7 +216,7 @@ func _find_hover() -> Dictionary:
 	var pick := 15.0 / game.cam_zoom()
 	match tool:
 		1:
-			h = _near_ctrl(["port", "test", "discharge"], pick)
+			h = _near_ctrl(["port", "test", "discharge", "probe"], pick)
 			if h.is_empty():
 				h = _near_line(pick * 0.6)
 			if h.is_empty():
@@ -226,7 +226,7 @@ func _find_hover() -> Dictionary:
 		3:
 			h = _piece_hover()
 		4:
-			h = _near_ctrl(["valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam"], pick)
+			h = _near_ctrl(WRENCH_CTRLS, pick)
 			var hj := _near_joint(pick * 0.9)
 			if not hj.is_empty() and (h.is_empty() or hj.d < h.d):
 				h = hj

@@ -19,6 +19,47 @@ const RESCUE_FEE := 0.05           # a rescue's fee: of what its pieces pay
 const TRIES := 30                 # draws per offer before the market gives up on that slot
 
 static var stats := {"made": 0, "discarded": 0, "reasons": {}}   # what the contract validator threw away
+# the ship types on the market and how often each comes up ([type, weight, reputation needed])
+const POOL := [["gr7", 4, 0], ["s09", 3, 0], ["pod", 3, 0], ["tug", 1, 0], ["h22", 3, 6]]
+
+
+# a type's card data: class letters, name, length, value (the Heron's here, the rest from their files)
+static func type_of(ship: String) -> Dictionary:
+	if ship == "":
+		return {}
+	if TYPES.has(ship):
+		return TYPES[ship]
+	var d := Ship.load_data(ship)
+	var m: Dictionary = d.get("market", {})
+	if m.is_empty():
+		return {}
+	return {"class": m.get("class", ship.to_upper()), "name": m.get("name", [ship, ship]), "length": float(d.get("length", 20.0)),
+		"value": float(d.get("value", {}).get("total", 0.0)), "time": float(m.get("time", 18.0)) * 60.0}
+
+
+# a one-star full strip's standard time for a type (s); short jobs and stars scale with it
+static func base_time(ship: String) -> float:
+	return float(type_of(ship).get("time", BASE_TIME))
+
+
+# which type an offer is: drawn from its own generator, seeded from the market's,
+# so adding types never shifts the Heron contracts' other draws
+static func pick_ship(rng: RandomNumberGenerator, career: Dictionary) -> String:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([rng.state, "ship"])
+	var rep := int(career.get("rep", 0))
+	var pool: Array = []
+	var total := 0
+	for e in POOL:
+		if rep >= int(e[2]) and FileAccess.file_exists(Ship.DIR + e[0] + ".json"):
+			pool.append(e)
+			total += int(e[1])
+	var k := r.randi_range(1, maxi(1, total))
+	for e in pool:
+		k -= int(e[1])
+		if k <= 0:
+			return e[0]
+	return "gr7"
 
 
 # the highest risk the market will offer at this reputation
@@ -63,7 +104,7 @@ static func make(seed: int, career: Dictionary) -> Array:
 # an offer that passed the contract validator (failures are counted and drawn again)
 static func valid_offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, used: Dictionary = {}, scope: String = "") -> Dictionary:
 	for k in TRIES:
-		var o := offer(rng, career, stars, used, scope)
+		var o := offer(rng, career, stars, used, scope, pick_ship(rng, career))
 		stats.made += 1
 		var v := ContractValidator.check(o._ship)
 		o.erase("_ship")
@@ -99,20 +140,21 @@ static func scope_text(o: Dictionary) -> String:
 
 
 # one offer at a given risk; `used` keeps registrations apart on one market
-static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, used: Dictionary = {}, want_scope: String = "") -> Dictionary:
-	var ship := "gr7"
-	var t: Dictionary = TYPES[ship]
+static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, used: Dictionary = {}, want_scope: String = "", ship: String = "gr7") -> Dictionary:
+	var t: Dictionary = type_of(ship)
+	var base := Ship.load_data(ship)
+	var tk := base_time(ship) / BASE_TIME
 	var reg := ""
 	while reg == "" or used.has(reg):
 		reg = "%s-%d" % [t["class"], rng.randi_range(10, 99)]
 	used[reg] = true
-	var traps := pick_traps(rng, stars, int(career.get("rep", 0)))
+	var traps := pick_traps(rng, stars, int(career.get("rep", 0)), Traps.allowed(base))
 	# how much of the ship is bought: the whole of it, or a short job on part of it
 	var scope: String = want_scope if want_scope != "" else ["full", "full", "section", "rescue"][rng.randi_range(0, 3)]
 	var o := {
 		"id": "%03d-%s" % [int(career.get("done", 0)) + 2, reg],
 		"ship": ship, "reg": reg, "stars": stars, "traps": traps,
-		"time": BASE_TIME + STAR_TIME * (stars - 1) if scope == "full" else SHORT_TIME[scope],
+		"time": snappedf((BASE_TIME + STAR_TIME * (stars - 1) if scope == "full" else SHORT_TIME[scope]) * tk, 30.0),
 		"scope": scope,
 		"reason": "R_reason_%02d" % rng.randi_range(1, REASONS),
 		"variant": rng.randi(),
@@ -122,7 +164,7 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 	o.goal = "valuable" if scope == "rescue" else GOALS[int(o.variant) % GOALS.size()]
 	if o.goal == "fast":
 		o.time = snappedf(float(o.time) * FAST_TIME, 60.0)
-	var d := Variant.make(Ship.load_data(ship), o)
+	var d := Variant.make(base, o)
 	# the estimate is the broker's, not the truth: within 8% either way
 	var value: float = float(d.value.total) * rng.randf_range(0.92, 1.08)
 	o.value = snappedf(value, 100.0)
@@ -135,7 +177,7 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 	o.named = _named(d)
 	o.logs = _logs(rng, traps)
 	var cargo: Array = []
-	for c in Variant.CONTAINERS:
+	for c in Variant.containers(d):
 		if Variant.piece(d, c) != null:
 			cargo.append([c, d.labels.get(c, "")])
 	o.cargo = cargo
@@ -146,12 +188,19 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 # The traps a contract carries. One star: one plain trap. Two: two, and the
 # subtle ones once the berth is certified. Three (senior and up): two or three,
 # at least one of them subtle; a chief gets three.
-static func pick_traps(rng: RandomNumberGenerator, stars: int, rep: int) -> Array:
+static func pick_traps(rng: RandomNumberGenerator, stars: int, rep: int, allowed: Array = Traps.ALL) -> Array:
 	var lv := level_index(rep)
 	var plain: Array = []
 	var subtle: Array = []
-	for t in Traps.ALL:
+	for t in allowed:
 		(plain if Traps.TIER[t] == 0 else subtle).append(t)
+	if plain.is_empty() and subtle.is_empty():
+		return []
+	# a type with no subtle slots: its plain ones stand in; with no plain ones, the subtle
+	if subtle.is_empty():
+		subtle = plain.duplicate()
+	if plain.is_empty():
+		plain = subtle.duplicate()
 	var out: Array = []
 	match stars:
 		1:
@@ -159,12 +208,20 @@ static func pick_traps(rng: RandomNumberGenerator, stars: int, rep: int) -> Arra
 		2:
 			var pool: Array = plain + (subtle if lv >= 1 else [])
 			for i in 2:
-				out.append(pool.pop_at(rng.randi_range(0, pool.size() - 1)))
+				if not pool.is_empty():
+					var t: String = pool.pop_at(rng.randi_range(0, pool.size() - 1))
+					if not t in out:
+						out.append(t)
 		_:
-			out.append(subtle.pop_at(rng.randi_range(0, subtle.size() - 1)))
+			var first: String = subtle.pop_at(rng.randi_range(0, subtle.size() - 1))
+			out.append(first)
 			var pool2: Array = plain + subtle
+			pool2.erase(first)
 			for i in (2 if lv >= 3 else rng.randi_range(1, 2)):
-				out.append(pool2.pop_at(rng.randi_range(0, pool2.size() - 1)))
+				if not pool2.is_empty():
+					var t: String = pool2.pop_at(rng.randi_range(0, pool2.size() - 1))
+					if not t in out:
+						out.append(t)
 	return out
 
 
@@ -187,9 +244,9 @@ static func _logs(rng: RandomNumberGenerator, traps: Array) -> Array:
 
 
 # for tests: the offer a seed makes at a given risk
-static func offer_for(seed: int, career: Dictionary, stars: int = 1, scope: String = "full") -> Dictionary:
+static func offer_for(seed: int, career: Dictionary, stars: int = 1, scope: String = "full", ship: String = "gr7") -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
-	var o := offer(rng, career, stars, {}, scope)
+	var o := offer(rng, career, stars, {}, scope, ship)
 	o.erase("_ship")
 	return o

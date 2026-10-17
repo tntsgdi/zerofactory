@@ -16,11 +16,10 @@ const FAST_BONUS := 0.30          # the same on a fast-recovery job (its standar
 const FIRST := "GR-001"           # the hand-made Heron; the market opens after it
 # The fixed contracts a new berth works through, in order, before the market
 # opens (design/体验打磨定案.md: training → the work tug → S-09 Swift → GR-001).
-# The tug and the Swift go in front of GR-001 here once their designs are
-# approved and their ship files exist:
-#   {"id": "TUG-001", "ship": "tug", "fee": 0.0, "intro": "L_tug_in"},
-#   {"id": "S09-001", "ship": "s09", "fee": 0.0, "intro": "L_swift_in"},
+# intro / outro: Liang's lines when the ship comes in (_1.._3) and when it is done.
 const OPENING := [
+	{"id": "TUG-001", "ship": "tug", "fee": 0.0, "time": 10.0 * 60.0, "intro": "L_tug_in", "outro": "L_tug_done"},
+	{"id": "S09-001", "ship": "s09", "fee": 0.0, "time": 14.0 * 60.0, "intro": "L_swift_in", "outro": "L_swift_done"},
 	{"id": FIRST, "ship": "gr7", "first": true, "fee": 9000.0},
 ]
 # reputation points per settlement grade (fail, pass, good, excellent) and the levels
@@ -116,6 +115,7 @@ static func fresh() -> Dictionary:
 		"clues": [],               # story clues filed (each save has its own)
 		"chapter_done": false,
 		"exam_grade": "",
+		"plans": {},               # ship type -> work plan (the order of a clean contract)
 	}
 
 
@@ -342,6 +342,17 @@ static func opening(i: int) -> Dictionary:
 	return o
 
 
+# where a contract sits in the opening (by id: a career saved before the tug and
+# the Swift were added has GR-001 as its opening 0), -1 when it is a market job
+static func opening_index(job: Dictionary) -> int:
+	if not job.has("opening"):
+		return -1
+	for i in OPENING.size():
+		if OPENING[i].id == job.get("id", ""):
+			return i
+	return int(job.opening)
+
+
 # A short job on part of a ship carries the installment and interest in
 # proportion to its standard time against a full contract's (never under 30%).
 static func due_share(job: Dictionary) -> float:
@@ -399,7 +410,7 @@ static func settle(r: Dictionary) -> Dictionary:
 		"grade": grade, "time": r.get("time", 0.0), "stars": a.get("stars", 0), "bonus": bonus, "loan": data.loan, "ops": r.get("ops", {}),
 		"goal": a.get("goal", ""), "scope": a.get("scope", "full"), "bonuses": r.get("bonuses", []), "incidents": r.get("incidents", []), "time_by": r.get("time_by", {})})
 	# the opening contracts follow one another; the market opens after the last of them
-	var oi: int = int(a.get("opening", -1))
+	var oi := opening_index(a)
 	data.active = opening(oi + 1) if oi >= 0 and oi + 1 < OPENING.size() else {}
 	data.market = data.active.is_empty()
 	data.offers = []

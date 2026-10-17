@@ -410,6 +410,7 @@ func _draw_hud() -> void:
 			_warp(s)
 		c.draw_set_transform(Vector2((1.0 - _in(1)) * 380.0, 0.0))
 		_credits(s)
+		_machines(s)
 		c.draw_set_transform(Vector2.ZERO)
 		_toolbar(s)
 		c.draw_set_transform(Vector2(0.0, (1.0 - _in(2)) * 140.0))
@@ -758,6 +759,24 @@ func _credits(s: Vector2) -> void:
 		_text(str(f[0]), Vector2(x - 120 + slide * 120.0, y + i * 22), 13, Pal.ink(0.5 * a), font, 1)
 
 
+# the berth's machines (arm, hauler) and the work plan: running, stopped, waiting for what
+func _machines(s: Vector2) -> void:
+	var g = game
+	var ps: Array = g.plan.status() if g.plan != null else []
+	if g.arm == null and g.hauler == null and ps.is_empty():
+		return
+	var x := s.x - 40.0
+	var y := 290.0
+	var h := 40.0 + (44.0 if not ps.is_empty() else 0.0)
+	UI.panel(c, Rect2(x - 250, y - 26, 268, h), 0.82)
+	var col := Pal.heat(0.9, 1.2) if g.auto_paused else Pal.ink(0.7)
+	_text(g.txt("auto_off" if g.auto_paused else "auto_on_short") + "  [%s]" % Keys.label("auto"), Vector2(x, y), 13, col, font, 1)
+	if not ps.is_empty():
+		_text(ps[0] + "  [%s]" % Keys.label("plan"), Vector2(x, y + 22), 13, Pal.ink(0.5), font, 1)
+		var wait: bool = g.plan.running and g.plan.wait != ""
+		_text(ps[1], Vector2(x, y + 40), 13, Pal.tint(Pal.AIR, 0.9, 1.2) if g.plan.running and not wait else (Pal.heat(0.85, 1.1) if wait else Pal.ink(0.6)), font, 1)
+
+
 func _toolbar(s: Vector2) -> void:
 	var g = game
 	var r := _toolbar_rect()
@@ -1074,6 +1093,7 @@ func _ctrl_action(ctrl) -> String:
 		"door": return g.txt("act_door")
 		"hatch": return g.txt("act_hatch")
 		"jam": return g.txt("act_jam")
+		"degauss": return g.txt("act_degauss")
 	return ""
 
 
@@ -1189,7 +1209,7 @@ func _contract_card(s: Vector2) -> void:
 func _offer_rows() -> Array:
 	var g = game
 	var o: Dictionary = g.job
-	var ty: Dictionary = Market.TYPES.get(o.get("ship", ""), {})
+	var ty: Dictionary = Market.type_of(o.get("ship", ""))
 	var rows: Array = []
 	rows.append(["h", g.txt("c_title_n") % o.get("id", ""), 14])
 	rows.append(["t", "%s · %s" % [o.get("reg", ""), (ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else ""], 28])

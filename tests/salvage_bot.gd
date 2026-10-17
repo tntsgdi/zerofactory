@@ -31,6 +31,8 @@ var busy := 0.0            # s of sim time the current operation still takes
 var last_sim := 0.0
 var work := 0.0            # s of hands-on work so far
 var hauls := 0             # bodies the drone hauled itself
+var scrap_hauls := 0       # of which plain scrap, to the furnace
+var scrap_masses: Array = []
 var scrapped := 0          # whole equipment it had to cut up (too heavy)
 var snapped := 0
 
@@ -451,6 +453,16 @@ func _strip() -> void:
 				order.append(id)
 
 
+# the heaviest plain scrap the berth's machines take by themselves (0: none)
+func _machine_max() -> float:
+	var mx := 0.0
+	if g.arm != null:
+		mx = g.arm.MAX_T
+	if g.hauler != null:
+		mx = maxf(mx, g.hauler.MAX_T)
+	return mx
+
+
 # one operation at a time, each taking its time: haul a body that is free, else free the next piece
 func _strip_paced() -> void:
 	var w = g.world
@@ -460,6 +472,8 @@ func _strip_paced() -> void:
 		if not is_instance_valid(b) or b.capture != null or sent.has(b) or b.get_meta("arm", false):
 			continue
 		if g.arm != null and g.arm.takes(b):
+			continue
+		if g.hauler != null and (g.hauler.auto_takes(b) or g.hauler.body == b):
 			continue
 		# outside a part-ship contract's scope: pushed aside, not hauled
 		if not b.pieces.any(func(q): return q.scope):
@@ -473,6 +487,20 @@ func _strip_paced() -> void:
 			return
 		var m: float = b.total_mass()
 		var zone := zone_for(b)
+		# plain scrap too heavy for the berth's machines: cut it down to their size and leave it to them
+		if zone == "metal" and _machine_max() > 0.0 and m > _machine_max() and int(b.get_meta("bot_cuts", 0)) < 4:
+			var big = null
+			for q in b.pieces:
+				if big == null or q.mass > big.mass:
+					big = q
+			if big != null and big.mass > 0.25:
+				b.set_meta("bot_cuts", int(b.get_meta("bot_cuts", 0)) + 1)
+				var bb := Geom.bbox(w.world_poly(big))
+				var c := bb.get_center()
+				var kerf := PackedVector2Array([c + Vector2(0, -bb.size.y), c + Vector2(0, bb.size.y)]) if bb.size.x >= bb.size.y else PackedVector2Array([c + Vector2(-bb.size.x, 0), c + Vector2(bb.size.x, 0)])
+				g.cut_kerf(big, kerf)
+				_work(4.0)
+				return
 		var k := 1
 		if m > g.grab_max() + 0.001:
 			# too heavy for the grapple: cut into pieces it can take (whole equipment becomes scrap)
@@ -495,6 +523,9 @@ func _strip_paced() -> void:
 		var mk := m / k
 		_work(k * (d / (6.0 / (1.0 + mk)) + d / 6.0 + 2.0) + (k - 1) * 2.5)
 		hauls += k
+		if zone == "metal":
+			scrap_hauls += k
+			scrap_masses.append(snappedf(m, 0.01))
 		b.set_meta("hauled", true)
 		b.global_position = mouth - b.global_transform.basis_xform(b.center_of_mass)
 		b.linear_velocity = Vector2.ZERO
@@ -565,4 +596,4 @@ func zone_for(b) -> String:
 func summary() -> Dictionary:
 	return {"rate": g.recovery_rate(), "net": g.net(), "earned": g.earned(), "losses": g.losses, "grade": g.hud.grade(),
 		"incidents": g.incidents.size(), "time": g.playtime, "ended": g.state == "ending", "forced": forced,
-		"work": work, "hauls": hauls, "arm": g.arm.carried if g.arm != null else 0, "scrapped": scrapped, "snapped": snapped}
+		"work": work, "hauls": hauls, "scrap_hauls": scrap_hauls, "arm": g.arm.carried if g.arm != null else 0, "hauler": g.hauler.carried if g.hauler != null else 0, "scrapped": scrapped, "snapped": snapped}

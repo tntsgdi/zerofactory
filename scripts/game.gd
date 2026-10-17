@@ -12,6 +12,10 @@ const SHIP_CENTER := Vector2(21.0 * 48.0, 0.0)
 
 var world: World
 var sys: Systems
+var mech: Mech                # magnets and preloaded arms some ship types carry
+var plan: WorkPlan            # the work plan of this ship type, recorded and replayed
+var auto_paused := false      # the operator stopped the berth's machines (arm, hauler, plan)
+var mouths := {}              # mouth zone -> the machine dropping into it now
 var dock: Dock
 var fx: Fx
 var drone: Drone
@@ -47,6 +51,7 @@ const OP_CAT := {
 	"measure": "decision", "isolate": "decision", "hose": "decision", "cut": "decision", "deliver_equip": "decision",
 	"deliver_hazard": "decision", "ring": "decision", "pick_contract": "decision", "buy": "decision",
 	"arm_haul": "machine",     # the recovery arm, or a mouth pulling in what drifted close
+	"plan": "machine",         # a step of a work plan the berth ran
 }
 var ops := {}                # kind -> count
 var _measured := {}
@@ -149,7 +154,10 @@ func _ready() -> void:
 		ship_id = Exam.pick()
 	job = contract
 	contract = {}
-	if not job.is_empty() and int(Career.data.get("done", 1)) == 0 and job.has("opening"):
+	# a contract plays its own ship type
+	if job.get("ship", "") != "" and not ship_id in ["exam"]:
+		ship_id = job.ship
+	if not job.is_empty() and job.has("opening") and int(Career.data.get("done", 1)) < Career.OPENING.size():
 		Txt.hint_tier = "guided"
 	var data := {}
 	if SaveGame.load_requested and (not testing or SaveGame.allow_test):
@@ -187,6 +195,9 @@ func _ready() -> void:
 	add_child(sys)
 	world.finalize(float(ship.get("value", {}).get("metal", 12000.0)))
 	sys.setup(self, world, ship)
+	mech = Mech.new()
+	add_child(mech)
+	mech.setup(self, ship)
 	world.piece_freed.connect(on_body_freed)
 	add_child(fx)
 	blueprint = Blueprint.new()
@@ -242,6 +253,10 @@ func _ready() -> void:
 		arm.game = self
 		arm.process_mode = Node.PROCESS_MODE_PAUSABLE
 		add_child(arm)
+	plan = WorkPlan.new()
+	plan.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(plan)
+	plan.setup(self)
 	if ship.has("exam"):
 		exam = Exam.new()
 		exam.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -289,6 +304,10 @@ func _ready() -> void:
 	state_t = 0.0
 	if not data.is_empty():
 		SaveGame.apply_late(self, data)
+		if data.has("mech"):
+			mech.load_state(data.mech)
+		if data.has("plan") and plan != null:
+			plan.load_state(data.plan)
 		if tutorial != null and data.has("tutorial"):
 			tutorial.load_state(data.tutorial)
 		if story != null and data.has("story"):
@@ -370,7 +389,7 @@ func room_name(room: String) -> String:
 
 # the ship as the player reads it: registration and type, in their language
 func ship_title() -> String:
-	var ty: Dictionary = Market.TYPES.get(ship_id, {})
+	var ty: Dictionary = Market.type_of(ship_id)
 	var tn: String = ((ty.name[0] if Txt.zh else ty.name[1]) if ty.has("name") else "")
 	var reg: String = job.get("reg", ship.get("name", "").split(" ")[0])
 	return ("%s · %s" % [reg, tn]) if tn != "" else ship.get("name", "")
@@ -558,6 +577,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 				sfx.play("switch")
 			"contract": open_contract()
 			"log": hud.show_log = not hud.show_log
+			"auto": toggle_auto()
+			"plan":
+				if plan != null:
+					if auto_paused and not plan.running:
+						auto_paused = false
+					say(plan.toggle(), drone.global_position + Vector2(0, -44))
+					sfx.play("switch")
 			"mouth":
 				if has_upgrade("mouth_rail"):
 					dock.move_mouth(drone.global_position.x / Geom.M)
@@ -621,6 +647,10 @@ func close_contract() -> void:
 	match int(job.get("stars", 0)):
 		1: Copy.say(radio, "L_accept_low")
 		3: Copy.say(radio, "L_accept_high")
+	# an opening ship: Liang's lines as it comes in (empty slots say nothing)
+	if job.has("intro"):
+		for i in 3:
+			Copy.say(radio, "%s_%d" % [job.intro, i + 1])
 	if story != null:
 		story.on_start()
 
@@ -789,7 +819,11 @@ func finish_contract(early: bool) -> void:
 	if not job.is_empty() and Career.usable():
 		Career.load_or_new()
 		Career.file_notes(ship_id, verified)
+		if plan != null and not early:
+			plan.commit()
 		career_result = Career.settle(settle_report())
+		if job.has("outro") and not early:
+			Copy.say(radio, job.outro)
 		if career_result.installment + career_result.interest > 0.0:
 			Copy.say(radio, "T_loan_installment", "term")
 		if career_result.bonus > 0.0 and playtime <= standard_time():
@@ -1744,6 +1778,8 @@ func do_measure(tg: Dictionary) -> void:
 				sys.measure(c.id, "volts", c.id, "inst_volts", {"ctrl": c, "volts_fn": _ctrl_volts_fn(c)})
 			else:
 				match c.medium:
+					"mag":
+						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
 						if sys.dead_leg_closed(c):
@@ -1819,6 +1855,8 @@ func restore_reading(rd: Dictionary) -> void:
 				extra.fluid_fn = func(): return sys.port_level(c.id)
 			"temp":
 				extra.temp_fn = func(): return sys.loop_T
+			"field":
+				extra.field_fn = func(): return mech.field(c.target)
 	var r := {"key": key, "kind": rd.kind, "at": rd.at, "inst": rd.inst, "t": rd.t, "val": rd.val, "text": rd.text, "ver": int(rd.ver), "vk": ""}
 	r.merge(extra, true)
 	sys.readings[key] = r
@@ -2051,6 +2089,8 @@ func do_wrench(tg: Dictionary) -> void:
 		"ctrl":
 			verify("ctrls", tg.ctrl.id, tg.ctrl.kind)
 			log_op("door" if tg.ctrl.kind in ["door", "hatch", "jam"] else "isolate")
+			if plan != null:
+				plan.on_player("w", tg.ctrl)
 			_operate(tg.ctrl, tg.pos)
 
 
@@ -2106,6 +2146,17 @@ func _operate(c, at: Vector2) -> void:
 			dp.door_open = not dp.door_open
 			c.state = dp.door_open
 			sfx.play("door")
+		"degauss":
+			var dc := Ship.ctrl_cfg(ship, c.id)
+			if not mech.degauss(dc.get("magnets", []), dc.get("supply", "")):
+				say("degauss_live", at)
+				sfx.play("deny")
+				hint("degauss_live")
+				return
+			c.state = true
+			say("degaussed", at)
+			sfx.play("discharge")
+			fx.ring(at, 6.0, 90.0, 0.6, Pal.tint(Pal.AIR, 0.8, 1.4), 2.0)
 		"jam":
 			if c.state:
 				return
@@ -2151,9 +2202,11 @@ func _operate(c, at: Vector2) -> void:
 			shake(0.2)
 
 
-func do_hose(tg: Dictionary) -> void:
+func do_hose(tg: Dictionary, by_plan := false) -> void:
 	var c = tg.ctrl
-	log_op("hose")
+	log_op("plan" if by_plan else "hose")
+	if plan != null and not by_plan:
+		plan.on_player("h", c)
 	if sys.hoses.has(c.id):
 		sys.hoses.erase(c.id)
 		dock.hose_detach(c.id)
@@ -2168,6 +2221,51 @@ func do_hose(tg: Dictionary) -> void:
 	say("hose_on_" + mode, tg.pos, c.id)
 	sfx.play("hose_on")
 	hint("hose")
+
+
+# a step of the work plan, done by the berth: the same control, worked as the operator did it
+func plan_do(kind: String, c) -> void:
+	var at: Vector2 = world.ctrl_world(c)
+	fx.ring(at, 4.0, 26.0, 0.35, Pal.ink(0.8, 1.3))
+	if kind == "h":
+		do_hose({"ctrl": c, "pos": at}, true)
+		return
+	changed["c:" + c.id] = true
+	log_op("plan")
+	_operate(c, at)
+
+
+# one machine at a time over a mouth: the arm and the hauler queue for it
+func mouth_take(zone: String, who: String) -> bool:
+	var h: String = mouths.get(zone, "")
+	if h == "" or h == who:
+		mouths[zone] = who
+		return true
+	return false
+
+
+func mouth_release(zone: String, who: String) -> void:
+	if mouths.get(zone, "") == who:
+		mouths.erase(zone)
+
+
+# a machine keeps clear of the operator's drone
+func drone_near(at: Vector2, r: float) -> bool:
+	return drone != null and drone.alive and drone.global_position.distance_to(at) < r
+
+
+# the automation key: every machine of the berth stops where it is, or goes on
+func toggle_auto() -> void:
+	auto_paused = not auto_paused
+	if auto_paused:
+		if plan != null:
+			plan.cancel()
+		if arm != null and arm.has_method("halt"):
+			arm.halt()
+		if hauler != null and hauler.has_method("halt"):
+			hauler.halt()
+	say("auto_off" if auto_paused else "auto_on", drone.global_position + Vector2(0, -44))
+	sfx.play("switch")
 
 
 # ---------------------------------------------------------------- gas & room events

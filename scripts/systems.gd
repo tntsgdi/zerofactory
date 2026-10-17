@@ -938,6 +938,9 @@ func _current(r: Dictionary) -> Array:
 		"temp":
 			var tv: float = r.get("temp_fn").call()
 			return [tv, "%d °C" % int(round(tv)), 0, "temp"]
+		"field":
+			var fv2: float = r.get("field_fn").call()
+			return [fv2, "%d mT" % int(round(fv2)), 0, "field"]
 	return [0.0, "", 0, ""]
 
 
@@ -952,4 +955,6 @@ func stale(r: Dictionary) -> bool:
 			return absf(cur[0] - r.val) > 0.02
 		"temp":
 			return absf(cur[0] - r.val) > 8.0
+		"field":
+			return absf(cur[0] - r.val) > 2.0
 	return false

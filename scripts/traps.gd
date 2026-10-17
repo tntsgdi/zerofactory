@@ -34,6 +34,23 @@ const TANK_SLOTS := [24.0, 25.7]          # x of an undeclared bottle on the hol
 const PLATES := ["p7", "p10", "p11"]     # the hold's roof plates a crack can run through
 
 
+# the traps a ship type can carry: the Heron all ten; another type the ones
+# its file has a slot for (market.slots), and the cargo ones when it has containers
+static func allowed(d: Dictionary) -> Array:
+	if not d.has("market"):
+		return ALL
+	var out: Array = []
+	var slots: Dictionary = d.market.get("slots", {})
+	for t in ALL:
+		if slots.has(t):
+			out.append(t)
+	return out
+
+
+static func _slot(d: Dictionary, trap: String):
+	return d.get("market", {}).get("slots", {}).get(trap, null)
+
+
 static func fittings(traps: Array) -> Dictionary:
 	var out := {"pieces": {}, "ctrls": {}, "lines": {}, "reshaped": {}}
 	for t in traps:
@@ -49,6 +66,18 @@ static func fittings(traps: Array) -> Dictionary:
 # each is aboard.
 static func evidence(d: Dictionary, trap: String) -> Array:
 	var tg: String = d.get("variant", {}).get("targets", {}).get(trap, "")
+	var sl = _slot(d, trap)
+	if sl != null:
+		match trap:
+			"second_source":
+				return [["ctrl", sl.test], ["piece", "EG-01"], ["ctrl", "K-EG"]]
+			"welded_hatch":
+				var ev: Array = []
+				for k in sl.evidence:
+					ev.append(["piece", k])
+				return ev
+			"live_cargo":
+				return [["piece", tg], ["ctrl", "K-RF"], ["line", "cr"]]
 	match trap:
 		"wrong_valve":
 			return [["ctrl", "P-C01"], ["ctrl", "V-C01"]]
@@ -144,6 +173,10 @@ static func _target(d: Dictionary, trap: String, tg: String) -> void:
 # the hazard settings, Variant._hazards)
 static func apply(d: Dictionary, trap: String, rng: RandomNumberGenerator, notes: Array) -> void:
 	notes.append(trap)
+	var sl = _slot(d, trap)
+	if sl != null:
+		_apply_slot(d, trap, sl, rng, notes)
+		return
 	match trap:
 		"hidden_tank":
 			var x: float = TANK_SLOTS[rng.randi_range(0, TANK_SLOTS.size() - 1)]
@@ -230,11 +263,118 @@ static func apply(d: Dictionary, trap: String, rng: RandomNumberGenerator, notes
 			pd.hazard = "explosive"
 
 
+# The same trap on another ship type, placed where its file's slot says
+# (market.slots[trap]). Same names and the same evidence as on the Heron;
+# what it does depends on where it sits on that ship.
+static func _apply_slot(d: Dictionary, trap: String, sl: Dictionary, rng: RandomNumberGenerator, notes: Array) -> void:
+	match trap:
+		"hidden_tank":
+			# each place it may stand: [x, the piece it is bolted to]
+			var spot: Array = sl.x[rng.randi_range(0, sl.x.size() - 1)]
+			var x: float = spot[0]
+			_add_bottle(d, "TK-X1", "TX", sl.room, x, sl.y0, sl.y1, rng.randf_range(1500.0, 2000.0), 0.6, "p_gastank", 2500.0, [_key(d, spot[1]), sl.base_y])
+			var c := {"at": [x + 0.4, float(sl.y0) + 0.07], "id": "TK-X1", "kind": "port", "medium": "gas", "piece": "TK-X1", "target": "TX"}
+			if sl.room != "":
+				c.hidden_room = sl.room
+			d.ctrls.append(c)
+			d.ctrls_cfg["TK-X1"] = {"rate": 0.2}
+			d.blueprint.get("hide", []).append("TK-X1")
+		"fire_system":
+			_add_bottle(d, "FX-01", "FX", sl.room, sl.x, sl.y0, sl.y1, rng.randf_range(1800.0, 2600.0), 0.4, "p_fx", 1800.0, [_key(d, sl.base[0]), sl.base[1]])
+			var fc := {"at": sl.port, "id": "FX-P", "kind": "port", "medium": "gas", "piece": "FX-01", "target": "FX"}
+			if sl.room != "":
+				fc.hidden_room = sl.room
+			d.ctrls.append(fc)
+			d.ctrls_cfg["FX-P"] = {"rate": 0.2}
+			d.labels["FX-01"] = "FX"
+		"second_source":
+			var x0: float = sl.at[0]
+			var y0: float = sl.at[1]
+			var w: float = sl.size[0]
+			var h: float = sl.size[1]
+			var pd := {"key": "EG-01", "tag": "EG-01", "kind": "equip", "cls": "equip", "name_key": "p_egen", "art": "gen",
+				"art_size": [w, h], "art_xf": [1.0, 0.0, 0.0, 1.0, x0, y0], "poly": [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]],
+				"mass": 1.2, "value": 4500.0, "fragile": 0.35, "hazard": "gen", "dest": "equip", "cut_speed": 140.0, "density": 1.0}
+			if sl.get("room", "") != "":
+				pd.room = sl.room
+			d.pieces.append(pd)
+			for b in sl.base:
+				d.joints.append({"a": "EG-01", "b": _key(d, b[0]), "type": "bolt", "at": [b[1], b[2]]})
+			var kc := {"at": sl.switch_at, "id": "K-EG", "kind": "switch", "piece": "EG-01", "state": true, "target": "K-EG"}
+			if sl.get("room", "") != "":
+				kc.hidden_room = sl.room
+			d.ctrls.append(kc)
+			d.lines.append({"id": "ce", "kind": "cable", "net": "power", "a": "EG-01", "b": sl.bus, "pa": sl.path[0], "pb": sl.path[-1], "path": sl.path})
+			d.power.sources.append({"cable": "ce", "kind": "gen", "piece": "EG-01", "running": true, "switch": "K-EG", "volts": float(sl.get("volts", 120.0))})
+			d.labels["EG-01"] = "EG"
+			d.blueprint.get("hide", []).append("EG-01")
+			# the safe way to the named item isolates the second supply first
+			_patch_proc(d, sl.proc, func(steps: Array) -> Array:
+				var out: Array = []
+				var done := false
+				for st in steps:
+					if not done and st.do == "operate":
+						out.append({"ctrl": "K-EG", "do": "operate"})
+						done = true
+					out.append(st)
+				return out)
+		"hidden_damage":
+			var plate: String = _key(d, sl.plates[rng.randi_range(0, sl.plates.size() - 1)])
+			_target(d, trap, plate)
+			_crack(d, plate, rng.randf_range(0.3, 0.7))
+		"welded_hatch":
+			for s in sl.seams:
+				d.joints.append({"a": _key(d, s[0]), "b": _key(d, s[1]), "type": "seam", "at": [s[2], s[3]]})
+		"explosive_cargo", "live_cargo":
+			# a plain container: aboard, no dangerous goods, not on a supply of its own already
+			var pool: Array = Variant.containers(d).filter(func(c): return Variant.piece(d, c) != null and Variant.piece(d, c).get("hazard", "") == "" \
+				and not d.power.get("isolated", []).any(func(s): return s.piece == c))
+			if pool.is_empty():
+				_reject(notes, "no_target %s: no plain container aboard" % trap)
+				return
+			var c: String = pool[rng.randi_range(0, pool.size() - 1)]
+			_target(d, trap, c)
+			var pd = Variant.piece(d, c)
+			if trap == "explosive_cargo":
+				pd.hazard = "explosive"
+				return
+			var bb := Variant._bbox(pd.poly)
+			var x0 := bb.position.x
+			var yb := bb.end.y
+			d.power.isolated.append({"piece": c, "volts": 230.0, "charge": 1.0, "switch": "K-RF"})
+			var kc := {"at": [snappedf(x0 + 0.3, 0.01), snappedf(bb.position.y + 0.12, 0.01)], "id": "K-RF", "kind": "switch", "piece": c, "state": true, "target": "K-RF"}
+			if sl.get("room", "") != "":
+				kc.hidden_room = sl.room
+			d.ctrls.append(kc)
+			var host: String = _key(d, sl.hosts.get(c, ""))
+			# a cracked rail: the half under the container
+			var hh = Variant.piece(d, host + "~")
+			if hh != null and Variant._bbox(hh.poly).has_point(Vector2(x0 - 0.1, float(sl.host_y))):
+				host = host + "~"
+			if host == "":
+				_reject(notes, "no_host live_cargo: nothing to plug %s into" % c)
+				return
+			d.lines.append({"id": "cr", "kind": "cable", "net": "power", "a": c, "b": host, "pa": [x0 + 0.15, yb - 0.2], "pb": [x0 - 0.1, float(sl.host_y)],
+				"path": [[x0 + 0.15, yb - 0.2], [x0 - 0.1, yb - 0.2], [x0 - 0.1, float(sl.host_y)]]})
+
+
+# a slot names a piece by its tag (or its key): the key the file uses
+static func _key(d: Dictionary, name: String) -> String:
+	if name == "":
+		return ""
+	for pd in d.pieces:
+		if pd.get("tag", "") == name:
+			return pd.key
+	return name
+
+
 # a pressure bottle standing on (or hanging from) a structural piece
 static func _add_bottle(d: Dictionary, tag: String, vol: String, room: String, x: float, y0: float, y1: float, kpa: float, v: float, name_key: String, value: float, base: Array) -> void:
 	d.pieces.append({"key": tag, "tag": tag, "kind": "equip", "cls": "equip", "name_key": name_key, "room": room, "art": "gastank",
 		"art_size": [0.8, y1 - y0], "art_xf": [1.0, 0.0, 0.0, 1.0, x, y0], "poly": [[x, y0], [x + 0.8, y0], [x + 0.8, y1], [x, y1]],
 		"mass": 0.35, "value": value, "hazard": "gas_tank", "dest": "equip", "cut_speed": 140.0, "density": 1.0})
+	if room == "":
+		d.pieces[-1].erase("room")
 	for dx in [0.2, 0.6]:
 		d.joints.append({"a": tag, "b": base[0], "type": "bolt", "at": [x + dx, base[1]]})
 	d.gas.vessels[vol] = {"V": v, "burst": 200.0, "kpa": snappedf(kpa, 1.0), "piece": tag}
@@ -254,6 +394,7 @@ static func _crack(d: Dictionary, key: String, f: float) -> void:
 		return
 	var other: Dictionary = pd.duplicate(true)
 	other.key = key + "~"
+	other.erase("tag")
 	pd.poly = _arr(left[0])
 	other.poly = _arr(right[0])
 	var m: float = float(pd.get("mass", 0.0))

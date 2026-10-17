@@ -87,8 +87,24 @@ func _run() -> void:
 	Career.data = {}
 	Career.start_new()
 	check(Career.exists(), "the career file is written")
-	check(Career.active().get("id", "") == Career.FIRST, "the first contract is GR-001")
-	# ---- contract 1: GR-001
+	check(Career.active().get("id", "") == "TUG-001", "the first contract is the work tug")
+	# ---- the opening: the work tug, then S-09, each towed straight in after the last
+	for want in [["TUG-001", "tug"], ["S09-001", "s09"]]:
+		check(Career.active().get("id", "") == want[0] and Career.active().ship == want[1], "%s is next, on %s" % want)
+		Game.start_ship = Career.active().ship
+		Game.contract = Career.active()
+		var go = _game()
+		await _frames(2)
+		check(go.job.get("id", "") == want[0] and go.fee == 0.0 and Txt.hint_tier == "guided", "%s: no fee, guided hints" % want[0])
+		var ro: Dictionary = await _play(go)
+		print("  %s: " % want[0], ro.sum)
+		check(ro.sum.ended and ro.sum.incidents == 0 and not Career.data.market, "%s taken apart safely; the market still shut" % want[0])
+		go.queue_free()
+		await _frames(2)
+	check(Career.active().get("id", "") == Career.FIRST, "then GR-001")
+	var money_open := float(Career.data.money)
+	check(money_open > 50000.0 and float(Career.data.loan) == 0.0, "the opening pays: funds %d, no debt" % money_open)
+	# ---- contract 3: GR-001
 	Game.start_ship = Career.active().ship
 	Game.contract = Career.active()
 	var g1 = _game()
@@ -98,8 +114,8 @@ func _run() -> void:
 	print("  GR-001: ", r1.sum)
 	check(r1.sum.ended and r1.sum.incidents == 0, "GR-001 taken apart safely")
 	var cr: Dictionary = g1.career_result
-	check(not cr.is_empty() and not cr.prepaid and int(Career.data.done) == 1 and Career.data.market, "GR-001 settled with the career; the market opens")
-	var expect_money: float = r1.sum.net + cr.bonus - cr.installment - cr.interest
+	check(not cr.is_empty() and not cr.prepaid and int(Career.data.done) == 3 and Career.data.market, "GR-001 settled with the career; the market opens")
+	var expect_money: float = money_open + r1.sum.net + cr.bonus - cr.installment - cr.interest
 	check(absf(float(Career.data.money) - expect_money) < 1.0, "funds = net %d + bonuses %d − installment %d − interest %d = %d (%d)" % [r1.sum.net, cr.bonus, cr.installment, cr.interest, expect_money, Career.data.money])
 	check(float(Career.data.loan) == 0.0 and cr.installment == 0.0 and cr.interest == 0.0, "no debt from a clean first contract: loan %d" % Career.data.loan)
 	g1.queue_free()
@@ -138,7 +154,7 @@ func _run() -> void:
 		print("      ", dd)
 	var r2: Dictionary = await _play(g2b)
 	print("  %s: " % o2.id, r2.sum)
-	check(r2.sum.ended and int(Career.data.done) == 2 and g2b.career_result.prepaid, "contract 2 settled (fee prepaid)")
+	check(r2.sum.ended and int(Career.data.done) == 4 and g2b.career_result.prepaid, "contract 4 settled (fee prepaid)")
 	g2b.queue_free()
 	await _frames(2)
 	# ---- contract 3
@@ -147,12 +163,12 @@ func _run() -> void:
 	await _frames(2)
 	var r3: Dictionary = await _play(g3)
 	print("  %s: " % o3.id, r3.sum)
-	check(r3.sum.ended and int(Career.data.done) == 3 and Career.data.history.size() == 3, "three contracts on the books")
+	check(r3.sum.ended and int(Career.data.done) == 5 and Career.data.history.size() == 5, "five contracts on the books")
 	check(Career.data.items.get("repair", 0) == 1, "stock carried through")
 	g3.queue_free()
 	await _frames(2)
 	Career.data = {}
 	Career.load_or_new()
-	check(int(Career.data.done) == 3 and Career.active().is_empty() and not SaveGame.exists(), "after the third: on disk, nothing in progress")
+	check(int(Career.data.done) == 5 and Career.active().is_empty() and not SaveGame.exists(), "after the fifth: on disk, nothing in progress")
 	print("CAREER %s  (%d checks, %d failed)" % ["PASS" if fails == 0 else "FAIL", checks, fails])
 	finished = true
