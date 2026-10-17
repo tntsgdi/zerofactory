@@ -1,6 +1,6 @@
 class_name S09Author
 # Authoring script for S-09 "Swift", the 26 m maintenance shuttle (approved
-# structure: design/S-09_结构图.png). Not part of the game: tools/ship_export.gd
+# structure: design/ships/S-09_结构图.png). Not part of the game: tools/ship_export.gd
 # runs it and writes ships/s09.json. Metres, x bow (0) to stern (26), y down.
 #
 # Nothing like the Heron's box hull (user spec 2026-10-16, four sections):

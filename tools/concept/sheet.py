@@ -5,9 +5,34 @@ from mini import BG, DIM, EQ, AIR, FLUID, HEAT, HAZ, VIO, HEAD, DEFS
 KIND = {"room": AIR, "must": HEAT, "sys": EQ, "haz": HAZ, "struct": DIM, "energy": VIO, "fluid": FLUID}
 
 
-def sheet(file, W, H, title, sub, body, P, calls, zones, legend_cols=2, legend_y=None, scale_at=None, scale_m=5, s=1.0, notes=None):
+def spread(calls, P, W, gap=34):
+    """put each label circle above/below its own target, left to right, at least
+    gap px apart, and renumber in reading order (top row, then bottom row)"""
+    out = []
+    for ly in sorted(set(c[4] for c in calls)):
+        row = sorted([c for c in calls if c[4] == ly], key=lambda c: P(c[1], c[2])[0])
+        xs = [min(max(P(c[1], c[2])[0], 60), W - 60) for c in row]
+        for _ in range(200):
+            moved = False
+            for i in range(1, len(xs)):
+                d = xs[i] - xs[i - 1]
+                if d < gap:
+                    xs[i - 1] -= (gap - d) / 2
+                    xs[i] += (gap - d) / 2
+                    moved = True
+            xs = [min(max(x, 60), W - 60) for x in xs]
+            if not moved:
+                break
+        for c, x in zip(row, xs):
+            out.append((len(out) + 1, c[1], c[2], round(x), ly, c[5], c[6]))
+    return out
+
+
+def sheet(file, W, H, title, sub, body, P, calls, zones, legend_cols=2, legend_y=None, scale_at=None, scale_m=5, s=1.0, notes=None, auto=False):
     """body: svg string (already in px); P(x, y) maps metres to px;
     calls: [(n, x, y, lx, ly, kind, text)]; zones: [(x0, x1, y_m, text, kind)]"""
+    if auto:
+        calls = spread(calls, P, W)
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" font-family="N"><defs>{DEFS}</defs><rect width="{W}" height="{H}" fill="{BG}"/>', body]
     for x0, x1, y, t, k in zones:
         a, b = P(x0, y), P(x1, y)
