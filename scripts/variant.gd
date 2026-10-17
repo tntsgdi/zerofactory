@@ -300,6 +300,7 @@ static func _bbox(poly: Array) -> Rect2:
 # the contract's total: scrap metal, gas, fluids and every piece of equipment
 static func revalue(d: Dictionary) -> void:
 	var sum := float(d.value.get("metal", 0.0)) + float(d.get("gas", {}).get("value", 0.0))
+	sum += float(d.get("ore", {}).get("fines", 0.0)) * float(d.get("ore", {}).get("price", 0.0))
 	for f in d.get("fluids", {}).get("value", {}):
 		sum += float(d.fluids.value[f])
 	for pd in d.pieces:

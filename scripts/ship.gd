@@ -64,6 +64,8 @@ static func build(w, d: Dictionary) -> Dictionary:
 			p.open_t = 1.0 if p.door_open else 0.0
 		if pd.get("rig", false):
 			p.set_meta("rig", true)
+		if pd.has("segments"):
+			p.set_meta("segments", pd.segments)
 		p.label = d.get("labels", {}).get(p.tag, "")
 		by_key[pd.key] = p
 		if pd.has("hidden_by"):

@@ -1010,7 +1010,7 @@ func _current(r: Dictionary) -> Array:
 			return [tv, "%d °C" % int(round(tv)), 0, "temp"]
 		"field":
 			var fv2: float = r.get("field_fn").call()
-			return [fv2, "%d mT" % int(round(fv2)), 0, "field"]
+			return [fv2, "%d %s" % [int(round(fv2)), r.get("unit", "mT")], 0, "field"]
 		"bio":
 			var bv: float = bio_index(r.get("room", ""))
 			return [bv, "%.2f" % bv, 0, "bio"]

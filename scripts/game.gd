@@ -14,6 +14,7 @@ var world: World
 var sys: Systems
 var mech: Mech                # magnets and preloaded arms some ship types carry
 var bio: Bio                  # biological contamination some ship types carry
+var ore: Ore                  # a hopper of loose ore some ship types carry
 var plan: WorkPlan            # the work plan of this ship type, recorded and replayed
 var auto_paused := false      # the operator stopped the berth's machines (arm, hauler, plan)
 var mouths := {}              # mouth zone -> the machine dropping into it now
@@ -204,6 +205,9 @@ func _ready() -> void:
 	bio = Bio.new()
 	add_child(bio)
 	bio.setup(self, ship)
+	ore = Ore.new()
+	world.add_child(ore)
+	ore.setup(self, ship)
 	world.piece_freed.connect(on_body_freed)
 	add_child(fx)
 	blueprint = Blueprint.new()
@@ -314,6 +318,8 @@ func _ready() -> void:
 			mech.load_state(data.mech)
 		if data.has("bio"):
 			bio.load_state(data.bio)
+		if data.has("ore"):
+			ore.load_state(data.ore)
 		if data.has("plan") and plan != null:
 			plan.load_state(data.plan)
 		if tutorial != null and data.has("tutorial"):
@@ -1095,6 +1101,23 @@ func lose(key: String, amount: float, at: Vector2) -> void:
 	hud.pop_credits(-amount)
 
 
+# ore pouring out of a hopper gate into the trough: paid by the tonne, booked a second at a time
+var _ore_due := 0.0
+var _ore_t := 0.0
+
+
+func on_ore_in(v: float) -> void:
+	_ore_due += v
+	if playtime - _ore_t < 1.0:
+		return
+	_ore_t = playtime
+	var at := Vector2(Dock.metal_x, Dock.TROUGH_Y - 1.0) * Geom.M
+	ledger.append([txt("ore_fines"), "metal", _ore_due])
+	gain("metal", _ore_due, at, txt("ore_fines"))
+	log_op("arm_haul")
+	_ore_due = 0.0
+
+
 func gain(kind: String, amount: float, at: Vector2, label: String) -> void:
 	match kind:
 		"equip": income_equip += amount
@@ -1712,7 +1735,12 @@ func cut_kerf(p, pl: PackedVector2Array) -> void:
 	if pl.is_empty():
 		return
 	log_op("cut")
-	on_cut_into(p, pl[0])
+	if world.segment_cut(p, pl):
+		# along its marked line: it comes apart as planned, nothing ruined
+		fx.sparks(pl[0], Vector2.UP, 10, Pal.heat(1.0, 2.0), 160.0, 0.3, PI)
+		say("seg_cut", pl[0], p.tag)
+	else:
+		on_cut_into(p, pl[0])
 	if pl.size() >= 2:
 		for hit in world.cut_lines(pl):
 			on_line_cut(hit[0], hit[1])
@@ -1810,6 +1838,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "bio", c.id, "inst_bio", {"ctrl": c, "room": c.target})
 					"mag":
 						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
+					"tension":
+						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return mech.tension(c.target), "unit": "kN"})
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
 						if sys.dead_leg_closed(c):
@@ -1886,7 +1916,11 @@ func restore_reading(rd: Dictionary) -> void:
 			"temp":
 				extra.temp_fn = func(): return sys.loop_T
 			"field":
-				extra.field_fn = func(): return mech.field(c.target)
+				if c.medium == "tension":
+					extra.field_fn = func(): return mech.tension(c.target)
+					extra.unit = "kN"
+				else:
+					extra.field_fn = func(): return mech.field(c.target)
 			"bio":
 				extra.room = c.target
 	var r := {"key": key, "kind": rd.kind, "at": rd.at, "inst": rd.inst, "t": rd.t, "val": rd.val, "text": rd.text, "ver": int(rd.ver), "vk": ""}
@@ -1927,6 +1961,11 @@ func _inspect_text(p) -> String:
 		parts.append("%d %s" % [behind, txt("j_behind")])
 	if p.hazard == "explosive" and p.intact:
 		parts.append(txt("j_explosive"))
+	# a bent gate or door shows it to anyone who looks
+	if p.door and p.tag != "" and Ship.ctrl_cfg(ship, p.tag).get("stuck", false):
+		parts.append(txt("insp_stuck"))
+	if p.has_meta("segments") and p.intact:
+		parts.append(txt("j_segments") % p.get_meta("segments").size())
 	if p.cls == "equip" and p.intact and has_upgrade("scan_kit"):
 		parts.append(txt("j_cond") % int(round(p.cond * 100.0)))
 	if parts.size() == 1 and p.body == null:
@@ -2171,6 +2210,10 @@ func _operate(c, at: Vector2) -> void:
 			say("discharge_on" if c.state else "discharge_off", at)
 			sfx.play("plug")
 		"door":
+			if Ship.ctrl_cfg(ship, c.id).get("stuck", false):
+				say("door_stuck", at, c.id)
+				sfx.play("deny")
+				return
 			if not (sys.bus_live or sys.aux):
 				say("no_power", at)
 				sfx.play("deny")

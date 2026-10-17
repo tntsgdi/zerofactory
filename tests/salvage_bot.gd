@@ -183,6 +183,27 @@ func _prep() -> void:
 			_note("open %s" % gv.ctrl)
 			_work(2.5)
 			return
+	# a hopper of loose cargo: both gates open (while there is power to drive them), the heap let run out
+	if g.ore != null and g.ore.active() and g.ore.fines > 0.0:
+		for gt in g.ore.cfg.get("gates", []):
+			var gc = w.ctrls.get(gt)
+			if gc != null and not gc.state and not Ship.ctrl_cfg(g.ship, gt).get("stuck", false) and _once("gate " + gt):
+				_w(gt)
+				_note("open gate %s" % gt)
+				_work(2.5)
+				return
+	# anything held under load: its locking pins out first (the tension let off)
+	if g.mech != null:
+		for l in g.mech.loads:
+			if not l.alive or l.fired:
+				continue
+			for pt in l.cfg.get("pins", []):
+				var pj = g.mech._joint(pt)
+				if pj != null and _once("pin " + pt):
+					g.do_wrench({"kind": "joint", "joint": pj, "pos": w.joint_world(pj)})
+					_note("slack %s" % pt)
+					_work(2.5)
+					return
 	# biohazard sealed where it stands, before anything moves it
 	for id in w.ctrls:
 		var c = w.ctrls[id]
@@ -354,6 +375,30 @@ func _open_room(room: String, for_ctrl: String) -> void:
 	_note("opened %s" % room)
 
 
+# cut a heavy piece along its marked lines (each line on whichever part now holds it)
+func _cut_segments(p) -> bool:
+	if not p.has_meta("segments") or not p.intact or _once_done("seg " + str(p.id)):
+		return false
+	var w = g.world
+	for sg in p.get_meta("segments"):
+		var a := Vector2(sg[0], sg[1]) * M
+		var b := Vector2(sg[2], sg[3]) * M
+		var on = w.piece_at(w.frame(p) * a.lerp(b, 0.5))
+		if on == null or not on.intact:
+			continue
+		g.cut_kerf(on, PackedVector2Array([w.frame(on) * a, w.frame(on) * b]))
+		_work(4.0)
+	_note("cut %s along its marked lines" % p.tag)
+	return true
+
+
+func _once_done(k: String) -> bool:
+	if done_ops.has(k):
+		return true
+	done_ops[k] = true
+	return false
+
+
 func _unsafe() -> Array:
 	var s = g.sys
 	var out: Array = []
@@ -376,6 +421,13 @@ func _unsafe() -> Array:
 	for k in s.fvol:
 		if s.fvol[k].amount > 0.02:
 			out.append("fluid %s %.3f" % [k, s.fvol[k].amount])
+	if g.ore != null and g.ore.active() and g.ore.fines > 0.3:
+		var can := false
+		for gt in g.ore.cfg.get("gates", []):
+			if g.ore._gate_open(gt):
+				can = true
+		if can:
+			out.append("ore %.1f t" % g.ore.fines)
 	for id in g.world.ctrls:
 		var c = g.world.ctrls[id]
 		if c.kind == "seal" and not c.state and g.world.ctrl_alive(c):
@@ -452,6 +504,8 @@ func _strip() -> void:
 		var p = w.pieces.get(id)
 		if p == null or p.gone or p.body != null:
 			continue
+		if _cut_segments(p):
+			return
 		for j in w.joints_of(p):
 			w.kill_joint(j)
 		for l in w.lines_of(p):
@@ -546,6 +600,8 @@ func _strip_paced() -> void:
 		var p = w.pieces.get(id)
 		if p == null or p.gone or p.body != null:
 			continue
+		if _cut_segments(p):
+			return
 		var sec := 1.0
 		var cut := false
 		for j in w.joints_of(p):

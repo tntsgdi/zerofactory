@@ -106,7 +106,7 @@ static func save(g) -> void:
 			"frag": p.fragile, "contam": p.contam, "cs": p.cut_speed, "room": p.room, "bar": p.barrier,
 			"door": p.door, "open": p.door_open, "odir": _v2(p.open_dir), "haz": p.hazard, "temp": p.temp,
 			"must": p.mandatory, "dest": p.dest, "hid": p.hidden_by, "seen": p.seen, "label": p.label,
-			"scope": p.scope,
+			"scope": p.scope, "seg": p.get_meta("segments", []),
 		})
 	var joints: Array = []
 	for j in w.joints:
@@ -155,6 +155,7 @@ static func save(g) -> void:
 		"ship": g.ship_id,
 		"mech": g.mech.save_state() if g.mech != null else {},
 		"bio": g.bio.save_state() if g.bio != null else {},
+		"ore": g.ore.save_state() if g.ore != null else {},
 		"plan": g.plan.save_state() if g.plan != null else {},
 		"world": {"pieces": pieces, "joints": joints, "lines": lines, "ctrls": ctrls, "rooms": rooms, "bodies": bodies,
 			"next_id": w.next_id, "next_joint": w.next_joint, "metal_price": w.metal_price, "smass": w.structural_mass},
@@ -299,6 +300,8 @@ static func apply(g, d: Dictionary) -> bool:
 		p.fragile = pd.frag
 		p.contam = pd.contam
 		p.scope = pd.get("scope", true)
+		if not pd.get("seg", []).is_empty():
+			p.set_meta("segments", pd.seg)
 		p.cut_speed = pd.cs
 		p.room = pd.room
 		p.barrier = pd.bar

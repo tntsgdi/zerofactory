@@ -59,6 +59,20 @@ func _joint(tag: String):
 	return null
 
 
+# the tension a preloaded joint holds (kN): what a tension gauge on it reads
+func tension(tag: String) -> float:
+	for l in loads:
+		if l.tag == tag:
+			if l.fired or not l.alive:
+				return 0.0
+			var cfg: Dictionary = l.cfg
+			for pt in cfg.get("pins", []):
+				if _joint(pt) != null:
+					return float(cfg.get("kn", 40.0))
+			return 0.0
+	return 0.0
+
+
 # the field a magnet piece shows now (mT): what a field probe reads
 func field(tag: String) -> float:
 	var m = mags.get(tag)
@@ -155,6 +169,10 @@ func _preloads() -> void:
 		game.sfx.play("snap")
 		if p != null:
 			game._dent(p, minf(p.cond, 0.45), "dv_preload")
+		# and what it is thrown into
+		var hit = world.tag(cfg.get("hits", ""))
+		if hit != null and not hit.gone:
+			game._dent(hit, minf(hit.cond, 0.4), "dv_preload")
 		game.lose("loss_preload", 3000.0, at + Vector2(0, -40))
 
 

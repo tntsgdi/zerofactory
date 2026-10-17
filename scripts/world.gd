@@ -670,10 +670,50 @@ func commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 	return out
 
 
+# A heavy piece of equipment can carry marked lines (ship file "segments": [[x0, y0,
+# x1, y1] m, in the piece's own frame]) along which it is meant to come apart: a
+# cut that follows one of them leaves the parts whole, each worth its share.
+const SEGMENT_NEAR := 0.4         # m either side of the line
+const SEGMENT_SPAN := 0.7         # of the line's length the cut must cover
+const SEGMENT_KEEP := 0.9         # of the value the parts keep between them
+
+
+# does this cut (world points) follow one of the piece's marked lines?
+func segment_cut(p, wpl: PackedVector2Array) -> bool:
+	var segs: Array = p.get_meta("segments", [])
+	if segs.is_empty() or not p.intact or p.cls != "equip" or wpl.size() < 2:
+		return false
+	var inv := frame(p).affine_inverse()
+	for sgm in segs:
+		var a := Vector2(sgm[0], sgm[1]) * Geom.M
+		var b := Vector2(sgm[2], sgm[3]) * Geom.M
+		var ab := b - a
+		var len2 := ab.length_squared()
+		if len2 < 1.0:
+			continue
+		var lo := INF
+		var hi := -INF
+		var near := true
+		for q in wpl:
+			var lq: Vector2 = inv * q
+			var t := (lq - a).dot(ab) / len2
+			var foot := a + ab * clampf(t, 0.0, 1.0)
+			if lq.distance_to(foot) > SEGMENT_NEAR * Geom.M:
+				near = false
+				break
+			lo = minf(lo, t)
+			hi = maxf(hi, t)
+		if near and minf(hi, 1.0) - maxf(lo, 0.0) >= SEGMENT_SPAN:
+			return true
+	return false
+
+
 func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 	var res := {"split": 0, "killed": [], "new": [], "lines": [], "gone": false}
 	if p.gone or pl.is_empty():
 		return res
+	var whole := segment_cut(p, frame(p) * pl)
+	var value0: float = p.value
 	var cutters := Geom.stroke(pl, r)
 	var parts: Array = Geom.cut(p.poly, cutters)
 	parts = parts.filter(func(q): return Geom.area(q) >= 8.0)
@@ -686,7 +726,7 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 			if Geom.dist_to_polyline(jp, pl) <= r + 3.0:
 				j.alive = false
 				res.killed.append(j)
-	if p.cls == "equip" and p.intact:
+	if p.cls == "equip" and p.intact and not whole:
 		p.intact = false
 	if parts.is_empty():
 		res.gone = true
@@ -706,6 +746,12 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 		q.intact = false
 		q.hazard = ""
 		q.tag = ""
+		if whole:
+			# cut along its marked line: this part is a piece of equipment in its own right
+			q.intact = true
+			q.value = value0 * SEGMENT_KEEP * Geom.area(parts[i]) / old_area
+			q.tag = "%s-%d" % [p.tag, i + 1]
+			q.set_meta("segments", p.get_meta("segments", []))
 		q.name_key = p.name_key if p.cls == "equip" else ""
 		q.art = ""
 		# the parts remember what they were cut from
@@ -722,6 +768,8 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 	if parts.size() > 1:
 		p.art = ""
 		res.split = parts.size()
+		if whole:
+			p.value = value0 * SEGMENT_KEEP * Geom.area(parts[0]) / old_area
 	for q in all_parts:
 		var a := Geom.area(q.poly)
 		if q.cls == "metal":
@@ -1018,6 +1066,18 @@ func draw_joints_of(ci: CanvasItem, list: Array) -> void:
 					cracks.append(pos + zz[k + 1])
 	if not welds.is_empty():
 		ci.draw_multiline(welds, Pal.ink(0.25), 1.0)
+	# the marked lines a heavy piece is meant to come apart along
+	for p in list:
+		if not p.intact or not p.has_meta("segments"):
+			continue
+		if p.room != "" and rooms.has(p.room) and not rooms[p.room].revealed and p.body == null:
+			continue
+		for sg in p.get_meta("segments"):
+			var a := Vector2(sg[0], sg[1]) * Geom.M
+			var b := Vector2(sg[2], sg[3]) * Geom.M
+			var n := maxi(2, int(a.distance_to(b) / 9.0))
+			for k in range(0, n, 2):
+				ci.draw_line(a.lerp(b, float(k) / n), a.lerp(b, float(k + 1) / n), Pal.heat(0.55, 1.1), 1.4)
 	if not seams.is_empty():
 		ci.draw_multiline(seams, Pal.ink(0.55), 1.4)
 	if not cracks.is_empty():

@@ -40,7 +40,8 @@ static func check(d: Dictionary) -> Dictionary:
 static func _dismantlable(d: Dictionary, reasons: Array, detail: Array) -> void:
 	var boxes: Array = []
 	for pd in d.pieces:
-		if pd.get("cls", "") == "equip" and float(pd.get("mass", 0.0)) > MAX_GRAPPLE:
+		# too heavy for any grapple, unless it has marked lines to cut it into parts that are not
+		if pd.get("cls", "") == "equip" and float(pd.get("mass", 0.0)) > MAX_GRAPPLE * (pd.get("segments", []).size() + 1):
 			reasons.append("too_heavy")
 			detail.append("%s weighs %.1f t" % [pd.key, pd.mass])
 		if pd.get("cls", "") == "equip" or pd.kind == "fixture":
