@@ -95,7 +95,7 @@ func _run() -> void:
 		Game.contract = Career.active()
 		var go = _game()
 		await _frames(2)
-		check(go.job.get("id", "") == want[0] and go.fee == 0.0 and Txt.hint_tier == "guided", "%s: no fee, guided hints" % want[0])
+		check(go.job.get("id", "") == want[0] and go.fee == 0.0 and Txt.hint_tier == "standard", "%s: no fee, the one standard hint level" % want[0])
 		var ro: Dictionary = await _play(go)
 		print("  %s: " % want[0], ro.sum)
 		check(ro.sum.ended and ro.sum.incidents == 0 and not Career.data.market, "%s taken apart safely; the market still shut" % want[0])
@@ -149,7 +149,7 @@ func _run() -> void:
 	var g2b = _game()
 	await _frames(2)
 	var diff: Array = Snap.diff(before, Snap.snap(g2b))
-	check(diff.is_empty(), "the contract in progress comes back as it was (%d differences)" % diff.size())
+	check(diff.is_empty(), "the contract in progress comes back as it was (%d differences %s)" % [diff.size(), str(diff.slice(0, 4))])
 	for dd in diff.slice(0, 6):
 		print("      ", dd)
 	var r2: Dictionary = await _play(g2b)
