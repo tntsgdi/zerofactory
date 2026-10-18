@@ -1432,6 +1432,9 @@ func on_body_freed(b) -> void:
 		world.remove_body(b)
 		sfx.play("debris")
 		return
+	# its outline lights up and spreads out: it is free
+	for p in b.pieces:
+		fx.outline_pulse(world.world_poly(p), 0.6, Pal.ink(0.95, 2.0))
 	# a gentle shove away from the hull so it reads as free
 	var away: Vector2 = (b.global_position - SHIP_CENTER).normalized()
 	b.linear_velocity += away * 10.0

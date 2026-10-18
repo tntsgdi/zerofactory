@@ -379,7 +379,27 @@ func _motion_drone(dt: float) -> void:
 
 # 0 → 1 as the HUD piece `i` comes in after the launch
 func _in(i: int) -> float:
+	# full animation boots the panels in place instead of sliding them (_boot)
+	if Txt.anim_level() != 1:
+		return 1.0
 	return Pal.ease_out(Motion.stagger(in_t, i, 0.07, 0.55))
+
+
+# a panel's boot (full animation): 0 dark, 1 on; one after another as the drone comes out
+func _boot(i: int) -> float:
+	if Txt.anim_level() < 2:
+		return 1.0
+	return Motion.stagger(maxf(0.0, in_t - 0.15), i, 0.16, 0.8)
+
+
+func _contract_rect() -> Rect2:
+	var g = game
+	var y := 46.0
+	var items0: Array = g.mandatory_items()
+	var by0 := maxf(y + 120, y + 56 + items0.size() * 24 + 18)
+	var lrow := 0.0 if g.training or g.exam != null else 24.0
+	var ph := by0 - y + 80.0 + lrow + (56.0 if g.scope() != "full" else 0.0)
+	return Rect2(40.0 - 18, y - 30, 340, ph)
 
 
 # ---------------------------------------------------------------- drawing helpers
@@ -419,7 +439,12 @@ func _draw_hud() -> void:
 		if not g.training and g.exam == null:
 			var bpk: float = g.blueprint.k if g.blueprint != null else 0.0
 			c.draw_set_transform(Vector2(-(1.0 - _in(0) * (1.0 - Pal.ease_io(bpk))) * 420.0, 0.0))
-			_contract_panel()
+			# booting: the edge and plate first, the content only once it is uncovered
+			if _boot(0) < 0.45:
+				UI.panel(c, _contract_rect(), 0.82, 0.0, Pal.HEAT, _boot(0))
+			else:
+				_contract_panel()
+				UI.boot_cover(c, _contract_rect(), _boot(0))
 			c.draw_set_transform(Vector2.ZERO)
 		_overweight()
 		_tearing()
@@ -429,12 +454,20 @@ func _draw_hud() -> void:
 		if g.warp:
 			_warp(s)
 		c.draw_set_transform(Vector2((1.0 - _in(1)) * 380.0, 0.0))
-		_credits(s)
+		if _boot(1) < 0.45:
+			UI.panel(c, Rect2(s.x - 290.0, 22, 268, 86), 0.82, 0.0, Pal.HEAT, _boot(1))
+		else:
+			_credits(s)
+			UI.boot_cover(c, Rect2(s.x - 290.0, 22, 268, 86), _boot(1))
 		_machines(s)
 		c.draw_set_transform(Vector2.ZERO)
 		_toolbar(s)
 		c.draw_set_transform(Vector2(0.0, (1.0 - _in(2)) * 140.0))
-		_drone_status(s)
+		if _boot(2) < 0.45:
+			UI.panel(c, Rect2(22.0, s.y - 106.0, 420, 70), 0.82, 0.0, Pal.HEAT, _boot(2))
+		else:
+			_drone_status(s)
+			UI.boot_cover(c, Rect2(22.0, s.y - 106.0, 420, 70), _boot(2))
 		c.draw_set_transform(Vector2.ZERO)
 		_hint(s)
 		_radio_box(s)
@@ -654,7 +687,7 @@ func _contract_panel() -> void:
 	var by0 := maxf(y + 120, y + 56 + items0.size() * 24 + 18)
 	var lrow := 0.0 if g.training or g.exam != null else 24.0     # the "pieces left" row
 	var ph := by0 - y + 80.0 + lrow + (56.0 if g.scope() != "full" else 0.0)
-	UI.panel(c, Rect2(x - 18, y - 30, 340, ph), 0.82)
+	UI.panel(c, Rect2(x - 18, y - 30, 340, ph), 0.82, 0.0, Pal.HEAT, _boot(0))
 	_text(g.txt("contract") + " " + g.ship.get("contract", ""), Vector2(x, y), 13, Pal.ink(0.5), font)
 	var kinds: Array = []
 	if g.scope() != "full":
@@ -761,7 +794,7 @@ func _recall(x: float, y: float) -> void:
 func _credits(s: Vector2) -> void:
 	var g = game
 	var x := s.x - 40.0
-	UI.panel(c, Rect2(x - 250, 22, 268, 86), 0.82)
+	UI.panel(c, Rect2(x - 250, 22, 268, 86), 0.82, 0.0, Pal.HEAT, _boot(1))
 	_text(g.txt("income"), Vector2(x, 46), 13, Pal.ink(0.5), font, 1)
 	var v: float = credit_roll.shown
 	var sc := 1.0 + 0.18 * credit_pop * credit_pop
@@ -861,7 +894,7 @@ func _drone_status(s: Vector2) -> void:
 	var d = g.drone
 	var x := 40.0
 	var y := s.y - 70.0
-	UI.panel(c, Rect2(x - 18, y - 36, 420, 70), 0.82)
+	UI.panel(c, Rect2(x - 18, y - 36, 420, 70), 0.82, 0.0, Pal.HEAT, _boot(2))
 	_text("R-02", Vector2(x, y), 18, Pal.ink(0.9), font_b)
 	var integ: float = d.integrity if d.alive else 0.0
 	var bw := 180.0

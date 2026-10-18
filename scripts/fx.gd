@@ -15,6 +15,7 @@ var arcs: Array = []       # [a, b, t, dur, k, seed]
 var flashes: Array = []    # [pos, r, t, dur, color]
 var numbers: Array = []    # [text, pos, vel, t, dur, size, color]
 var motes: Array = []      # [pos, vel, phase, size]
+var outlines: Array = []   # [poly (world), t, dur, color, grow]
 var add_layer: Node2D
 var glow_tex: Texture2D
 var soft_tex: Texture2D
@@ -109,6 +110,13 @@ func arc(a: Vector2, b: Vector2, dur: float, k: float = 1.0) -> void:
 	arcs.append([a, b, 0.0, dur, k, randi()])
 
 
+# a piece's outline lighting up and spreading out as it fades (a piece coming free)
+func outline_pulse(poly: PackedVector2Array, dur: float, c: Color, grow: float = 0.12) -> void:
+	if poly.size() < 3 or Txt.anim_level() == 0:
+		return
+	outlines.append([poly, 0.0, dur, c, grow if Txt.anim_level() >= 2 else 0.0])
+
+
 func flash(pos: Vector2, r: float, dur: float, c: Color) -> void:
 	if flashes.size() >= 300:
 		return
@@ -178,6 +186,7 @@ func step(dt: float) -> void:
 		n[1] += n[2] * dt
 		n[2] *= exp(-3.0 * dt)
 	_age(flashes, 2, 3, dt)
+	_age(outlines, 1, 2, dt)
 	for m in motes:
 		m[2] += dt
 		m[0] += (m[1] + Vector2(sin(m[2] * 0.31), cos(m[2] * 0.27)) * 3.0) * dt
@@ -259,6 +268,20 @@ func _draw_add() -> void:
 	batch.flush(add_layer, soft_tex)
 	for a in arcs:
 		_draw_arc_bolt(a)
+	for o in outlines:
+		var k: float = o[1] / o[2]
+		var poly: PackedVector2Array = o[0]
+		var c0 := Vector2.ZERO
+		for q in poly:
+			c0 += q
+		c0 /= maxf(1.0, poly.size())
+		var sc := 1.0 + float(o[4]) * Pal.ease_out(k)
+		var pts := PackedVector2Array()
+		for q in poly:
+			pts.append(c0 + (q - c0) * sc)
+		pts.append(pts[0])
+		var col: Color = o[3]
+		add_layer.draw_polyline(pts, Color(col.r, col.g, col.b, col.a * (1.0 - k) * (1.0 - k)), 2.0, true)
 	for fl in flashes:
 		var k2: float = 1.0 - fl[2] / fl[3]
 		var r: float = fl[1] * (0.6 + 0.4 * Pal.ease_out(fl[2] / fl[3] * 2.0))

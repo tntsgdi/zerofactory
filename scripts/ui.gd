@@ -9,12 +9,49 @@ const SMALL := 13          # the smallest size for text that matters
 const DIM := 0.5           # the faintest alpha for text that matters
 
 
-static func panel(ci: CanvasItem, r: Rect2, a: float = 1.0, chosen: float = 0.0, accent: Color = Pal.HEAT) -> void:
+static func panel(ci: CanvasItem, r: Rect2, a: float = 1.0, chosen: float = 0.0, accent: Color = Pal.HEAT, boot: float = 1.0) -> void:
+	if boot < 1.0:
+		panel_boot(ci, r, a, boot)
+		return
 	ci.draw_rect(r, Color(PLATE.r + 0.012 * chosen, PLATE.g + 0.012 * chosen, PLATE.b + 0.012 * chosen, 0.95 * a))
 	ci.draw_rect(r, Pal.ink((0.14 + 0.4 * chosen) * a), false, 1.0)
 	if chosen > 0.005:
 		var h := r.size.y * chosen
 		ci.draw_rect(Rect2(r.position.x, r.position.y + (r.size.y - h) * 0.5, 3, h), Color(accent.r, accent.g, accent.b, a))
+
+
+# A panel coming on (UI animation, 2026-10-17): a bright pen draws its edge
+# round from the top left (k 0..0.5), the plate fills in under it (0.3..0.7).
+# What is drawn on it is uncovered after, top down, by boot_cover.
+static func panel_boot(ci: CanvasItem, r: Rect2, a: float, k: float) -> void:
+	var f := clampf((k - 0.3) / 0.4, 0.0, 1.0)
+	ci.draw_rect(r, Color(PLATE.r, PLATE.g, PLATE.b, 0.95 * a * f))
+	var pts := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y), r.position]
+	var total := (r.size.x + r.size.y) * 2.0
+	var left := total * clampf(k / 0.5, 0.0, 1.0)
+	var line := PackedVector2Array([pts[0]])
+	for i in 4:
+		var seg: float = (pts[i] as Vector2).distance_to(pts[i + 1])
+		if left <= seg:
+			line.append((pts[i] as Vector2).lerp(pts[i + 1], left / maxf(seg, 0.001)))
+			break
+		line.append(pts[i + 1])
+		left -= seg
+	if line.size() >= 2:
+		ci.draw_polyline(line, Pal.ink((0.14 + 0.5 * (1.0 - f)) * a), 1.0)
+		if k < 0.5:
+			ci.draw_circle(line[line.size() - 1], 2.2, Pal.tint(Pal.AIR, a, 2.2))
+
+
+# the content of a booting panel shows from the top down behind a scan line
+static func boot_cover(ci: CanvasItem, r: Rect2, k: float) -> void:
+	if k >= 1.0:
+		return
+	var u := clampf((k - 0.45) / 0.55, 0.0, 1.0)
+	var y := r.position.y + r.size.y * u
+	ci.draw_rect(Rect2(r.position.x + 1, y, r.size.x - 2, r.end.y - y - 1), Color(PLATE.r, PLATE.g, PLATE.b, 0.985))
+	if u > 0.0:
+		ci.draw_rect(Rect2(r.position.x, y - 1, r.size.x, 2), Pal.tint(Pal.AIR, 0.8 * (1.0 - u * 0.6), 1.8))
 
 
 # a full-screen sheet behind a result (settlement, assessment): nothing of the scene shows through
