@@ -535,7 +535,9 @@ func _process(dt: float) -> void:
 func _draw_panel() -> void:
 	hits = []
 	if Txt.dev and not workbench_open:
-		var r := Rect2(c.size.x - 350, 18, 330, 36)
+		# over a terminal its readouts own the top right: the badge goes to the bottom
+		var term_open := not c.get_tree().get_nodes_in_group("terminal").is_empty()
+		var r := Rect2(c.size.x - 350, c.size.y - 54 if term_open else 18, 330, 36)
 		c.draw_rect(r, Color(0.025, 0.03, 0.035, 0.94))
 		c.draw_rect(Rect2(r.position, Vector2(3, 36)), Pal.heat(0.9))
 		c.draw_string(font_b, r.position + Vector2(12, 24), Growth.text(["DEV 在线 · F12 工作台", "DEV ACTIVE · F12 WORKBENCH"]), HORIZONTAL_ALIGNMENT_LEFT, 310, 15, Pal.ink(0.9))

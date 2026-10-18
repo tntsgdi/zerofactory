@@ -17,6 +17,11 @@ TARGETS = {
     "backdrop.gd": ["_process", "_draw"],
     "blueprint.gd": ["_process", "_draw"],
     "sfx.gd": ["_process"],
+    "hauler.gd": ["_physics_process", "_process", "_draw"],
+    "minimap.gd": ["_process", "_draw"],
+    "arm.gd": ["_physics_process", "_process", "_draw"],
+    "crane.gd": ["_physics_process", "_process", "_draw"],
+    "consoles.gd": ["_process", "_draw"],
 }
 MARK = "# PROF-WRAP"
 

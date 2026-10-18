@@ -164,6 +164,7 @@ func _ready() -> void:
 		sel_k.append(Motion.Spring.new(0.0, 300.0, 0.8))
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_to_group("terminal")
 	Settings.apply(get_viewport())
 	book = SkillBook.new()
 	book.visible = tab == 3
