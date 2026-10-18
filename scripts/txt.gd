@@ -669,6 +669,7 @@ const S := {
 	"fa_hauler_d": ["现场用 %s 给漂浮零件打标记，它自己送到该去的回收口（1.5 t 以内）", "USE %s ON A FLOATING PIECE: IT TAKES IT TO THE RIGHT MOUTH (UP TO 1.5 t)"],
 	"tm_facilities": ["船坞设施（买一次，永久生效）", "BERTH FACILITIES (BOUGHT ONCE, KEPT)"],
 	"mouth_moving": ["炉口沿导轨移动中", "FURNACE MOUTH MOVING"],
+	"minimap": ["船坞全图", "BERTH"],
 	"mouth_moving_equip": ["设备口沿导轨移到头顶", "EQUIPMENT BAY COMING OVERHEAD"],
 	"mouth_moving_both": ["设备口和炉口沿导轨移过来", "EQUIPMENT BAY AND FURNACE COMING OVER"],
 	"hint_equip_rail": ["设备口挂在天花板导轨上：按 %s 让它移到你头顶。", "The equipment bay runs on a ceiling rail: press %s to bring it overhead."],

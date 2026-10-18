@@ -58,6 +58,7 @@ var bursts: Array = []      # [screen pos, age]
 var cur := Motion.Spring2.new(Vector2.ZERO, 900.0, 0.9)
 var cur_key := ""
 var cur_t := 0.0
+var minimap: Control        # the berth map, bottom right (P.6)
 var stock_last := {}
 var stock_pop := 9.0
 
@@ -81,6 +82,9 @@ func _ready() -> void:
 	fadd.material = m
 	fadd.draw.connect(_draw_add)
 	add_child(fadd)
+	minimap = preload("res://scripts/minimap.gd").new()
+	minimap.visible = false
+	add_child(minimap)
 	for i in 5:
 		slot_y.append(Motion.Spring.new(0.0, 300.0, 0.6))
 		slot_glow.append(0.0)
@@ -293,6 +297,7 @@ func _process(dt: float) -> void:
 	# the fresh gain glows, then the trail catches up
 	rate_lo = rate_roll.shown if rate_roll.shown < rate_lo else Pal.damp(rate_lo, rate_roll.shown, 1.6, dt)
 	_motion_drone(dt)
+	_place_minimap()
 	credit_roll.set_to(game.earned() - game.losses)
 	credit_roll.step(dt)
 	var mp := c.get_local_mouse_position()
@@ -336,6 +341,21 @@ func _process(dt: float) -> void:
 	cur.step(dt)
 	c.queue_redraw()
 	fadd.queue_redraw()
+
+
+# the map stays on screen while working the ship; menus, cards and the
+# blueprint cover it, and the lessons and the exam keep their own screens
+func _place_minimap() -> void:
+	var g = game
+	minimap.game = g
+	var bpk: float = g.blueprint.k if g.blueprint != null else 0.0
+	var on: bool = g.state == "play" and not ending and not g.menu_open and not g.contract_open and card_k.x < 0.01 and menu_k.x < 0.01 and bpk < 0.05 and not g.training and g.exam == null
+	minimap.visible = on
+	if on:
+		if minimap.map_size.y <= 0.0 or minimap._ship_sig.is_empty():
+			minimap.layout()
+		var s := size()
+		minimap.position = Vector2(s.x - 40.0 - minimap.map_size.x, s.y - 40.0 - minimap.map_size.y + (1.0 - _in(2)) * 200.0)
 
 
 func _motion_drone(dt: float) -> void:

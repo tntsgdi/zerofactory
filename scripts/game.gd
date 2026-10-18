@@ -664,9 +664,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 			_end_intro()
 			return
 		if ev.button_index == MOUSE_BUTTON_WHEEL_UP:
-			zoom_target = clampf(zoom_target * 1.1, 0.85, 2.6)
+			zoom_target = clampf(zoom_target * 1.1, zoom_min(), 2.6)
 		elif ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			zoom_target = clampf(zoom_target / 1.1, 0.85, 2.6)
+			zoom_target = clampf(zoom_target / 1.1, zoom_min(), 2.6)
 		elif ev.button_index == MOUSE_BUTTON_RIGHT and state == "play" and not menu_open and not contract_open:
 			# A short click releases and marks; a drag only pans the view.
 			rmb_down = true
@@ -757,6 +757,16 @@ func close_contract() -> void:
 
 # ---------------------------------------------------------------- camera
 
+# the zoom that fits the whole berth and the ship in it: the wheel goes all the
+# way out to it (P.6), and the hold-to-look overview uses it
+const ZOOM_FOLLOW := 0.85    # below this the view starts leaving the drone for the berth's middle
+
+
+func zoom_min() -> float:
+	var vs := get_viewport().get_visible_rect().size
+	return minf(vs.x / ((Dock.FLOOR_X1 - Dock.TOWER_X + 3.0) * Geom.M), vs.y / (26.0 * Geom.M))
+
+
 func _camera(dt: float) -> void:
 	_pan(dt)
 	var target := cam_pos
@@ -772,6 +782,10 @@ func _camera(dt: float) -> void:
 		if tools.held_piece != null and not tools.held_piece.gone:
 			target = target.lerp(tools.grab_point(), 0.18)
 		target += cam_pan
+		# zoomed right out the view settles on the berth: the whole ship in sight
+		var zm := zoom_min()
+		if zoom_target < ZOOM_FOLLOW and zm < ZOOM_FOLLOW:
+			target = target.lerp(Dock.centre() * Geom.M, clampf((ZOOM_FOLLOW - zoom_target) / (ZOOM_FOLLOW - zm), 0.0, 1.0))
 	# a critically damped follow: soft, never laggy
 	var k := 38.0
 	var c := 2.0 * sqrt(k)
@@ -783,10 +797,11 @@ func _camera(dt: float) -> void:
 	var zt := zoom_override if zoom_override > 0.0 else zoom_target
 	if overview and zoom_override <= 0.0:
 		# the whole ship and the berth in view
-		var vs := get_viewport().get_visible_rect().size
-		zt = minf(vs.x / ((Dock.FLOOR_X1 - Dock.TOWER_X + 3.0) * Geom.M), vs.y / (26.0 * Geom.M))
+		zt = zoom_min()
 	if state == "play" and drone.alive:
 		zt *= lerpf(1.0, 0.86, clampf(drone.linear_velocity.length() / 700.0, 0.0, 1.0))
+		if zoom_override <= 0.0:
+			zt = maxf(zt, minf(zoom_min(), zoom_target))
 	zoom_now = Pal.damp(zoom_now, zt, 4.0 if zoom_override > 0.0 else 6.0, dt)
 	trauma = maxf(0.0, trauma - dt * 1.6)
 	punch = Pal.damp2(punch, Vector2.ZERO, 12.0, dt)

@@ -12,7 +12,7 @@ const K_TETHER := 34.0
 const FMAX := 3.0 * 175.0
 const BRAKE := 2.0          # x the towing force, for slowing a load down
 const HANG := 0.12          # share of the tether's turn on the load (the rest goes through its centre)
-const SPIN_DAMP := 5.0      # 1/s: a held load's spin dies away
+const SPIN_DAMP := 2.0      # 1/s: a held load's spin dies away
 const FLICK := 220.0        # px/s faster than the drone at let-go: a throw, not a let-go
 
 var game: Game
@@ -862,14 +862,16 @@ func physics_step(dt: float) -> void:
 		# The tether pulls the load as a whole (through its centre of mass), so a
 		# load caught off-centre no longer swings round on the line; a small share
 		# of the turn still hangs it from where it was caught, and its spin is
-		# damped hard. Slightly overdamped: it follows without bobbing.
+		# damped. Well under critical: in vacuum a load carries its way, it only
+		# shouldn't swing round the line.
 		var r: Vector2 = g - held_body.global_transform * held_body.center_of_mass
 		var vg: Vector2 = held_body.linear_velocity
 		var stable: float = game.skill_value("grapple_stable")
 		var haul: float = game.skill_value("haul_speed")
-		var c := 2.0 * 1.05 * sqrt(K_TETHER * m) * stable
+		var c := 2.0 * 0.6 * sqrt(K_TETHER * m) * stable
 		var f: Vector2 = (tether_target - g) * K_TETHER - (vg - drone.linear_velocity) * c
-		var force_max := FMAX * maxf(1.0, game.grab_max() / 5.0) * haul
+		# a heavier load gets more of the grapple: heavy is slower, not stuck
+		var force_max := FMAX * maxf(1.0, game.grab_max() / 5.0) * haul * clampf(sqrt(m / 1.5), 1.0, 1.8)
 		# stopping a load gets more of the grapple than getting it going
 		var cap := force_max * (BRAKE if f.dot(vg) < 0.0 else 1.0)
 		f = f.limit_length(cap)
@@ -877,10 +879,10 @@ func physics_step(dt: float) -> void:
 		held_body.apply_central_force(f)
 		held_body.apply_torque(r.cross(f) * HANG)
 		held_body.angular_velocity *= exp(-SPIN_DAMP * stable * dt)
-		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.7) / (stable * sqrt(haul))
+		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.35) / (stable * sqrt(haul))
 		var over: float = g.distance_to(drone.global_position) - tether_reach
 		drone.tow_u = (drone.global_position - g).normalized()
-		drone.tow_k = clampf((over - 0.5 * Geom.M) / (1.5 * Geom.M), 0.0, 1.0)
+		drone.tow_k = clampf((over - 1.0 * Geom.M) / (2.0 * Geom.M), 0.0, 1.0)
 		drone.tow_v = vg.dot(drone.tow_u) + 60.0
 	else:
 		# still fixed to the ship: the beam pulls, the fixings decide

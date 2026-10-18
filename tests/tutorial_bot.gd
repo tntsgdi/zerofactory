@@ -71,6 +71,8 @@ func _process(_dt: float) -> bool:
 				if ch is TutorialHud and ch.stamp_t > 2.0:
 					Cap.save(root, "res://tests/out/tut_cert.png")
 					shot_done["cert"] = true
+	if "watch" in OS.get_cmdline_user_args() and frame % 600 == 0:
+		_say("watch: lesson %d step %d (%s) drone %s v %.0f alive %s" % [li, game.tutorial.step_i, game.tutorial.step().get("id", ""), (game.drone.global_position / 48.0).snapped(Vector2(0.1, 0.1)), game.drone.linear_velocity.length(), game.drone.alive])
 	if frame > 60 * 60 * 30:
 		_say("TIMEOUT in lesson %d step %d (%s)" % [li, game.tutorial.step_i, game.tutorial.step().get("id", "")])
 		_report()

@@ -42,8 +42,8 @@ var _ghost_check := 0.0
 
 # Let go off the grapple without a fling, a load settles where it was let go
 # (player 2026-10-17: "it stops when you let go") instead of drifting on.
-const SETTLE_T := 0.45
-const SETTLE_K := 9.0          # 1/s: speed lost while settling
+const SETTLE_T := 1.0
+const SETTLE_K := 3.5          # 1/s: speed lost while settling
 var settle := 0.0
 
 var cols := {}              # piece id -> Array of CollisionPolygon2D
