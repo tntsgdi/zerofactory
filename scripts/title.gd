@@ -5,6 +5,7 @@ extends Control
 # slot asks for a company name and begins at ARRIVAL, straight on into the
 # training course and the first contract. Settings, quit.
 
+var _wiping := false       # the transition out has been asked for
 var font: Font
 var font_l: Font
 var font_b: Font
@@ -180,11 +181,16 @@ func _process(dt: float) -> void:
 		music.volume_db = linear_to_db(maxf(0.0001, music_k))
 	if leaving >= 0.0:
 		leaving += dt
-		if leaving > 0.7:
-			if next_scene == "career":
-				Game.play_career(get_tree())
-			else:
-				get_tree().change_scene_to_file(next_scene)
+		# its own leave plays first, then the transition covers the change
+		if leaving > 0.3 and not _wiping:
+			_wiping = true
+			var tree := get_tree()
+			var to := next_scene
+			Wipe.go(tree, func():
+				if to == "career":
+					Game.play_career(tree)
+				else:
+					tree.change_scene_to_file(to))
 	queue_redraw()
 
 

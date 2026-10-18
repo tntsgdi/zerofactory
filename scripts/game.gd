@@ -1067,7 +1067,8 @@ func to_title() -> void:
 		Career.save()
 	Engine.time_scale = 1.0
 	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/title.tscn")
+	var tree := get_tree()
+	Wipe.go(tree, func(): tree.change_scene_to_file("res://scenes/title.tscn"))
 
 
 # the contract is over and settled: a career goes back to the berth terminal

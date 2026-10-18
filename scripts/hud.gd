@@ -130,13 +130,8 @@ func toast_saved() -> void:
 
 
 func close_then(f: Callable) -> void:
-	if closing >= 0.0:
-		return
-	closing = 0.0
-	after_close = f
-	if game != null and game.testing:
-		closing = 1.0
-
+	# the shared transition: the heat line closes, the next screen opens as a blueprint
+	Wipe.go(game.get_tree(), f)
 
 func show_hint(text: String) -> void:
 	hint_text = text
@@ -486,7 +481,8 @@ func _draw_hud() -> void:
 
 # the scene opens out of the heat line the last one closed on: no hard cut
 func _open_wipe(s: Vector2) -> void:
-	if t > 0.6:
+	# the shared transition opens this screen when it covered the change
+	if t > 0.6 or Wipe.busy() or Txt.anim_level() == 0:
 		return
 	var e := Pal.ease_out(clampf((t - 0.05) / 0.5, 0.0, 1.0))
 	var h := s.y * 0.5 * (1.0 - e)

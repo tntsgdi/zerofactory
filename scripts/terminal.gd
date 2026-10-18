@@ -101,6 +101,7 @@ var on_close: Callable
 var on_skill_changed: Callable
 var book: SkillBook
 var next_job := {}         # an opening contract still to play: the market shows it, alone
+var _wiping := false       # the transition out has been asked for
 
 
 func _ready() -> void:
@@ -258,8 +259,11 @@ func _process(dt: float) -> void:
 			install.erase(k)
 	if leaving >= 0.0:
 		leaving += dt
-		if leaving > 0.78:
-			get_tree().change_scene_to_file("res://scenes/main.tscn")
+		# the card flies off, then the transition takes it over
+		if leaving > 0.36 and not _wiping:
+			_wiping = true
+			var tree := get_tree()
+			Wipe.go(tree, func(): tree.change_scene_to_file("res://scenes/main.tscn"))
 	queue_redraw()
 
 
@@ -326,8 +330,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 		KEY_ESCAPE:
 			if overlay:
 				close()
-			else:
-				get_tree().change_scene_to_file("res://scenes/title.tscn")
+			elif not _wiping:
+				_wiping = true
+				var tree := get_tree()
+				Wipe.go(tree, func(): tree.change_scene_to_file("res://scenes/title.tscn"))
 		KEY_O:
 			settings.open()
 
