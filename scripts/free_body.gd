@@ -18,6 +18,8 @@ const INSET := 1.0            # px: collision sits this far inside the outline
 const MAX_SPEED := 900.0      # px/s for anything loose
 const MAX_SPIN := 6.0         # rad/s
 const TELEPORT := 72.0        # px in one step: more than this was placed, not moved
+var _safe_transform := Transform2D.IDENTITY
+var _has_safe_transform := false
 var _last := Vector2.INF     # where the body was last physics step
 var cols := {}              # piece id -> Array of CollisionPolygon2D
 var age := 0.0
@@ -25,6 +27,7 @@ var rejected_t := 0.0
 
 
 func _init() -> void:
+	process_physics_priority = -1
 	gravity_scale = 0.0
 	linear_damp_mode = RigidBody2D.DAMP_MODE_REPLACE
 	angular_damp_mode = RigidBody2D.DAMP_MODE_REPLACE
@@ -108,6 +111,18 @@ func drop_piece(p) -> void:
 
 
 func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
+	# The overlap solver can produce a non-finite state for a newly freed shard.
+	# Restore its last valid pose before it propagates into tractor forces, FX,
+	# or the camera. Finite states retain the original integration unchanged.
+	var pose := state.transform
+	if not pose.origin.is_finite() or not pose.x.is_finite() or not pose.y.is_finite() or not state.linear_velocity.is_finite() or not is_finite(state.angular_velocity):
+		state.transform = _safe_transform if _has_safe_transform else Transform2D(0.0, _last if _last.is_finite() else Vector2.ZERO)
+		state.linear_velocity = Vector2.ZERO
+		state.angular_velocity = 0.0
+		hit_imp = 0.0
+		return
+	_safe_transform = pose
+	_has_safe_transform = true
 	# a light piece squeezed between something heavy and the hull can be pushed
 	# right through it: if the body's centre crossed the attached ship since
 	# the last step, put it back and bounce it off
@@ -138,6 +153,19 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		if imp > hit_imp:
 			hit_imp = imp
 			hit_pos = state.get_contact_local_position(i)
+
+
+func _physics_process(_dt: float) -> void:
+	# The solver publishes its result before scene physics callbacks. Repair an
+	# invalid result before the dock, tools and FX read the body this step.
+	var pose := global_transform
+	if pose.origin.is_finite() and pose.x.is_finite() and pose.y.is_finite() and linear_velocity.is_finite() and is_finite(angular_velocity):
+		return
+	global_transform = _safe_transform if _has_safe_transform else Transform2D(0.0, _last if _last.is_finite() else Vector2.ZERO)
+	linear_velocity = Vector2.ZERO
+	angular_velocity = 0.0
+	hit_imp = 0.0
+	reset_physics_interpolation()
 
 
 func _process(_dt: float) -> void:

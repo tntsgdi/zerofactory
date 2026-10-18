@@ -15,6 +15,9 @@ var points: Array = []    # [pos, label, kind]
 var font: Font
 var snapped := false
 var t := 0.0
+var _draw_zoom := -1.0
+var _draw_zh := Txt.zh
+var _note_state: Array = []
 var x0 := -2.0 * 48.0     # drawn extent (px), from the ship's own size
 var x1 := 46.0 * 48.0
 var y_top := -4.0 * 48.0
@@ -147,50 +150,92 @@ func _process(dt: float) -> void:
 	t += dt
 	var was := k
 	k = Pal.damp(k, 1.0 if on else 0.0, 10.0, dt)
-	if absf(k - was) > 0.001 or k > 0.01:
+	var redraw := not is_equal_approx(k, was) or (was >= 0.01 and k < 0.01)
+	if k > 0.01:
+		var zoom: float = game.cam_zoom()
+		if not is_equal_approx(zoom, _draw_zoom) or Txt.zh != _draw_zh:
+			redraw = true
+		var state: Array = []
+		for p in note_polys: state.append(note_void("p:" + p[1]))
+		for r in note_runs: state.append(note_void("l:" + r[1].to_lower()))
+		for p in note_points: state.append(note_void("c:" + p[2]))
+		if state != _note_state:
+			_note_state = state
+			redraw = true
+		_draw_zoom = zoom if redraw else _draw_zoom
+		_draw_zh = Txt.zh
+	if redraw:
 		queue_redraw()
-	# once: a ship with no rooms (the assessment module) left this empty and
-	# the drawing was rebuilt every frame
 	if not snapped and game != null and game.world != null:
 		snapped = true
 		snapshot()
+		queue_redraw()
 
 
-func _dash(a: Vector2, b: Vector2, c: Color, w: float, seg: float = 7.0) -> void:
-	var l := a.distance_to(b)
-	if l < 0.5:
+# Collect only one object's lines at a time, preserving its order relative
+# to text and neighbouring objects. Each pair is still an independent dash.
+func _dash_points(points: PackedVector2Array, a: Vector2, b: Vector2, seg: float = 7.0) -> void:
+	var length := a.distance_to(b)
+	if length < 0.5:
 		return
-	var n := maxi(1, int(l / seg))
+	var n := maxi(1, int(length / seg))
 	for i in n:
 		if i % 2 == 0:
-			draw_line(a.lerp(b, float(i) / n), a.lerp(b, float(i + 1) / n), c, w)
+			points.append(a.lerp(b, float(i) / n))
+			points.append(a.lerp(b, float(i + 1) / n))
 
 
 func _dpoly(poly: PackedVector2Array, c: Color, w: float) -> void:
-	for i in poly.size():
-		_dash(poly[i], poly[(i + 1) % poly.size()], c, w)
+	if not _poly_dashes.has(poly):
+		var points := PackedVector2Array()
+		for i in poly.size():
+			_dash_points(points, poly[i], poly[(i + 1) % poly.size()])
+		_poly_dashes[poly] = points
+	var points: PackedVector2Array = _poly_dashes[poly]
+	if not points.is_empty():
+		draw_multiline(points, c, w)
 
 
 func _dpath(path: PackedVector2Array, c: Color, w: float) -> void:
-	for i in path.size() - 1:
-		_dash(path[i], path[i + 1], c, w, 5.0)
+	if not _path_dashes.has(path):
+		var points := PackedVector2Array()
+		for i in path.size() - 1:
+			_dash_points(points, path[i], path[i + 1], 5.0)
+		_path_dashes[path] = points
+	var points: PackedVector2Array = _path_dashes[path]
+	if not points.is_empty():
+		draw_multiline(points, c, w)
 
 
 # Labels are drawn at their size on screen, whatever the zoom: rasterised at
 # native pixels and never stretched by the camera (stretching made them blur),
 # on a dark backing so they read over the hull lines.
 var _z := 1.0
+var _poly_dashes := {}
+var _path_dashes := {}
 var _placed: Array = []      # label rects this frame, in screen-scale units
 
 
 # a point label: the first of a few spots beside the point that is still free
+# Keep the original candidate ordering and rectangle predicate, without a
+# per-candidate closure or a spatial index that costs more on small layouts.
+func _label_occupied(r: Rect2) -> bool:
+	for placed in _placed:
+		if placed.intersects(r): return true
+	return false
+
+
+func _remember_label(r: Rect2) -> void:
+	_placed.append(r)
+
+
 func _point_label(at: Vector2, text: String, col: Color) -> void:
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 6.0
 	var base := at * _z
 	for off in [Vector2(8, -7), Vector2(8, 19), Vector2(8, -25), Vector2(8, 37), Vector2(-w - 8, -7), Vector2(-w - 8, 19)]:
 		var r := Rect2(base + off + Vector2(-3, -14), Vector2(w, 18))
-		if not _placed.any(func(q): return q.intersects(r)):
-			_placed.append(r)
+		if not _label_occupied(r):
+			_remember_label(r)
 			_label(at, text, 14, col, off)
 			return
 	_label(at, text, 14, col, Vector2(8, -7))

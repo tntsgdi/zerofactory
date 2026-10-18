@@ -19,6 +19,9 @@ const SAFE_KPA := 5.0
 # hazards that only ever go to the hazard mouth (which pays 40 % of their value)
 const HAZARD_ONLY := ["explosive", "bio", "chem"]
 
+var _cable_index := {}
+var _cable_version := -1
+
 var game: Game
 var world: World
 var cfg: Dictionary = {}          # the ship file
@@ -585,12 +588,22 @@ func _step_elec(dt: float) -> void:
 
 # all pieces reachable from piece id through live power cables
 func _flood(start: int, seen: Dictionary, _unused: Dictionary) -> void:
+	if _cable_version != world.electrical_links_version:
+		_cable_index.clear()
+		for lid in world.lines:
+			var line = world.lines[lid]
+			if line.kind != "cable":
+				continue
+			if not _cable_index.has(line.a): _cable_index[line.a] = []
+			if not _cable_index.has(line.b): _cable_index[line.b] = []
+			_cable_index[line.a].append(line)
+			if line.b != line.a: _cable_index[line.b].append(line)
+		_cable_version = world.electrical_links_version
 	var stack: Array = [start]
 	seen[start] = true
 	while not stack.is_empty():
 		var id = stack.pop_back()
-		for lid in world.lines:
-			var l = world.lines[lid]
+		for l in _cable_index.get(id, []):
 			if not l.alive or l.kind != "cable":
 				continue
 			var other := -1

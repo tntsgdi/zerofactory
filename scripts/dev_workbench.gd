@@ -151,7 +151,7 @@ func refresh() -> void:
 		context = dev.game.ship_title()
 	elif dev.terminal != null:
 		context = words("生涯船坞终端", "CAREER TERMINAL")
-	var values := [[words("当前环境", "CONTEXT"), context], [words("生涯资金 / 声望", "CAREER FUNDS / REP"), "%s  /  %d" % [Pal.money(float(Career.data.get("money", 0))), int(Career.data.get("rep", 0))]], [words("已装配技能", "FITTED SKILLS"), "%d / 45" % progress], [words("模拟状态", "SIMULATION"), words("已暂停 · 关闭后恢复", "PAUSED · CLOSE TO RESUME") if dev.game != null else words("终端待命", "TERMINAL IDLE")]]
+	var values := [[words("当前环境", "CONTEXT"), context], [words("生涯资金 / 声望", "CAREER FUNDS / REP"), "%s  /  %d" % [Pal.money(float(Career.data.get("money", 0))), int(Career.data.get("rep", 0))]], [words("已装配技能", "FITTED SKILLS"), "%d / %d" % [progress, Growth.TRACKS.size() * 3]], [words("模拟状态", "SIMULATION"), words("已暂停 · 关闭后恢复", "PAUSED · CLOSE TO RESUME") if dev.game != null else words("终端待命", "TERMINAL IDLE")]]
 	if dev.game != null:
 		values[3][1] = words("暂停 · 耐久 %d%% · %s", "PAUSED · HP %d%% · %s") % [int(dev.game.drone.integrity), dev._time_text()]
 	for value in values:
@@ -205,7 +205,7 @@ func operations() -> void:
 		"dev_money": words("为当前生涯增加 100,000。成长页可自定金额。", "Add 100,000 to this career; choose other amounts in Progression."),
 		"dev_loan": words("清零当前生涯债务。", "Clear this career's debt."),
 		"dev_rep": words("为当前生涯增加 5 点声望。", "Add 5 reputation to this career."),
-		"dev_upgrades": words("解锁全部设备、设施及 45 级技能书。", "Unlock every facility and all 45 skill levels."),
+		"dev_upgrades": words("解锁全部设备、设施及 %d 级技能书。" % (Growth.TRACKS.size() * 3), "Unlock every facility and all %d skill levels." % (Growth.TRACKS.size() * 3)),
 		"dev_offers": words("刷新当前市场可选合同。", "Regenerate the available market offers."),
 		"dev_trap": words("生成只包含一种指定事故的合同卡。", "Generate an offer containing a single accident type."),
 		"dev_opening": words("跳过开局合同，打开三份报价的市场。", "Skip the opening jobs and open the three-offer market."),

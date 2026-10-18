@@ -73,7 +73,7 @@ func refresh() -> void:
 	for node in list.get_children():
 		list.remove_child(node)
 		node.queue_free()
-	progress_label.text = Growth.text(["技能书  /  已掌握 %d / 45 级 · 资金 %s", "FIELD MANUAL  /  %d / 45 levels · Funds %s"]) % [Growth.progress(), Pal.money(float(Career.data.money))]
+	progress_label.text = Growth.text(["技能书  /  已掌握 %d / %d 级 · 资金 %s", "FIELD MANUAL  /  %d / %d levels · Funds %s"]) % [Growth.progress(), Growth.TRACKS.size() * 3, Pal.money(float(Career.data.money))]
 	var selection := ButtonGroup.new()
 	for group in Growth.GROUPS.size():
 		var heading := _label("%02d  %s" % [group + 1, Growth.text(Growth.GROUPS[group])], 16)

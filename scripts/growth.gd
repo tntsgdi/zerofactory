@@ -19,6 +19,7 @@ const TRACKS := [
 	["hose_range", 4, ["延长接管", "Hose reach"], "m", [4, 5.5, 7, 9], [7000, 42000, 255000], ["远处接口的接管距离；已接软管照常独立工作。", "Connect more distant ports; attached hoses keep working independently."]],
 	["wrench_speed", 5, ["快拆工法", "Quick service"], "×", [1, 1.25, 1.65, 2.2], [8000, 45000, 285000], ["螺栓、锁、夹具、接头及控制件的操作速度。", "Operate bolts, locks, clamps, connectors and controls faster."]],
 	["repair_eff", 5, ["维修剂配方", "Repair compound"], "HP", [50, 65, 80, 100], [6000, 36000, 225000], ["每份维修剂的恢复量；机库维修依旧免费。", "Integrity restored per repair kit; bay repair remains free."]],
+	["wrench_multi", 5, ["同步拆装", "Ganged service"], "pcs", [1, 2, 3, 4], [15000, 78000, 430000], ["一次扳手动作同时处理同一部件上相邻的多颗固定件。", "One wrench pass handles several fixings on the same unit at once."]],
 ]
 const LEGACY := {"grapple_mass": "grapple5", "meter_speed": "scan_kit", "pump_rate": "pump2"}
 const DONE := [0, 0, 3, 8]
@@ -46,6 +47,8 @@ static func value(kit: Dictionary, id: String) -> float:
 static func display(row: Array, n: int) -> String:
 	if row[0] == "laser_kerf":
 		return "%.1f cm" % (float(row[4][clampi(n, 0, 3)]) / Geom.M * 100.0)
+	if row[0] == "wrench_multi":
+		return text(["同时 %d 颗", "%d at once"]) % int(row[4][clampi(n, 0, 3)])
 	return "%s %s" % [str(row[4][clampi(n, 0, 3)]), row[3]]
 
 static func price(id: String) -> float:

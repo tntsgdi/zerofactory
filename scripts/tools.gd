@@ -34,6 +34,9 @@ var in_material := false
 var material_k := 0.0
 var touched := {}          # piece id -> true (hazards fire once per stroke)
 var cut_sound := 0.0
+var tail_on := false       # the beam is still finishing a stroke after the button came up
+var tail_target := Vector2.ZERO
+var tail_t := 0.0
 
 # grapple
 var held_body = null
@@ -347,9 +350,39 @@ func _piece_hover() -> Dictionary:
 
 # ---------------------------------------------------------------- jobs (measure / wrench / hose)
 
+# The ganged service head (upgrade): the fixings of the same unit that come off
+# together with the one under the pointer, nearest first.
+func _joint_batch(primary) -> Array:
+	var n := int(game.skill_value("wrench_multi")) - 1
+	if n <= 0 or primary == null:
+		return []
+	var p0: Vector2 = world.joint_world(primary)
+	var r := 1.1 * Geom.M
+	var cand: Array = []
+	for j in world.joints:
+		if j == primary or not j.alive:
+			continue
+		if not (j.type in ["bolt", "lock", "clamp"]):
+			continue
+		if j.a != primary.a and j.b != primary.a and j.a != primary.b and j.b != primary.b:
+			continue
+		var p: Vector2 = world.joint_world(j)
+		var d := p.distance_to(p0)
+		if d > r or world.joint_covered(j):
+			continue
+		cand.append([d, j])
+	cand.sort_custom(func(a, b): return a[0] < b[0])
+	var out: Array = []
+	for i in mini(n, cand.size()):
+		var j = cand[i][1]
+		out.append({"kind": "joint", "joint": j, "pos": world.joint_world(j), "d": cand[i][0], "label": j.get_meta("tag", "")})
+	return out
+
+
 func _start_job() -> void:
 	var dur := 0.4
 	var kind := "wrench"
+	var extra: Array = []
 	match tool:
 		1:
 			kind = "measure"
@@ -366,12 +399,18 @@ func _start_job() -> void:
 					dur = 0.4
 				"ctrl":
 					dur = {"switch": 0.22, "remote": 0.22, "valve": 0.5, "door": 0.25, "hatch": 0.3, "jam": 0.9, "stop": 0.35, "socket": 0.45, "discharge": 0.45}.get(hover.ctrl.kind, 0.35)
+	if kind == "wrench" and hover.get("kind", "") == "joint":
+		extra = _joint_batch(hover.joint)
+		if not extra.is_empty():
+			dur *= 1.0 + 0.28 * extra.size()
 	if kind == "wrench":
 		dur /= game.skill_value("wrench_speed")
 	elif kind == "measure":
 		dur = game.skill_value("meter_speed")
-	job = {"kind": kind, "t": 0.0, "dur": dur, "target": hover.duplicate(), "pos": hover.pos}
+	job = {"kind": kind, "t": 0.0, "dur": dur, "target": hover.duplicate(), "pos": hover.pos, "extra": extra}
 	game.sfx.play("probe" if kind == "measure" else ("wrench" if kind == "wrench" else "hose"))
+	if not extra.is_empty():
+		game.say("wrench_multi", hover.pos, str(extra.size() + 1))
 
 
 func _target_pos(tg: Dictionary) -> Vector2:
@@ -405,7 +444,11 @@ func _step_job(dt: float) -> void:
 		job = {}
 		match j.kind:
 			"measure": game.do_measure(j.target)
-			"wrench": game.do_wrench(j.target)
+			"wrench":
+				game.do_wrench(j.target)
+				for e in j.get("extra", []):
+					if e.get("joint") != null and e.joint.alive:
+						game.do_wrench(e)
 			"hose": game.do_hose(j.target)
 
 
@@ -440,14 +483,28 @@ func _locked(q) -> bool:
 
 func _laser(dt: float) -> void:
 	if not lmb:
-		if cutting:
+		if not cutting:
+			in_material = false
+			laser_lock = {}
+			return
+		if not tail_on:
+			# The beam crawls through material and flies through air, so a quick
+			# flick always leaves it behind the pointer. Let it run on to where the
+			# button came up instead of dropping the stroke half-way through a bar.
+			tail_on = true
+			tail_target = clamp_range(aim)
+			tail_t = 0.6
+		tail_t -= dt
+		if tail_t <= 0.0 or front.distance_to(tail_target) <= 0.5:
+			tail_on = false
 			_finish_cut()
-		in_material = false
-		laser_lock = {}
-		return
-	var desired := clamp_range(aim)
-	if lmb_pressed or not cutting:
+			in_material = false
+			laser_lock = {}
+			return
+	var desired := tail_target if tail_on else clamp_range(aim)
+	if lmb and (lmb_pressed or not cutting):
 		cutting = true
+		tail_on = false
 		pending = {}
 		touched = {}
 		# a second press on the same piece confirms cutting into equipment
@@ -480,6 +537,7 @@ func _laser(dt: float) -> void:
 	var moved_world := PackedVector2Array([front])
 	var went := 0.0
 	in_material = false
+	var prev_list: Array = _speed_at(front)[1]
 	var guard := 0
 	while budget > 0.0 and guard < 400:
 		guard += 1
@@ -518,6 +576,14 @@ func _laser(dt: float) -> void:
 				if not touched.has(q.id):
 					touched[q.id] = true
 					game.on_cut_into(q, front)
+		elif not prev_list.is_empty():
+			# the beam left the material: carry the kerf out to the edge, so the
+			# cut always spans the piece instead of ending a step short of it
+			for q in prev_list:
+				if pending.has(q.id):
+					_kerf_point(q, np)
+					pending[q.id].anch = true
+		prev_list = sa[1]
 		moved_world.append(front)
 	material_k = Pal.damp(material_k, 1.0 if in_material else 0.0, 18.0, dt)
 	# lines the beam passed over
@@ -579,6 +645,7 @@ func _commit(id: int) -> void:
 
 func _finish_cut() -> void:
 	cutting = false
+	tail_on = false
 	# one stroke that went through something is one cutting decision
 	if stroke_cuts > 0 or not pending.is_empty():
 		game.log_op("cut")

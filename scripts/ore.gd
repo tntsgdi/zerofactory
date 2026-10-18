@@ -28,6 +28,13 @@ var forced := {}                 # gate tag -> true once it came open by force
 var t := 0.0
 var stream: Array = []           # [pos, vel, life] particles of the falling fines
 var flowing := {}                # ore piece -> the gate point (px) the flow carries it to
+# Instance the same 64-segment circles as Godot draw_circle, with no texture
+# rasterization or reduction in detail. Only transforms change as ore drains.
+var heap := MultiMesh.new()
+var heap_fines := -1.0
+var stream_layer: Node2D
+const HEAP_COLOR := Color(0.55, 0.45, 0.35, 0.5)
+const CIRCLE_SEGMENTS := 64
 const FLOW_V := 90.0             # px/s the flow carries a loose chunk at
 
 
@@ -39,6 +46,11 @@ func setup(g, ship: Dictionary) -> void:
 	fines0 = fines
 	z_index = 3
 	z_as_relative = false
+	if active():
+		_setup_heap()
+		stream_layer = Node2D.new()
+		stream_layer.draw.connect(_draw_stream)
+		add_child(stream_layer)
 
 
 func active() -> bool:
@@ -179,33 +191,85 @@ func _check_surge(tag: String) -> void:
 	game.fx.sparks(at, Vector2.UP, 30, Pal.heat(1.0, 2.0), 360.0, 0.5, PI)
 
 
-func _process(dt: float) -> void:
-	if not active():
-		return
-	for s in stream:
-		s[2] += dt
-		s[0] += s[1] * dt
-	stream = stream.filter(func(s): return s[2] < 0.9)
-	queue_redraw()
-
-
-func _draw() -> void:
-	if not active():
-		return
-	# the heap: shaded to its level inside the hopper, once anyone can see in
+func _setup_heap() -> void:
+	var verts := PackedVector3Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	for i in CIRCLE_SEGMENTS + 1:
+		# Match the float angle/radius used by RendererCanvasCull::canvas_item_add_ellipse.
+		var angle: float = float(PackedFloat32Array([i * TAU / CIRCLE_SEGMENTS])[0])
+		var offset := Vector2(cos(angle), sin(angle)) * 1.6
+		verts.append(Vector3(offset.x, offset.y, 0.0))
+		colors.append(HEAP_COLOR)
+	verts.append(Vector3.ZERO)
+	colors.append(HEAP_COLOR)
+	for i in CIRCLE_SEGMENTS:
+		indices.append(CIRCLE_SEGMENTS + 1)
+		indices.append(i)
+		indices.append(i + 1)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	heap.transform_format = MultiMesh.TRANSFORM_2D
+	heap.mesh = mesh
+	# Reserve enough slots once, including room for alternate saved fill levels.
 	var b: Array = cfg.get("box", [0, 0, 0, 0])
+	heap.instance_count = (ceili((b[2] - b[0]) * Geom.M / 12.0) + 1) * (ceili((b[3] - b[1]) * Geom.M / 14.0) + 1)
+	heap.visible_instance_count = 0
+	_update_heap()
+
+
+func _heap_rect() -> Rect2:
+	var b: Array = cfg.get("box", [0, 0, 0, 0])
+	var top: float = lerpf(float(b[3]), float(b[1]), clampf(fines / maxf(fines0, 0.001), 0.0, 1.0))
+	return Rect2(Vector2(b[0], top) * Geom.M, Vector2(b[2] - b[0], b[3] - top) * Geom.M)
+
+
+func _update_heap() -> void:
+	if fines == heap_fines:
+		return
+	heap_fines = fines
+	var k := 0
 	if fines > 0.0:
-		var top: float = lerpf(float(b[3]), float(b[1]), clampf(fines / maxf(fines0, 0.001), 0.0, 1.0))
-		var r := Rect2(Vector2(b[0], top) * Geom.M, Vector2(b[2] - b[0], b[3] - top) * Geom.M)
-		draw_rect(r, Color(0.32, 0.26, 0.2, 0.35))
-		var k := 0
+		var r := _heap_rect()
 		var x: float = r.position.x + 6.0
 		while x < r.end.x - 6.0:
 			var y: float = r.position.y + 4.0 + float((k * 37) % 23)
 			while y < r.end.y - 4.0:
-				draw_circle(Vector2(x + float((k * 13) % 9), y), 1.6, Color(0.55, 0.45, 0.35, 0.5))
+				heap.set_instance_transform_2d(k, Transform2D(0.0, Vector2(x + float((k * 13) % 9), y)))
 				y += 14.0
 				k += 1
 			x += 12.0
+	heap.visible_instance_count = k
+	queue_redraw()
+
+
+func _process(dt: float) -> void:
+	if not active():
+		return
+	_update_heap()
+	# Keep the animated falling fines independent of the retained heap commands.
+	var had_stream := not stream.is_empty()
 	for s in stream:
-		draw_circle(s[0], 2.0, Color(0.6, 0.5, 0.38, 0.8 * (1.0 - s[2] / 0.9)))
+		s[2] += dt
+		s[0] += s[1] * dt
+	if had_stream:
+		stream = stream.filter(func(s): return s[2] < 0.9)
+		stream_layer.queue_redraw()
+
+
+func _draw() -> void:
+	if not active() or fines <= 0.0:
+		return
+	draw_rect(_heap_rect(), Color(0.32, 0.26, 0.2, 0.35))
+	if heap.visible_instance_count > 0:
+		draw_multimesh(heap, null)
+
+
+func _draw_stream() -> void:
+	for s in stream:
+		stream_layer.draw_circle(s[0], 2.0, Color(0.6, 0.5, 0.38, 0.8 * (1.0 - s[2] / 0.9)))

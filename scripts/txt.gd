@@ -210,6 +210,7 @@ const S := {
 	"act_measure": ["测量", "MEASURE"],
 	"act_inspect": ["检查", "INSPECT"],
 	"act_unbolt": ["拧下螺栓", "UNBOLT"],
+	"wrench_multi": ["同步拆装 ×%s", "GANGED ×%s"],
 	"act_unlock": ["解开锁扣", "UNLOCK"],
 	"act_clamp": ["松开船坞夹具", "RELEASE CLAMP"],
 	"act_unplug": ["拔下接头", "DISCONNECT"],

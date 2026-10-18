@@ -62,7 +62,7 @@ func _run() -> void:
 	check(g.grab_max() == 3.0 and not g.has_upgrade("grapple5"), "stock reset removes legacy alias and restores real 3 t limit")
 	await click(dev.bench.buttons.career_scope)
 	await click(dev.bench.buttons.preset_3)
-	check(Growth.progress() == 45 and g.grab_max() == 8.0, "permanent expert preset unlocks all 45 levels and fits this career job")
+	check(Growth.progress() == 48 and g.grab_max() == 8.0, "permanent expert preset unlocks all 48 levels and fits this career job")
 	await click(dev.bench.buttons.preset_0)
 	check(Growth.progress() == 0 and g.grab_max() == 3.0, "permanent stock preset downgrades aliases as well as levels")
 	await click(dev.bench.buttons.add_funds)
@@ -101,7 +101,7 @@ func _run() -> void:
 	for child in term.get_children():
 		if child is DevPanel: dev = child
 	dev.run(4)
-	check(Growth.progress() == 45, "legacy F4 shortcut now grants all skillbook levels")
+	check(Growth.progress() == 48, "legacy F4 shortcut now grants all skillbook levels")
 	dev.set_open(true)
 	await click(dev.bench.buttons.page_2)
 	DevPanel.b_ship = "h22"

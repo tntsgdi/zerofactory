@@ -15,6 +15,7 @@ var pieces := {}
 var order: Array = []          # piece ids in draw order
 var joints: Array = []
 var lines := {}
+var electrical_links_version := 0
 var ctrls := {}
 var rooms := {}
 var next_id := 1
@@ -129,6 +130,7 @@ func add_line(id: String, kind: String, net: String, a, pa: Vector2, b, pb: Vect
 	l.pb = pb
 	l.path = path
 	lines[id] = l
+	electrical_links_version += 1
 
 
 func add_ctrl(id: String, kind: String, piece, pos: Vector2, opts: Dictionary = {}) -> void:
@@ -641,6 +643,8 @@ func _process(dt: float) -> void:
 
 # back = the room backs too (their wall fades with the structure around them)
 func redraw_all(back: bool = false) -> void:
+	# Structural edits may reassign cable endpoints to newly cut fragments.
+	electrical_links_version += 1
 	dirty_draw = true
 	if back:
 		dirty_back = true
