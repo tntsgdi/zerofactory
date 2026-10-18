@@ -640,11 +640,14 @@ func _unhandled_input(ev: InputEvent) -> void:
 					say(plan.toggle(), drone.global_position + Vector2(0, -44))
 					sfx.play("switch")
 			"mouth":
+				# the equipment bay always runs on its rail; the furnace with the rail upgrade
+				dock.move_equip(drone.global_position.x / Geom.M)
 				if has_upgrade("mouth_rail"):
 					dock.move_mouth(drone.global_position.x / Geom.M)
-					say("mouth_moving", drone.global_position + Vector2(0, -44))
+					say("mouth_moving_both", drone.global_position + Vector2(0, -44))
 				else:
-					say("mouth_fixed", drone.global_position + Vector2(0, -44))
+					say("mouth_moving_equip", drone.global_position + Vector2(0, -44))
+				sfx.play("switch")
 			"mark": mark_salvage()
 			"use":
 				if consoles != null and state == "play" and consoles.near() != "":
@@ -1889,6 +1892,11 @@ func on_grab(p) -> void:
 	elif p.body.total_mass() > grab_max():
 		say("too_heavy", aim, "%.1f" % p.body.total_mass())
 		hint("heavy")
+	elif p.cls == "equip" and p.intact:
+		# whole equipment far from its bay: the bay comes to you
+		var bay := Dock.zpos(Dock.nearest("equip", aim))
+		if absf(bay.x - aim.x) > 10.0 * Geom.M:
+			hint("equip_rail")
 
 
 func on_tear(p, weak: Array, lines_held: Array, at: Vector2) -> void:
@@ -2645,7 +2653,7 @@ const MUST_SHARE := 0.10        # a named piece delivered whole: this share of i
 const MUST_VALUABLE := 0.25     # ...or this, on a valuable-equipment job
 const MUST_MIN := 500.0
 const SAFE_SHARE := 0.05        # a safe-recovery job with no incident: this share of what was earned
-const UI_HINTS := ["field", "hose", "measured", "drone_lost", "free_body", "equip_cut"]
+const UI_HINTS := ["field", "hose", "measured", "drone_lost", "free_body", "equip_cut", "equip_rail"]
 var hint_log: Array = []
 
 

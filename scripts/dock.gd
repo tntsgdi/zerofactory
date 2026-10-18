@@ -47,6 +47,19 @@ const RAIL_SPEED := 4.0             # m/s: the movable furnace mouth along its r
 static var metal_x := 21.0          # where the furnace mouth sits (it moves only with the rail upgrade)
 static var metal_home := 21.0       # where it sits at the start
 var mouth_target := 21.0
+# The equipment bays run on a ceiling rail along the boom and on past it
+# (P.5, player 2026-10-17: "the equipment mouth is too far away"): the mouth key
+# slides the nearest one to over the drone. Free from the start.
+const EQUIP_RAIL_X0 := 0.5          # m: the rail's near end (clear of the drone bay)
+const EQUIP_GAP := 7.0              # m: two bays on the rail keep this far apart
+const EQUIP_SPEED := 9.0            # m/s along the rail
+const RAIL_Y := -10.0               # m: the rail, under the boom
+static var equip_x := {}            # bay id -> where it sits on the rail (m); a bay not in it is at home
+var equip_goal := {}
+
+
+static func equip_rail_x1() -> float:
+	return FLOOR_X1 - 3.5
 
 
 # lay the berth out for a floor ending at x (m): STANDARD or EXTENDED
@@ -60,6 +73,7 @@ static func configure(x: float) -> void:
 	ZONES = BASE_ZONES.duplicate(true)
 	ZONES.hazard.pos.x += d
 	ZONES.equip.pos.x += d * 0.45
+	equip_x.clear()
 	ZONES.metal.pos.x += d * 0.45
 	metal_home = ZONES.metal.pos.x
 	MASTS = [Vector2(5.0, -10.0), Vector2(23.0 + d * 0.45, -10.0), Vector2(38.0 + d, 6.6)]
@@ -72,6 +86,7 @@ static func configure(x: float) -> void:
 # what the first takes; "kind" says which mouth it stands for.
 static func add_port2() -> void:
 	ZONES["equip2"] = {"pos": Vector2(FLOOR_X1 - 10.0, -8.4), "face": Vector2(0, 1), "w": 4.2, "kind": "equip"}
+	equip_x.erase("equip2")
 
 
 # what a mouth takes: "equip", "metal" or "hazard" (a second bay stands for the first)
@@ -139,6 +154,7 @@ var suck_x := 0.0
 func _init() -> void:
 	metal_x = metal_home
 	mouth_target = metal_home
+	_equip_home()
 	z_index = -1
 	z_as_relative = false
 	font = Fonts.get_font("Regular")
@@ -218,6 +234,7 @@ func set_ship(ship: Dictionary) -> void:
 	_mouth_drawn.clear()
 	metal_x = metal_home
 	mouth_target = metal_home
+	_equip_home()
 	_bounds()
 	if static_node != null:
 		static_node.queue_redraw()
@@ -243,6 +260,8 @@ func set_ship(ship: Dictionary) -> void:
 static func zpos(id: String) -> Vector2:
 	if id == "metal":
 		return Vector2(metal_x, ZONES.metal.pos.y) * Geom.M
+	if equip_x.has(id):
+		return Vector2(equip_x[id], ZONES[id].pos.y) * Geom.M
 	return ZONES[id].pos * Geom.M
 
 
@@ -253,6 +272,41 @@ static func inside(id: String) -> Vector2:
 # the rail upgrade: the furnace mouth runs along the trough to under x (m)
 func move_mouth(x: float) -> void:
 	mouth_target = clampf(x, TROUGH_X0 + 2.5, TROUGH_X1 - 2.5)
+
+
+# every equipment bay back at its home on the rail
+func _equip_home() -> void:
+	equip_x.clear()
+	for id in ZONES:
+		if kind(id) == "equip":
+			equip_x[id] = ZONES[id].pos.x
+	equip_goal = equip_x.duplicate()
+
+
+# the mouth key: the equipment bay nearest x (m) slides along its rail to x,
+# stopping at the rail's ends and short of the other bay
+func move_equip(x: float) -> void:
+	for id in ZONES:
+		if kind(id) == "equip" and not equip_x.has(id):
+			equip_x[id] = ZONES[id].pos.x
+			equip_goal[id] = equip_x[id]
+	var best := ""
+	for id in equip_x:
+		if best == "" or absf(equip_x[id] - x) < absf(equip_x[best] - x):
+			best = id
+	if best == "":
+		return
+	var lo := EQUIP_RAIL_X0
+	var hi := equip_rail_x1()
+	for id in equip_x:
+		if id == best:
+			continue
+		var ox: float = equip_goal.get(id, equip_x[id])
+		if ox < equip_x[best]:
+			lo = maxf(lo, ox + EQUIP_GAP)
+		else:
+			hi = minf(hi, ox - EQUIP_GAP)
+	equip_goal[best] = clampf(x, lo, maxf(lo, hi))
 
 
 # ---------------------------------------------------------------- per frame
@@ -328,6 +382,11 @@ func _process(dt: float) -> void:
 	if absf(metal_x - mouth_target) > 0.001:
 		metal_x = move_toward(metal_x, mouth_target, RAIL_SPEED * dt)
 		zone_state["metal"].glow = 1.0
+	for id in equip_goal:
+		if equip_x.has(id) and absf(equip_x[id] - equip_goal[id]) > 0.001:
+			equip_x[id] = move_toward(equip_x[id], equip_goal[id], EQUIP_SPEED * dt)
+			if zone_state.has(id):
+				zone_state[id].glow = 1.0
 	for id in zone_state:
 		var z: Dictionary = zone_state[id]
 		z.glow = maxf(0.0, z.glow - dt * 2.0)
@@ -685,6 +744,20 @@ func _draw_static() -> void:
 	# the open ends: striped, so the edge of the berth reads at a glance
 	_stripes(Rect2((FLOOR_X1 - 2.2) * M, FLOOR_Y * M + 3, 2.0 * M, 0.6 * M - 6))
 	_stripes(Rect2((ARM_X1 - 2.0) * M, -10.6 * M + 3, 1.6 * M, 0.6 * M - 6))
+	# the equipment bays' rail: under the boom, and on past it on a slim girder
+	var rx0 := (EQUIP_RAIL_X0 - 2.6) * M
+	var rx1 := (equip_rail_x1() + 2.6) * M
+	if rx1 > (ARM_X1 + 0.2) * M:
+		var hx := ARM_X1 + 4.0
+		while hx < rx1 / M - 0.5:
+			ci.draw_line(Vector2(hx, RAIL_Y - 0.4) * M, Vector2(hx, BOUNDS.position.y + 1.0) * M, Pal.ink(0.1), 1.4)
+			ci.draw_circle(Vector2(hx, RAIL_Y - 0.4) * M, 2.0, Pal.ink(0.3))
+			hx += 6.0
+		_truss(Rect2((ARM_X1 + 0.2) * M, (RAIL_Y - 0.4) * M, rx1 - (ARM_X1 + 0.2) * M, 0.4 * M))
+	ci.draw_line(Vector2(rx0, RAIL_Y * M + 2), Vector2(rx1, RAIL_Y * M + 2), Pal.ink(0.5), 2.0)
+	ci.draw_line(Vector2(rx0, RAIL_Y * M + 5), Vector2(rx1, RAIL_Y * M + 5), Pal.ink(0.16), 1.0)
+	for ex in [rx0, rx1]:
+		ci.draw_rect(Rect2(ex - 3, RAIL_Y * M - 2, 6, 10), Pal.heat(0.6, 1.1))
 	# the berth's own plate on the tower: its number, and whose it is
 	var pr := Rect2((TOWER_X + 0.9) * M, 5.0 * M, 8.0 * M, 1.4 * M)
 	ci.draw_rect(pr, Color(0.035, 0.037, 0.042, 0.96))
@@ -905,6 +978,19 @@ func _mouth(id: String, ci: CanvasItem) -> void:
 		ci.draw_circle(p, 2.6, zone_col(id, on, 1.3))
 	match kind(id):
 		"equip":
+			# the trolley it hangs from on the rail, wheels turning while it moves
+			var ty := RAIL_Y * M + 4.0
+			var moving: bool = equip_goal.has(id) and equip_x.has(id) and absf(equip_x[id] - equip_goal[id]) > 0.001
+			ci.draw_rect(Rect2(Vector2(c.x - 0.75 * M, ty), Vector2(1.5 * M, 10)), Color(0.07, 0.073, 0.082))
+			ci.draw_rect(Rect2(Vector2(c.x - 0.75 * M, ty), Vector2(1.5 * M, 10)), col, false, 1.4)
+			for wx in [-0.5, 0.5]:
+				var wc := Vector2(c.x + wx * M, ty)
+				ci.draw_circle(wc, 5.0, Color(0.05, 0.053, 0.06))
+				ci.draw_arc(wc, 5.0, 0.0, TAU, 12, col, 1.4, true)
+				var sp := c.x / 5.0
+				ci.draw_line(wc, wc + Vector2(cos(sp), sin(sp)) * 4.0, col, 1.2)
+			if moving:
+				ci.draw_circle(Vector2(c.x, ty + 5), 2.6, Pal.heat(0.6 + 0.4 * sin(t * 12.0), 1.6))
 			# padded cradle arms either side, guide rails down the throat
 			for s in [-1.0, 1.0]:
 				var a0: Vector2 = c + side * s * (lip + 4.0)
