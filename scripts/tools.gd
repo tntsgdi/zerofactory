@@ -30,6 +30,7 @@ var front_prev := Vector2.ZERO
 var pending := {}          # piece id -> {"pl": PackedVector2Array, "anch": bool, "t": float}
 var auth := {}
 var blocked := {}          # {"piece": id, "t": time}
+var warn := {}             # {"piece": id, "t": time, "d": px}: the beam is close to intact equipment
 var in_material := false
 var material_k := 0.0
 var touched := {}          # piece id -> true (hazards fire once per stroke)
@@ -507,10 +508,6 @@ func _laser(dt: float) -> void:
 		tail_on = false
 		pending = {}
 		touched = {}
-		# a second press on the same piece confirms cutting into equipment
-		if not blocked.is_empty() and t - blocked.t < 4.0:
-			auth[blocked.piece] = true
-			blocked = {}
 		var start := desired
 		if world.hidden(start):
 			start = _last_visible(drone.global_position, start)
@@ -519,16 +516,12 @@ func _laser(dt: float) -> void:
 		for q in at[1]:
 			if _locked(q):
 				guard_hit = true
-			elif _guarded(q):
-				guard_hit = true
-				blocked = {"piece": q.id, "t": t}
-				game.on_laser_blocked(q, start)
 		if guard_hit:
 			start = _last_free(drone.global_position, start)
 		front = start
 		front_prev = front
 		for q in _speed_at(front)[1]:
-			if not _guarded(q) and not laser_lock.has(q.id):
+			if not laser_lock.has(q.id):
 				_kerf_point(q, front)
 				if not touched.has(q.id):
 					touched[q.id] = true
@@ -554,11 +547,6 @@ func _laser(dt: float) -> void:
 		for q in sa[1]:
 			if _locked(q):
 				stop = true
-			elif _guarded(q):
-				if blocked.is_empty() or blocked.piece != q.id:
-					game.on_laser_blocked(q, np)
-				blocked = {"piece": q.id, "t": t}
-				stop = true
 		if stop:
 			break
 		var cost: float = stepl / sa[0]
@@ -569,6 +557,29 @@ func _laser(dt: float) -> void:
 		budget -= cost
 		front = np
 		went += stepl
+		# the beam left a piece — into air, or straight across a seam into the
+		# next plate: carry that piece's kerf out past its edge, so the cut always
+		# spans it instead of ending a step short (across a seam it used to stop
+		# short every time, and the plate stayed whole)
+		for q in prev_list:
+			if not sa[1].has(q) and pending.has(q.id):
+				_kerf_point(q, np)
+				pending[q.id].anch = true
+		# The front often sits in the slot it has just cut (no material there), so
+		# a piece being cut drops out of what is under the beam a little before its
+		# far edge — and when the metal left before a seam is narrower than the
+		# kerf, the beam steps clean over it and the piece never "comes back" to
+		# be finished. Keep a piece's kerf running with the beam while the beam is
+		# still at its edge.
+		var reach: float = game.skill_value("laser_kerf") + 3.0
+		for id in pending.keys():
+			var pq = world.pieces.get(id)
+			if pq == null or pq.gone or sa[1].has(pq) or prev_list.has(pq):
+				continue
+			var lnp: Vector2 = world.frame(pq).affine_inverse() * np - world.door_offset(pq)
+			if Geom.dist_to_boundary(lnp, pq.poly) <= reach:
+				_kerf_point(pq, np)
+				pending[id].anch = true
 		if not sa[1].is_empty():
 			in_material = true
 			for q in sa[1]:
@@ -576,16 +587,10 @@ func _laser(dt: float) -> void:
 				if not touched.has(q.id):
 					touched[q.id] = true
 					game.on_cut_into(q, front)
-		elif not prev_list.is_empty():
-			# the beam left the material: carry the kerf out to the edge, so the
-			# cut always spans the piece instead of ending a step short of it
-			for q in prev_list:
-				if pending.has(q.id):
-					_kerf_point(q, np)
-					pending[q.id].anch = true
 		prev_list = sa[1]
 		moved_world.append(front)
 	material_k = Pal.damp(material_k, 1.0 if in_material else 0.0, 18.0, dt)
+	_warn_equipment()
 	# lines the beam passed over
 	if moved_world.size() >= 2:
 		for hit in world.cut_lines(moved_world, game.skill_value("laser_kerf")):
@@ -609,11 +614,48 @@ func _laser(dt: float) -> void:
 		_cut_fx(dt, went)
 
 
+# Equipment does not stop the beam any more (it used to wait for a second
+# click): close to an intact unit the beam and the unit's outline flash red and
+# a warning sounds once; cut on and it is scrap — the player's call.
+const WARN_NEAR := 36.0           # px (0.75 m) from the unit's edge
+
+func _warn_equipment() -> void:
+	var best = null
+	var bd := WARN_NEAR
+	for id in world.order:
+		var q = world.pieces[id]
+		if q.gone or q.cls != "equip" or not q.intact:
+			continue
+		var lp: Vector2 = world.frame(q).affine_inverse() * front - world.door_offset(q)
+		var bb := Geom.bbox(q.poly).grow(WARN_NEAR)
+		if not bb.has_point(lp):
+			continue
+		var d := 0.0 if Geometry2D.is_point_in_polygon(lp, q.poly) else Geom.dist_to_boundary(lp, q.poly)
+		if d <= bd:
+			bd = d
+			best = q
+	if best == null:
+		return
+	var fresh: bool = warn.is_empty() or warn.piece != best.id or t - warn.t > 2.0
+	warn = {"piece": best.id, "t": t, "d": bd}
+	if fresh:
+		game.on_laser_near_equipment(best, front)
+
+
 func _kerf_point(q, wp: Vector2) -> void:
 	var lp: Vector2 = world.frame(q).affine_inverse() * wp - world.door_offset(q)
 	if not pending.has(q.id):
-		var near_edge: bool = Geom.dist_to_boundary(lp, q.poly) <= game.skill_value("laser_kerf") + 1.5 or not Geometry2D.is_point_in_polygon(lp, q.poly)
-		pending[q.id] = {"pl": PackedVector2Array([lp]), "anch": near_edge, "t": 0.0}
+		var inside := Geometry2D.is_point_in_polygon(lp, q.poly)
+		var near_edge: bool = Geom.dist_to_boundary(lp, q.poly) <= game.skill_value("laser_kerf") + 1.5 or not inside
+		var pl := PackedVector2Array([lp])
+		if inside and near_edge:
+			# The beam steps up to 3 px at a time, so the first point it lays in a
+			# piece (entering it, or crossing a seam into the next plate) can sit
+			# that far inside the edge — more than a fine kerf's radius, which left
+			# a hair of metal joining the halves. Start the kerf just outside the
+			# edge, the way the exit end is carried out.
+			pl = PackedVector2Array([_outside_edge(lp, q.poly), lp])
+		pending[q.id] = {"pl": pl, "anch": near_edge, "t": 0.0}
 		return
 	var pd: Dictionary = pending[q.id]
 	var pl: PackedVector2Array = pd.pl
@@ -622,6 +664,22 @@ func _kerf_point(q, wp: Vector2) -> void:
 		pd.pl = pl
 	if not pd.anch and Geom.dist_to_boundary(lp, q.poly) <= game.skill_value("laser_kerf") + 1.0:
 		pd.anch = true
+
+
+# the nearest point of a polygon's edge to p, pushed a little past it
+func _outside_edge(p: Vector2, poly: PackedVector2Array) -> Vector2:
+	var best := p
+	var bd := INF
+	for i in poly.size():
+		var c := Geometry2D.get_closest_point_to_segment(p, poly[i], poly[(i + 1) % poly.size()])
+		var d := c.distance_to(p)
+		if d < bd:
+			bd = d
+			best = c
+	var out := best - p
+	if out.length() < 0.01:
+		return best
+	return best + out.normalized() * 2.0
 
 
 func _commit(id: int) -> void:
@@ -678,7 +736,8 @@ func _last_free(a: Vector2, b: Vector2) -> Vector2:
 		var m := (lo + hi) * 0.5
 		var guarded := false
 		for q in world.pieces_at(a.lerp(b, m)):
-			if _guarded(q):
+			# only the training interlock holds the beam back now
+			if laser_lock.has(q.id):
 				guarded = true
 		if guarded:
 			hi = m
@@ -853,9 +912,9 @@ func _draw() -> void:
 			draw_circle(tip, 2.5 / z, Pal.ink(1.0))
 	# cursor
 	_cursor(z)
-	# blocked laser hint ring
-	if tool == 2 and not blocked.is_empty() and t - blocked.t < 4.0:
-		var bp = world.pieces.get(blocked.piece)
+	# the unit the beam is about to cut into, outlined in red
+	if tool == 2 and not warn.is_empty() and t - warn.t < 0.25:
+		var bp = world.pieces.get(warn.piece)
 		if bp != null and not bp.gone:
 			var poly2: PackedVector2Array = world.world_poly(bp)
 			var cl2 := poly2.duplicate()
@@ -916,8 +975,15 @@ func _draw_add() -> void:
 		var m := drone.muzzle()
 		var k := material_k
 		var flick := 0.85 + 0.15 * sin(t * 90.0)
-		add_node.draw_line(m, front, Pal.heat(0.22 + 0.25 * k, 1.5), (4.0 + 3.0 * k) * flick, true)
-		add_node.draw_line(m, front, Color(2.0, 1.7, 1.4, 0.75 + 0.2 * k), 1.4, true)
+		# close to intact equipment the beam itself turns red and pulses
+		var hot: bool = not warn.is_empty() and t - warn.t < 0.25
+		var pulse := 0.6 + 0.4 * sin(t * 18.0)
+		var outer: Color = Color(2.4, 0.25, 0.2, (0.35 + 0.3 * k) * pulse) if hot else Pal.heat(0.22 + 0.25 * k, 1.5)
+		var inner: Color = Color(2.4, 0.9, 0.8, 0.85) if hot else Color(2.0, 1.7, 1.4, 0.75 + 0.2 * k)
+		add_node.draw_line(m, front, outer, (4.0 + 3.0 * k) * flick * (1.4 if hot else 1.0), true)
+		add_node.draw_line(m, front, inner, 1.4, true)
+		if hot:
+			add_node.draw_texture_rect(tex, Rect2(front - Vector2(34, 34), Vector2(68, 68)), false, Color(2.2, 0.2, 0.15, 0.45 * pulse))
 		# light runs down the beam
 		var bl := m.distance_to(front)
 		var bd := (front - m) / maxf(bl, 1.0)

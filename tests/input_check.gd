@@ -1,5 +1,5 @@
 extends SceneTree
-# Real-input checks: laser stops at equipment and needs a second click; the
+# Real-input checks: the laser warns (red) close to equipment and cuts on into it; the
 # wrench unbolts; the grapple strains against locks and tears them; the hatch
 # needs its jam cleared. tools/run_test.sh tests/input_check.gd --fixed-fps 60
 
@@ -22,10 +22,8 @@ func _initialize() -> void:
 		[3, func(): _open_all(); _park(Vector2(12.4, -1.0)); game.tools.set_tool(2); bot.aim = Vector2(12.4, -0.2) * M],
 		[5, func(): bot.lmb = true],
 		[8, func(): bot.aim = Vector2(12.4, 1.2) * M],
-		[30, func(): print("laser blocked at C-01: ", not game.tools.blocked.is_empty(), "  C-01 intact: ", game.world.tag("C-01").intact)],
-		[31, func(): bot.lmb = false],
-		[34, func(): bot.lmb = true],
-		[60, func(): bot.lmb = false; print("after second click C-01 intact: ", game.world.tag("C-01").intact)],
+		[30, func(): print("laser warned at C-01: ", not game.tools.warn.is_empty() and game.world.pieces.get(game.tools.warn.piece) == game.world.tag("C-01"))],
+		[60, func(): bot.lmb = false; print("one stroke on, C-01 intact: ", game.world.tag("C-01").intact, " (cut into it: scrap)")],
 		# wrench the four locks of C-03
 		[70, func(): game.tools.set_tool(4); _park(Vector2(20.6, 0.6))],
 		[72, func(): _press_joint("C-03", 0)],

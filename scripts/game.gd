@@ -1548,8 +1548,8 @@ func on_drone_destroyed() -> void:
 
 # ---------------------------------------------------------------- tool events
 
-func on_laser_blocked(p, pos: Vector2) -> void:
-	say("confirm_cut", pos, Txt.piece_name(p))
+func on_laser_near_equipment(p, pos: Vector2) -> void:
+	say("laser_near", pos, p.tag if p.tag != "" else Txt.piece_name(p))
 	sfx.play("warn")
 	hint("equip_cut")
 
