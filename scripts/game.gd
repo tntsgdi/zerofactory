@@ -235,6 +235,7 @@ func _ready() -> void:
 	tools = Tools.new()
 	tools.game = self
 	tools.world = world
+	world.piece_reframed.connect(tools.on_piece_reframed)
 	tools.sys = sys
 	tools.drone = drone
 	add_child(tools)

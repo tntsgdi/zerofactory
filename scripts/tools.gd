@@ -654,6 +654,14 @@ func _warn_equipment() -> void:
 		game.on_laser_near_equipment(best, front)
 
 
+# a piece being cut came loose (or changed body) mid-kerf: the points laid so
+# far follow it into its new frame, or the kerf joined the old frame to the new
+# one in a line across the berth
+func on_piece_reframed(p, t: Transform2D) -> void:
+	if pending.has(p.id):
+		pending[p.id].pl = t * (pending[p.id].pl as PackedVector2Array)
+
+
 func _kerf_point(q, wp: Vector2) -> void:
 	var lp: Vector2 = world.frame(q).affine_inverse() * wp - world.door_offset(q)
 	if not pending.has(q.id):
@@ -701,14 +709,19 @@ func _commit(id: int) -> void:
 	if p == null or p.gone:
 		return
 	var pl: PackedVector2Array = pd.pl
+	# where the front is, in the berth: the cut can free a part, and a freed
+	# part has a frame of its own (the old point in it drew a line across the berth)
+	var w_last: Vector2 = world.frame(p) * (pl[pl.size() - 1] + world.door_offset(p))
 	var res: Dictionary = world.commit_cut(p, pl, game.skill_value("laser_kerf"))
 	game.on_kerf(p, res)
 	stroke_cuts += 1
 	# keep cutting from where the front is now, on whatever holds that point
 	if not res.gone:
-		var last := pl[pl.size() - 1]
 		for q in [p] + res.new:
-			if not q.gone and (Geometry2D.is_point_in_polygon(last, q.poly) or Geom.dist_to_boundary(last, q.poly) < 6.0):
+			if q.gone:
+				continue
+			var last: Vector2 = world.frame(q).affine_inverse() * w_last - world.door_offset(q)
+			if Geometry2D.is_point_in_polygon(last, q.poly) or Geom.dist_to_boundary(last, q.poly) < 6.0:
 				pending[q.id] = {"pl": PackedVector2Array([last]), "anch": true, "t": 0.0}
 				break
 

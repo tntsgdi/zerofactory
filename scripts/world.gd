@@ -5,6 +5,8 @@ extends Node2D
 # that loses its last connection into a FreeBody, and applies laser kerfs.
 
 signal piece_freed(body)
+# a piece moved into a new frame (t: old frame -> new): whoever keeps points in its frame follows
+signal piece_reframed(p, t)
 
 const KERF := 3.4
 const BOLT_RING := [Vector2(1, 0), Vector2(0.7071, 0.7071), Vector2(0, 1), Vector2(-0.7071, 0.7071), Vector2(-1, 0), Vector2(-0.7071, -0.7071), Vector2(0, -1), Vector2(0.7071, -0.7071)]
@@ -543,8 +545,10 @@ static func free_shape(c: Node) -> void:
 func _reframe(p, t: Transform2D) -> void:
 	p.poly = t * p.poly
 	p.art_xf = t * p.art_xf
-	for h in p.heat:
-		h[0] = t * h[0]
+	# new entries, not edited in place: both halves of a cut share the kerf's
+	# entry, and moving one half's copy dragged the other half's glow along
+	# into the wrong frame (a long red line from the piece across the berth)
+	p.heat = p.heat.map(func(h): return [t * (h[0] as PackedVector2Array), h[1]])
 	for j in joints:
 		if j.a == p.id:
 			j.pos = t * j.pos
@@ -559,6 +563,7 @@ func _reframe(p, t: Transform2D) -> void:
 		if c.piece == p.id:
 			c.pos = t * c.pos
 	p.open_dir = t.basis_xform(p.open_dir)
+	piece_reframed.emit(p, t)
 
 
 func _kill_body(b) -> void:
