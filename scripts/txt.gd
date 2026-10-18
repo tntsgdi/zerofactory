@@ -20,6 +20,21 @@ static var dev := false               # developer mode (F12)
 static var context := true            # the tool follows what the cursor is on (not the laser)
 static var fullscreen := false
 static var calm := false              # no screen shake, flashes or hit-stops
+# animation intensity (UI animation, 2026-10-17): "full" (glow, particles,
+# trails), "lite" (the motion without particles, afterimages or big glows),
+# "off" (screens switch at once, no transitions; shake and flashes off too)
+static var anim := "full"
+const ANIM_LEVELS := ["off", "lite", "full"]
+
+
+# shake, white flashes and hit-stops: off by their own switch, or with animation off
+static func no_flash() -> bool:
+	return calm or anim == "off"
+
+
+# 2 full, 1 reduced, 0 off
+static func anim_level() -> int:
+	return maxi(0, ANIM_LEVELS.find(anim))
 const TIERS := ["guided", "standard", "hardcore"]
 const CFG := "user://zeropower_settings.cfg"
 
@@ -775,6 +790,10 @@ const S := {
 	"s_win_full": ["全屏", "FULLSCREEN"],
 	"s_win_window": ["窗口", "WINDOW"],
 	"s_calm": ["震屏 / 闪白 / 顿帧", "SHAKE / FLASH / HIT-STOP"],
+	"s_anim": ["动画强度", "ANIMATION"],
+	"s_anim_full": ["完整", "FULL"],
+	"s_anim_lite": ["精简", "REDUCED"],
+	"s_anim_off": ["关闭", "OFF"],
 	"autosaved": ["已自动保存", "AUTOSAVED"],
 	"s_keys_row": ["按键设置", "KEY BINDINGS"],
 	"s_on": ["开", "ON"],
@@ -1112,6 +1131,9 @@ static func load_settings(testing: bool) -> void:
 		context = cf.get_value("ui", "context", true)
 		fullscreen = cf.get_value("video", "fullscreen", false)
 		calm = cf.get_value("video", "calm", false)
+		anim = cf.get_value("video", "anim", "full")
+		if not anim in ANIM_LEVELS:
+			anim = "full"
 		Keys.load_from(cf)
 		vol_master = cf.get_value("audio", "master", 1.0)
 		vol_music = cf.get_value("audio", "music", 0.8)
@@ -1136,6 +1158,7 @@ static func save_settings(testing: bool) -> void:
 	cf.set_value("ui", "context", context)
 	cf.set_value("video", "fullscreen", fullscreen)
 	cf.set_value("video", "calm", calm)
+	cf.set_value("video", "anim", anim)
 	Keys.store(cf)
 	cf.set_value("audio", "master", vol_master)
 	cf.set_value("audio", "music", vol_music)

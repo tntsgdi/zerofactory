@@ -144,7 +144,7 @@ func show_hint(text: String) -> void:
 
 
 func white_flash(a: float) -> void:
-	if Txt.calm:
+	if Txt.no_flash():
 		return
 	flash = maxf(flash, a)
 

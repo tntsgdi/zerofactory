@@ -28,6 +28,8 @@ func _initialize() -> void:
 	Txt.vol_sfx = 0.9
 	Txt.quality = "high"
 	Txt.zh = true
+	Txt.anim = "full"
+	Txt.calm = false
 	# what a player does: master down 3, music down 8, sfx up 1, quality, language
 	for i in 3:
 		panel.change("vol_master", -1)
@@ -36,7 +38,10 @@ func _initialize() -> void:
 	panel.change("vol_sfx", 1)
 	panel.change("quality", 1)
 	panel.change("lang", 1)
-	var want := {"master": 0.7, "music": 0.0, "sfx": 1.0, "quality": "low", "zh": false}
+	panel.change("anim", -1)
+	panel.change("anim", -1)
+	var want := {"master": 0.7, "music": 0.0, "sfx": 1.0, "quality": "low", "zh": false, "anim": "off"}
+	_check(Txt.no_flash(), "animation off turns shake and flashes off with it")
 	_check(FileAccess.file_exists(TEST_CFG), "settings written to the test file")
 	# a restart: fresh values, then the file
 	Txt.vol_master = 0.123
@@ -44,8 +49,9 @@ func _initialize() -> void:
 	Txt.vol_sfx = 0.789
 	Txt.quality = "high"
 	Txt.zh = true
+	Txt.anim = "full"
 	Txt.load_settings(false)
-	var got := {"master": snappedf(Txt.vol_master, 0.01), "music": snappedf(Txt.vol_music, 0.01), "sfx": snappedf(Txt.vol_sfx, 0.01), "quality": Txt.quality, "zh": Txt.zh}
+	var got := {"master": snappedf(Txt.vol_master, 0.01), "music": snappedf(Txt.vol_music, 0.01), "sfx": snappedf(Txt.vol_sfx, 0.01), "quality": Txt.quality, "zh": Txt.zh, "anim": Txt.anim}
 	_check(str(got) == str(want), "read back after restart: %s" % str(got))
 	Settings.apply(root)
 	var mi := AudioServer.get_bus_index("Music")

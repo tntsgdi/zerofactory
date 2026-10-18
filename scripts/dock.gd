@@ -793,12 +793,13 @@ func _draw_static() -> void:
 	var hr := Rect2(bc + Vector2(-100, -48), Vector2(100, 96))
 	ci.draw_rect(hr, Color(0.05, 0.053, 0.06))
 	ci.draw_polyline(PackedVector2Array([bc + Vector2(0, -48), bc + Vector2(-100, -48), bc + Vector2(-100, 48), bc + Vector2(0, 48)]), Pal.ink(0.7), 2.0, true)
-	# the launch pad: an octagon outline with landing marks
+	# the launch pad: the drone's outline painted on it (nose to the door), with landing marks
 	var pc := bc + Vector2(-46, 0)
-	var oct := PackedVector2Array()
-	for i in 9:
-		oct.append(pc + Vector2.from_angle(TAU * i / 8.0 + PI / 8.0) * 30.0)
-	ci.draw_polyline(oct, Pal.ink(0.3), 1.4, true)
+	var pad := PackedVector2Array()
+	for v in preload("res://scripts/drone_art.gd").ARROW:
+		pad.append(pc + (v as Vector2) * 1.25)
+	pad.append(pad[0])
+	ci.draw_polyline(pad, Pal.ink(0.3), 1.4, true)
 	for i in 4:
 		var d := Vector2.from_angle(TAU * i / 4.0)
 		ci.draw_line(pc + d * 34.0, pc + d * 42.0, Pal.ink(0.4), 2.0)

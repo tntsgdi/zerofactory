@@ -34,6 +34,12 @@ var hold_t := 0.0
 var t := 0.0
 var carried := 0
 var wait_t := 0.0               # s spent holding back for the drone
+# its airframe (2026-10-17): every drone in the berth looks different; drawn
+# smaller and in air-blue, turned the way it travels
+const Art = preload("res://scripts/drone_art.gd")
+var heading := -PI / 2.0
+var _last_pos := Vector2.ZERO
+var _move := Vector2.ZERO
 
 
 func _init() -> void:
@@ -254,7 +260,16 @@ func _crosses(a: Vector2, b: Vector2, r: Rect2) -> bool:
 	return false
 
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
+	var v := (pos - _last_pos) / maxf(dt, 0.001)
+	_last_pos = pos
+	_move = _move.lerp(v, 1.0 - exp(-8.0 * dt))
+	var want := heading
+	if _move.length() > 20.0:
+		want = _move.angle()
+	elif body != null and is_instance_valid(body):
+		want = (body.global_transform * body.center_of_mass - pos).angle()
+	heading = lerp_angle(heading, want, 1.0 - exp(-6.0 * dt))
 	queue_redraw()
 
 
@@ -271,9 +286,13 @@ func _draw() -> void:
 	# the drone itself, and its line to the load
 	if body != null and is_instance_valid(body) and state in ["carry", "release"]:
 		draw_line(pos, body.global_transform * body.center_of_mass, Pal.tint(Pal.AIR, 0.5, 1.2), 1.2, true)
-	var hexp := PackedVector2Array()
-	for i in 9:
-		hexp.append(pos + Vector2.from_angle(TAU * i / 8.0 + PI / 8.0) * R)
-	draw_colored_polygon(hexp.slice(0, 8), Color(0.07, 0.074, 0.084))
-	draw_polyline(hexp, Pal.tint(Pal.AIR, 0.9, 1.1), 1.4, true)
-	draw_circle(pos, 3.0, Pal.tint(Pal.AIR, 0.9, 1.4) if state != "idle" else Pal.ink(0.5))
+	var sc := R / 20.0
+	var xf := Transform2D(0.0, Vector2(sc, sc), 0.0, pos)
+	draw_set_transform_matrix(xf)
+	var busy := state != "idle"
+	var push := _move.normalized() * clampf(_move.length() / 120.0, 0.0, 1.0) if Txt.anim_level() > 0 else Vector2.ZERO
+	Art.tint = Color(Pal.AIR.r * 1.05, Pal.AIR.g * 1.05, Pal.AIR.b * 1.05)
+	Art.draw(self, "tripod" if who == "hauler2" else "coreclaw", {"heading": heading, "tool": 3 if busy else 0, "open": 1.0 if state in ["carry", "release"] else (0.4 if busy else 0.0),
+		"t": t, "thrust": push, "dash": false, "design": "", "base_xf": xf})
+	Art.tint = Color(1, 1, 1)
+	draw_set_transform_matrix(Transform2D.IDENTITY)

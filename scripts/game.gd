@@ -835,13 +835,13 @@ func _pan(dt: float) -> void:
 
 # a few frames of near-freeze that sell an impact
 func hitstop(sec: float) -> void:
-	if state != "play" or bot != null or Txt.calm:
+	if state != "play" or bot != null or Txt.no_flash():
 		return
 	hitstop_t = maxf(hitstop_t, sec)
 
 
 func shake(amount: float, dir: Vector2 = Vector2.ZERO) -> void:
-	if Txt.calm:
+	if Txt.no_flash():
 		return
 	trauma = minf(1.0, trauma + amount)
 	punch += dir * 12.0 * amount

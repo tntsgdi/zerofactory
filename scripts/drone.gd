@@ -21,6 +21,15 @@ var alive := true
 var dashing := false
 var braking := false
 var trail: Array = []
+# the airframe (UI animation, 2026-10-17: H1 arrow-ring, scripts/drone_art.gd)
+const Art = preload("res://scripts/drone_art.gd")
+const DESIGN := "arrowring"
+const BOOT_T := 1.1           # s: the launch draw-on
+const OPEN_T := 0.25          # s: a tool's transform
+var tool_shown := 0
+var tool_open := 1.0
+var art_t := 0.0
+var _booted := false
 var hit_imp := 0.0
 var hit_pos := Vector2.ZERO
 var hurt_t := 0.0
@@ -155,13 +164,30 @@ func _process(dt: float) -> void:
 	for i in 4:
 		var target := maxf(0.0, -thrust.dot(dirs[i]))
 		flame[i] = Pal.damp(flame[i], target, 22.0, dt)
+	art_t += dt
 	var fx = game.fx
-	if alive:
-		for i in 4:
-			if flame[i] > 0.3 and randf() < flame[i] * 0.6:
-				var d: Vector2 = dirs[i]
-				var o: Vector2 = global_position + d * (R + 3.0)
-				fx.puff(o, d * randf_range(90, 160) * flame[i] + linear_velocity * 0.5, randf_range(0.18, 0.32), 3.0, 9.0 * flame[i], Pal.heat(0.12, 1.0))
+	var lvl := Txt.anim_level()
+	# a new tool: the airframe changes over to it
+	var tl: int = game.tools.tool if game.tools != null else 0
+	if tl != tool_shown:
+		tool_shown = tl
+		tool_open = 0.0
+		if alive and lvl >= 2 and spawn_t > BOOT_T:
+			fx.ring(global_position + Vector2(28, 0).rotated(heading), 3.0, 30.0, 0.28, Art.tool_col(tl, 0.7, 1.8), 1.4)
+	tool_open = 1.0 if lvl == 0 else move_toward(tool_open, 1.0, dt / OPEN_T)
+	# out of the launch: one pulse as it comes fully alive
+	if alive and not _booted and spawn_t >= BOOT_T:
+		_booted = true
+		if lvl >= 1:
+			fx.ring(global_position, 8.0, 70.0, 0.45, Pal.ink(0.6, 1.6), 1.6)
+	if spawn_t < 0.05:
+		_booted = false
+	if alive and lvl >= 1:
+		for jet in Art.arrowring_jets(art_state()):
+			var f: float = jet[2]
+			if f > 0.3 and randf() < f * (0.6 if lvl >= 2 else 0.25):
+				var d: Vector2 = jet[1]
+				fx.puff(global_position + jet[0] + d * 3.0, d * randf_range(90, 160) * f + linear_velocity * 0.5, randf_range(0.18, 0.32), 2.5, 8.0 * f, Pal.heat(0.12, 1.0))
 		if dashing:
 			trail.push_front(global_position)
 		else:
@@ -198,80 +224,62 @@ func hurt(amount: float, from: Vector2) -> void:
 func _draw() -> void:
 	if not alive:
 		return
-	# afterimages while burning hard
-	for i in range(trail.size() - 1, 0, -1):
-		var p: Vector2 = trail[i] - global_position
-		var k := 1.0 - float(i) / trail.size()
-		draw_circle(p, R * (0.55 + 0.4 * k), Pal.ink(0.05 * k))
-	# body: a rounded hexagon
-	var hexp := PackedVector2Array()
-	for i in 8:
-		hexp.append(Vector2.from_angle(TAU * i / 8.0 + PI / 8.0) * R)
-	draw_colored_polygon(hexp, Color(0.07, 0.074, 0.084))
-	var flash := hurt_t / 0.35
-	var ring_c := Pal.ink(0.95).lerp(Pal.heat(1.0, 1.8), flash)
-	var closed := hexp.duplicate()
-	closed.append(hexp[0])
-	draw_polyline(closed, ring_c, 1.8, true)
-	# four nozzle pods
-	var dirs := [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP]
-	for d in dirs:
-		var c: Vector2 = d * (R - 1.0)
-		var t := Vector2(-d.y, d.x)
-		draw_line(c + t * 5.0, c - t * 5.0, Pal.ink(0.8), 3.0)
-	# fitted upgrades show on the airframe
-	if game != null and game.has_upgrade("grapple5"):
-		# the bigger tractor emitter: a heavy ring round the lens and two coil blocks
-		draw_arc(Vector2.ZERO, 12.5, 0.0, TAU, 28, Pal.ink(0.7), 2.4, true)
-		for s in [-1.0, 1.0]:
-			var a: float = heading + s * 0.9
-			draw_rect(Rect2(Vector2.from_angle(a) * 13.0 - Vector2(3, 3), Vector2(6, 6)), Pal.ink(0.75))
-	if game != null and game.has_upgrade("scan_kit"):
-		# the precision inspection head: a small dish on a mast
-		var up := Vector2(0, -R - 2.0)
-		draw_line(Vector2(0, -R + 2.0), up + Vector2(0, -6), Pal.ink(0.7), 1.4)
-		draw_arc(up + Vector2(0, -6), 5.0, PI * 1.1, PI * 1.9, 10, Pal.ink(0.85), 1.6, true)
-		draw_circle(up + Vector2(0, -9), 1.4, Pal.tint(Pal.AIR, 0.9, 1.4))
-	# lens looks where you aim
-	var lens := Vector2.from_angle(heading) * 7.0
-	draw_circle(Vector2.ZERO, 8.5, Color(0.03, 0.03, 0.035))
-	draw_arc(Vector2.ZERO, 8.5, 0.0, TAU, 20, Pal.ink(0.6), 1.0, true)
-	draw_circle(lens * 0.5, 3.4, Pal.ink(0.95))
+	var lvl := Txt.anim_level()
+	# afterimages while burning hard: the hull's ghost along the trail
+	if lvl >= 2:
+		for i in range(trail.size() - 1, 0, -1):
+			var p: Vector2 = trail[i] - global_position
+			var k := 1.0 - float(i) / trail.size()
+			draw_set_transform(p, heading, Vector2.ONE * (0.8 + 0.2 * k))
+			draw_colored_polygon(PackedVector2Array(Art.ARROW), Pal.ink(0.035 * k))
+		draw_set_transform(Vector2.ZERO)
+	Art.draw(self, DESIGN, art_state())
+	# hit: the hull flashes in heat
+	if hurt_t > 0.0:
+		var flash := hurt_t / 0.35
+		var hull := Art.rot(Art.ARROW, heading)
+		Art.outline(self, hull, Pal.heat(flash, 1.8), 2.4)
 	if game != null:
-		var armor := Growth.level(game.job.get("kit", {}), "armor")
+		# fitted upgrades show on the airframe: armour as plates round the hull,
+		# shield arcs ahead, drive ticks at the tail
+		var kit: Dictionary = game.job.get("kit", {})
+		var armor := Growth.level(kit, "armor")
 		for i in armor:
-			draw_rect(Rect2(Vector2(-23 - i * 3, -23 - i * 3), Vector2(46 + i * 6, 46 + i * 6)), Pal.ink(0.55), false, 1.0)
-		var shield := Growth.level(game.job.get("kit", {}), "shield")
+			var hull := Art.rot(Art.ARROW, heading, 1.18 + i * 0.12)
+			Art.outline(self, hull, Pal.ink(0.22), 1.0)
+		var shield := Growth.level(kit, "shield")
 		for i in shield:
 			draw_arc(Vector2.ZERO, 33.0 + i * 4, heading - 0.6, heading + 0.6, 20, Pal.ink(0.6), 1.0, true)
-		var drive := Growth.level(game.job.get("kit", {}), "drive")
+		var drive := Growth.level(kit, "drive")
 		for i in drive:
-			draw_line(Vector2(-14 + i * 12, -27), Vector2(-14 + i * 12, -34), Pal.ink(0.8), 2.0)
+			var tail := Vector2(-19 - i * 3, 0).rotated(heading)
+			var n := Vector2(0, 5).rotated(heading)
+			draw_line(tail - n, tail + n, Pal.ink(0.8), 1.6)
+		if game.has_upgrade("grapple5"):
+			draw_arc(Vector2(-2, 0).rotated(heading), 11.5, 0.0, TAU, 28, Pal.ink(0.5), 1.2, true)
 	# integrity tick ring
 	if integrity < 100.0:
-		draw_arc(Vector2.ZERO, R + 7.0, -PI / 2.0, -PI / 2.0 + TAU * integrity / 100.0, 40, Pal.ink(0.35) if integrity > 35.0 else Pal.heat(0.8, 1.2), 1.6, true)
+		draw_arc(Vector2.ZERO, R + 9.0, -PI / 2.0, -PI / 2.0 + TAU * integrity / 100.0, 40, Pal.ink(0.35) if integrity > 35.0 else Pal.heat(0.8, 1.2), 1.6, true)
+
+
+# what the airframe drawing needs this frame
+func art_state() -> Dictionary:
+	return {"heading": heading, "tool": tool_shown, "open": tool_open, "t": art_t, "thrust": thrust, "dash": dashing,
+		"boot": boot(), "design": DESIGN, "base_xf": Transform2D.IDENTITY}
+
+
+# the launch: the airframe draws itself on over its first second out
+func boot() -> float:
+	if Txt.anim_level() == 0:
+		return 1.0
+	return clampf(spawn_t / BOOT_T, 0.0, 1.0)
 
 
 func _draw_add() -> void:
-	if not alive:
+	if not alive or Txt.anim_level() == 0:
 		return
-	var dirs := [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP]
 	var tex: Texture2D = game.fx.glow_tex
-	var t := Time.get_ticks_msec() / 1000.0
-	for i in 4:
-		var f: float = flame[i]
-		if f < 0.04:
-			continue
-		var d: Vector2 = dirs[i]
-		var nrm := Vector2(-d.y, d.x)
-		var base: Vector2 = d * (R + 1.0)
-		var flick := 0.85 + 0.15 * sin(t * 61.0 + i * 1.7) + randf() * 0.1
-		var ln := (14.0 + 22.0 * f) * flick * (1.6 if dashing else 1.0)
-		var tip := base + d * ln
-		var cone := PackedVector2Array([base + nrm * 5.0, tip, base - nrm * 5.0])
-		add_node.draw_colored_polygon(cone, Pal.heat(0.55 * f, 1.6))
-		var core := PackedVector2Array([base + nrm * 2.4, base + d * ln * 0.55, base - nrm * 2.4])
-		add_node.draw_colored_polygon(core, Color(1.6, 1.3, 1.0, 0.8 * f))
-		add_node.draw_texture_rect(tex, Rect2(base + d * 6.0 - Vector2(16, 16), Vector2(32, 32)), false, Pal.heat(0.35 * f, 1.4))
-	# the lens glows faintly
-	add_node.draw_texture_rect(tex, Rect2(Vector2.from_angle(heading) * 3.5 - Vector2(9, 9), Vector2(18, 18)), false, Pal.ink(0.35, 1.2))
+	# the core glows in the tool's colour
+	var core := Vector2(-2, 0).rotated(heading)
+	var col := Art.tool_col(tool_shown, 0.3 + 0.25 * tool_open, 1.2)
+	add_node.draw_texture_rect(tex, Rect2(core - Vector2(12, 12), Vector2(24, 24)), false, col)

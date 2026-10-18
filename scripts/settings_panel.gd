@@ -6,7 +6,7 @@ extends CanvasLayer
 
 signal closed
 
-const ROWS := ["vol_master", "vol_music", "vol_sfx", "quality", "window", "calm", "lang", "context", "keys_row", "back"]
+const ROWS := ["vol_master", "vol_music", "vol_sfx", "quality", "window", "anim", "calm", "lang", "context", "keys_row", "back"]
 
 var testing := false
 var is_open := false
@@ -162,6 +162,9 @@ func change(row: String, dir: int) -> void:
 			Txt.fullscreen = not Txt.fullscreen
 		"calm":
 			Txt.calm = not Txt.calm
+		"anim":
+			var i := Txt.ANIM_LEVELS.find(Txt.anim)
+			Txt.anim = Txt.ANIM_LEVELS[(i + (1 if dir >= 0 else -1) + Txt.ANIM_LEVELS.size()) % Txt.ANIM_LEVELS.size()]
 		"keys_row":
 			keys_open = true
 			return
@@ -186,7 +189,9 @@ func value(row: String) -> String:
 		"window":
 			return Txt.t("s_win_full") if Txt.fullscreen else Txt.t("s_win_window")
 		"calm":
-			return Txt.t("s_off") if Txt.calm else Txt.t("s_on")
+			return Txt.t("s_off") if Txt.no_flash() else Txt.t("s_on")
+		"anim":
+			return Txt.t("s_anim_" + Txt.anim)
 	return ""
 
 
@@ -220,7 +225,7 @@ func _draw_ui() -> void:
 	if keys_open:
 		_draw_keys(s)
 		return
-	_text(Txt.t("s_title"), Vector2(s.x * 0.5, s.y * 0.5 - 210), 30, Pal.ink(0.9 * k), font_l, 0)
+	_text(Txt.t("s_title"), Vector2(s.x * 0.5, s.y * 0.5 - 330), 30, Pal.ink(0.9 * k), font_l, 0)
 	for i in ROWS.size():
 		var row: String = ROWS[i]
 		var r := _row_rect(i)
