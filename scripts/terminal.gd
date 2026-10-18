@@ -132,6 +132,11 @@ var _dt := 0.016
 var _push_label := ""
 var _push_old := ""
 var _push_t := 9.0
+# the pointer's pour on the push button and the way home (after Skyguard, 2026-10-18)
+var pointer_override := Vector2.INF   # tests point here instead (the real mouse is never moved)
+var pour_go: Pour
+var pour_home: Pour
+var _go_live := false
 var _focus_tab := -99
 var hover_goal := -1       # one of the header's two goals under the pointer
 var _route_frame := -1
@@ -196,6 +201,8 @@ func _ready() -> void:
 		if on_skill_changed.is_valid():
 			on_skill_changed.call()
 	add_child(book)
+	pour_go = Pour.make(self, Color(1.0, 0.82, 0.62))
+	pour_home = Pour.make(self)
 	settings = SettingsPanel.new()
 	settings.testing = testing
 	add_child(settings)
@@ -398,7 +405,7 @@ func _process(dt: float) -> void:
 	_step_motion(dt)
 	flash = maxf(0.0, flash - dt * 3.0)
 	radio.step(dt, false)
-	var m := get_local_mouse_position()
+	var m := get_local_mouse_position() if pointer_override == Vector2.INF else pointer_override
 	hover = -1
 	hover_tab = -1
 	for i in items().size():
@@ -411,6 +418,9 @@ func _process(dt: float) -> void:
 			if _goal_rect(i).has_point(m):
 				hover_goal = i
 	hover_go = _go_rect().has_point(m)
+	var free := not settings.is_open and leaving < 0.0 and boot_t >= BOOT_T
+	pour_go.place(_go_rect(), free and hover_go and _go_live, m)
+	pour_home.place(_home_rect(), free and hover_home, m)
 	hover_minus = _has_qty() and _qty_rect(-1).has_point(m)
 	hover_plus = _has_qty() and _qty_rect(1).has_point(m)
 	if dragging:
@@ -422,11 +432,12 @@ func _process(dt: float) -> void:
 			install.erase(k)
 	if leaving >= 0.0:
 		leaving += dt
-		# the card flies off, then the transition takes it over
-		if leaving > 0.36 and not _wiping:
+		# the card lifts, then the screen folds into a hairline through it and
+		# the berth opens out of the line (player 2026-10-18)
+		if leaving > 0.12 and not _wiping:
 			_wiping = true
 			var tree := get_tree()
-			Wipe.go(tree, func(): tree.change_scene_to_file("res://scenes/main.tscn"))
+			Wipe.go(tree, func(): tree.change_scene_to_file("res://scenes/main.tscn"), "fold", leave_from)
 	queue_redraw()
 
 
@@ -2083,6 +2094,7 @@ func _berth(s: Vector2, a: float) -> void:
 # ---------------------------------------------------------------- the button, the keys, the messages
 
 func _bottom(s: Vector2, a: float) -> void:
+	_go_live = false
 	if tab == 3:
 		return
 	var r := _go_rect()
@@ -2095,6 +2107,7 @@ func _bottom(s: Vector2, a: float) -> void:
 			label = Txt.t("tm_take") + "   Enter"
 			if not next_job.is_empty():
 				Hmi.push(self, font_s, _go_rect(), Txt.t("tm_next_go"), true, 1.0 if hover_go else 0.0, a, t, 0.0, "", "ENTER")
+				_go_live = true
 				return
 			var o: Dictionary = offers()[sel] if sel < offers().size() else {}
 			if o.is_empty():
@@ -2155,6 +2168,7 @@ func _bottom(s: Vector2, a: float) -> void:
 			_push_label = shown
 			_push_t = 0.0
 		var swap := 1.0 if Txt.anim_level() == 0 else Pal.ease_out(clampf(_push_t / 0.16, 0.0, 1.0))
+		_go_live = ok
 		Hmi.push(self, font_s, r, shown, ok, 1.0 if hover_go else 0.0, a * _page_in(), t, shake, note, "ENTER" if label.ends_with("Enter") else "", 1.0 if press_t > 0.0 and tab_press == -2 else 0.0, _push_old, swap)
 	_text(Txt.t("tm_keys_onsite") if overlay else Txt.t("tm_keys"), Vector2(60, s.y - 34), 13, Pal.ink(0.45 * a), font)
 	if msg != "" and msg_t < 3.0:

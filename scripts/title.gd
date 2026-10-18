@@ -48,6 +48,8 @@ var bay_rect := Rect2()
 var bay_k := Motion.Spring.new(0.0, 300.0, 0.9)
 var sfx: Sfx
 var glow_tex: Texture2D
+var item_pour: Array = []        # the pointer's pour on each menu item, and on "back"
+var back_pour: Pour
 # the title ship's bays, in its metres: GR-7's rooms, and its drive
 const BAYS := [[Rect2(0.2, -4.0, 4.8, 8.0), "room_A"], [Rect2(5.0, -4.0, 5.0, 8.0), "room_B"], [Rect2(10.0, -4.0, 17.0, 8.0), "room_C"],
 	[Rect2(27.0, -4.0, 6.0, 4.0), "room_D"], [Rect2(27.0, 0.0, 6.0, 4.0), "room_E"], [Rect2(33.0, -3.1, 8.6, 6.2), "t_bay_drive"]]
@@ -106,6 +108,9 @@ func _ready() -> void:
 		item_k.append(Motion.Spring.new(0.0, 360.0, 0.75))
 	sfx = Sfx.new()
 	add_child(sfx)
+	for i in 3:
+		item_pour.append(Pour.make(self))
+	back_pour = Pour.make(self)
 	var gr := Gradient.new()
 	gr.set_color(0, Color(1, 1, 1, 1))
 	gr.set_color(1, Color(1, 1, 1, 0))
@@ -237,6 +242,10 @@ func _process(dt: float) -> void:
 		sfx.play("menu", Vector2.INF, 0.35)
 	_last_hover = hover
 	press_t = maxf(0.0, press_t - dt)
+	var busy := leaving >= 0.0 or settings.is_open or naming >= 0
+	for i in item_pour.size():
+		item_pour[i].place(_menu_rect(i), hover == i and not _in_slots() and not busy and t > 2.4, m)
+	back_pour.place(_back_rect(), hover == 99 and _in_slots() and not busy, m)
 	# the bay under the pointer, on the title's ship
 	var vk0 := clampf(view_k.x, 0.0, 1.0)
 	var xf := _ship_xf(vk0)
@@ -273,7 +282,7 @@ func _process(dt: float) -> void:
 	if leaving >= 0.0:
 		leaving += dt
 		# its own leave plays first, then the transition covers the change
-		if leaving > 0.3 and not _wiping:
+		if leaving > 0.1 and not _wiping:
 			_wiping = true
 			var tree := get_tree()
 			var to := next_scene
@@ -571,6 +580,16 @@ func _lit(a: Vector2, b: Vector2, c: Vector2, r: float, origin: Vector2, scale: 
 		var fall := 1.0 - clampf(((p0 + p1) * 0.5).distance_to(c) / r, 0.0, 1.0)
 		if fall > 0.02:
 			draw_line(origin + p0 * scale, origin + p1 * scale, Pal.tint(Pal.AIR, 0.9 * fall * k, 1.0 + 0.8 * fall), 1.4 + 0.8 * fall, true)
+
+
+# a menu item where it's drawn this frame (the parallax, the rise in, the dive)
+func _menu_rect(i: int) -> Rect2:
+	var vk := clampf(view_k.x, 0.0, 1.0)
+	var ia := clampf((t - 2.0 - i * 0.08) / 0.35, 0.0, 1.0)
+	var r := _item_rect(i)
+	r.position += -par * 4.0
+	r.position.y += (1.0 - Pal.ease_out(ia)) * 16.0 + vk * 30.0
+	return r
 
 
 # the title menu: one highlight that glides to the item in hand; the item's
