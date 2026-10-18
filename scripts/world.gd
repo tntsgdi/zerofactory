@@ -59,7 +59,7 @@ func _init() -> void:
 	font = Fonts.get_font("Regular")
 	static_body = StaticBody2D.new()
 	# layer 8 as well: free bodies ray-check against the attached ship alone
-	static_body.collision_layer = 1 | STATIC_LAYER
+	static_body.collision_layer = STATIC_LAYER
 	static_body.collision_mask = 0
 	add_child(static_body)
 	back_layer = _layer(0, false, _draw_back)
@@ -434,6 +434,10 @@ func make_body(group: Array, from_body):
 	com /= maxf(m, 0.0001)
 	var b := FreeBody.new()
 	b.world = self
+	# placed before it enters the physics: added at the origin first and moved
+	# after, continuous collision swept it from (0, 0) across the whole hull, and
+	# a piece on that line was knocked 100 m away the moment it came loose
+	b.position = bodies_node.to_local(com)
 	bodies_node.add_child(b)
 	b.global_position = com
 	b.reset_physics_interpolation()
@@ -447,7 +451,7 @@ func make_body(group: Array, from_body):
 			p.body.drop_piece(p)
 		elif static_cols.has(p.id):
 			for c in static_cols[p.id]:
-				c.queue_free()
+				free_shape(c)
 			static_cols.erase(p.id)
 		p.body = b
 		b.pieces.append(p)
@@ -460,6 +464,13 @@ func make_body(group: Array, from_body):
 	for p in group:
 		b.rebuild_cols(p)
 	b.refresh()
+	# born overlapping: overlapping the attached ship it slides out without
+	# colliding with it; overlapping only other loose bodies it eases out
+	var od := overlap_dir(group)
+	if not od.is_empty():
+		b.calm = FreeBody.CALM_T
+		if od.ship:
+			b.start_ghost(od.dir)
 	bodies.append(b)
 	# a wall that floats away leaves a hole, however it came loose
 	if group.any(func(q): return q.barrier) and game != null and game.sys != null:
@@ -467,6 +478,65 @@ func make_body(group: Array, from_body):
 	redraw_all(true)
 	piece_freed.emit(b)
 	return b
+
+
+# Does a group of pieces overlap a piece outside it (by more than a sliver)?
+# {} if not; else {"dir": the way out (from the overlap towards the group's
+# centre), "ship": whether an attached piece is among what it overlaps}.
+func overlap_dir(group: Array) -> Dictionary:
+	var ids := {}
+	for p in group:
+		ids[p.id] = true
+	var c := Vector2.ZERO
+	for p in group:
+		c += world_poly(p)[0]
+	var sum := Vector2.ZERO
+	var area := 0.0
+	var ship := false
+	var com := Vector2.ZERO
+	var n := 0
+	for p in group:
+		var wp := world_poly(p)
+		com += Geom.centroid(wp)
+		n += 1
+		var bb := Geom.bbox(wp)
+		for id in order:
+			if ids.has(id):
+				continue
+			var q = pieces[id]
+			if q.gone:
+				continue
+			var wq := world_poly(q)
+			if not bb.intersects(Geom.bbox(wq)):
+				continue
+			for part in Geometry2D.intersect_polygons(wp, wq):
+				var a := absf(Geom.area(part))
+				if a > 12.0:
+					sum += Geom.centroid(part) * a
+					area += a
+					if q.body == null:
+						ship = true
+	if area <= 0.0:
+		return {}
+	com /= maxf(1.0, n)
+	var dir := com - sum / area
+	if dir.length() < 0.5:
+		dir = Vector2.UP
+	return {"dir": dir.normalized(), "ship": ship}
+
+
+# A collision shape that is going away leaves the physics now, not at the end of
+# the frame: a queued one stayed for the rest of the step, so a piece that had
+# just come loose sat exactly on top of its own old shape and was flung off —
+# once a whole 100 m (the "shoots off for a moment" players saw), and cut-off
+# parts were kicked about or squeezed into walls the same way.
+static func free_shape(c: Node) -> void:
+	if not is_instance_valid(c):
+		return
+	var parent := c.get_parent()
+	if parent != null:
+		parent.remove_child(c)
+	c.queue_free()
 
 
 # Move a piece's own data into a new frame (t maps old frame -> new frame).
@@ -518,7 +588,7 @@ func remove_piece(p) -> void:
 			b.refresh()
 	elif static_cols.has(p.id):
 		for c in static_cols[p.id]:
-			c.queue_free()
+			free_shape(c)
 		static_cols.erase(p.id)
 	p.body = null
 	dirty_links = true
@@ -558,7 +628,7 @@ func rebuild_cols(p) -> void:
 		return
 	if static_cols.has(p.id):
 		for c in static_cols[p.id]:
-			c.queue_free()
+			free_shape(c)
 	static_cols.erase(p.id)
 	if p.gone or (p.door and p.open_t > 0.5):
 		return

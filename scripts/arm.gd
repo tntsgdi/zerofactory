@@ -129,7 +129,7 @@ func _physics_process(dt: float) -> void:
 			elif hold_t > 0.3:
 				# let go over the mouth: physics back on, a nudge down, the mouth does the rest
 				body.collision_layer = 1
-				body.collision_mask = 1 | 2 | 4
+				body.collision_mask = FreeBody.MASK
 				body.set_deferred("freeze", false)
 				body.linear_velocity = Vector2(0, 80)
 				# (the drop point follows a furnace mouth moved along its rail)
@@ -153,7 +153,7 @@ func _heading() -> Vector2:
 func halt() -> void:
 	if body != null and is_instance_valid(body) and state in ["carry", "release"]:
 		body.collision_layer = 1
-		body.collision_mask = 1 | 2 | 4
+		body.collision_mask = FreeBody.MASK
 		body.set_deferred("freeze", false)
 		body.linear_velocity = Vector2.ZERO
 	if body != null and is_instance_valid(body):

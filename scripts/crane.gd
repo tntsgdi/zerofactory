@@ -158,7 +158,7 @@ func _physics_process(dt: float) -> void:
 				_done()
 			elif hold_t > 0.4:
 				body.collision_layer = 1
-				body.collision_mask = 1 | 2 | 4
+				body.collision_mask = FreeBody.MASK
 				body.set_deferred("freeze", false)
 				body.linear_velocity = Dock.ZONES[zone].face * -50.0
 				body.set_meta("arm", false)
@@ -182,7 +182,7 @@ func halt() -> void:
 	if body != null and is_instance_valid(body):
 		if state in ["carry", "release"]:
 			body.collision_layer = 1
-			body.collision_mask = 1 | 2 | 4
+			body.collision_mask = FreeBody.MASK
 			body.set_deferred("freeze", false)
 			body.linear_velocity = Vector2.ZERO
 		body.set_meta("arm", false)

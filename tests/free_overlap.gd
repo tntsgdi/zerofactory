@@ -143,6 +143,8 @@ func _lesson4() -> void:
 	var bus = w.tag("BUS-T")
 	print("bus body origin %s  piece centre %s" % [bus.body.global_position / M, (w.frame(bus) * Geom.centroid(bus.poly)) / M])
 	for sp in [600.0, 1200.0, 2400.0]:
+		if gen.body != null:
+			print("  G-T01 before fling: mask %d ghost %.2f calm %.2f ccd %d pos %.2f m" % [gen.body.collision_mask, gen.body.ghost, gen.body.calm, gen.body.continuous_cd, (gen.body.global_transform * gen.body.center_of_mass).x / M])
 		for tag in ["C-T01", "BUS-T"]:
 			var q = w.tag(tag)
 			if q != null and q.body != null:

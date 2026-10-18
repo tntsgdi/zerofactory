@@ -21,6 +21,25 @@ const TELEPORT := 72.0        # px in one step: more than this was placed, not m
 var _safe_transform := Transform2D.IDENTITY
 var _has_safe_transform := false
 var _last := Vector2.INF     # where the body was last physics step
+static var guard_hits := 0   # how often the tunnel check put a body back (tests read it)
+# A piece that comes loose overlapping its neighbours (shapes that touch or
+# cross in the ship data) was flung off at full speed by the solver pushing the
+# overlap apart. Born overlapping, it eases out instead for a moment.
+const CALM_T := 0.5           # s
+const CALM_SPEED := 60.0      # px/s
+var calm := 0.0
+# what a loose body collides with: other loose bodies (1), the drone (2), the
+# berth's edges (4) and the attached ship (8)
+const MASK := 1 | 2 | 4 | 8
+# Born overlapping the attached ship, a body slides out without colliding with
+# it (the solver used to shove it out in one jump) and touches it again once it
+# is clear, or after GHOST_T at the latest.
+const GHOST_T := 1.5
+const GHOST_SPEED := 40.0     # px/s, out of the overlap
+var ghost := 0.0
+var ghost_dir := Vector2.ZERO
+var _ghost_check := 0.0
+
 var cols := {}              # piece id -> Array of CollisionPolygon2D
 var age := 0.0
 var rejected_t := 0.0
@@ -38,7 +57,7 @@ func _init() -> void:
 	max_contacts_reported = 6
 	continuous_cd = RigidBody2D.CCD_MODE_CAST_SHAPE
 	collision_layer = 1
-	collision_mask = 1 | 2 | 4
+	collision_mask = MASK
 	center_of_mass_mode = RigidBody2D.CENTER_OF_MASS_MODE_CUSTOM
 	z_index = 3
 	z_as_relative = false
@@ -79,7 +98,7 @@ func refresh() -> void:
 func rebuild_cols(p) -> void:
 	if cols.has(p.id):
 		for c in cols[p.id]:
-			c.queue_free()
+			World.free_shape(c)
 	cols.erase(p.id)
 	if p.gone or p.body != self:
 		return
@@ -106,7 +125,7 @@ func drop_piece(p) -> void:
 	pieces.erase(p)
 	if cols.has(p.id):
 		for c in cols[p.id]:
-			c.queue_free()
+			World.free_shape(c)
 		cols.erase(p.id)
 
 
@@ -131,17 +150,25 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 	# apart): a teleport (a load, a test placing it) jumps metres at once
 	var moved := _last.distance_to(here) if _last != Vector2.INF else 0.0
 	var could := maxf(state.linear_velocity.length() * state.step * 2.0, TELEPORT)
-	if capture == null and moved > 2.0 and moved < could:
+	# A body born overlapping (calm) is meant to ease out of what it overlaps:
+	# putting it back would only make it judder in place.
+	if capture == null and calm <= 0.0 and moved > 2.0 and moved < could:
 		var q := PhysicsRayQueryParameters2D.create(_last, here, World.STATIC_LAYER)
 		var hit: Dictionary = state.get_space_state().intersect_ray(q)
 		if not hit.is_empty():
 			var xf := state.transform
 			xf.origin = _last
 			state.transform = xf
+			guard_hits += 1
 			state.linear_velocity = state.linear_velocity.bounce(hit.normal) * 0.4
 			state.angular_velocity *= 0.5
 			return
 	_last = here
+	if calm > 0.0:
+		calm -= state.step
+		if not tethered:
+			state.linear_velocity = state.linear_velocity.limit_length(CALM_SPEED)
+			state.angular_velocity = clampf(state.angular_velocity, -1.0, 1.0)
 	# nothing loose outruns the collision: a hard knock still sends it flying,
 	# just not through a wall
 	if state.linear_velocity.length() > MAX_SPEED:
@@ -155,7 +182,8 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 			hit_pos = state.get_contact_local_position(i)
 
 
-func _physics_process(_dt: float) -> void:
+func _physics_process(dt: float) -> void:
+	_ghost_step(dt)
 	# The solver publishes its result before scene physics callbacks. Repair an
 	# invalid result before the dock, tools and FX read the body this step.
 	var pose := global_transform
@@ -166,6 +194,29 @@ func _physics_process(_dt: float) -> void:
 	angular_velocity = 0.0
 	hit_imp = 0.0
 	reset_physics_interpolation()
+
+
+func start_ghost(dir: Vector2) -> void:
+	ghost = GHOST_T
+	ghost_dir = dir
+	collision_mask = MASK & ~World.STATIC_LAYER
+	linear_velocity = dir * GHOST_SPEED
+
+
+func _ghost_step(dt: float) -> void:
+	if ghost <= 0.0:
+		return
+	ghost -= dt
+	calm = maxf(calm, 0.1)
+	if not tethered and capture == null:
+		linear_velocity = ghost_dir * GHOST_SPEED
+		angular_velocity = 0.0
+	_ghost_check -= dt
+	if _ghost_check <= 0.0 or ghost <= 0.0:
+		_ghost_check = 0.1
+		if ghost <= 0.0 or world.overlap_dir(pieces).is_empty():
+			ghost = 0.0
+			collision_mask = MASK
 
 
 func _process(_dt: float) -> void:

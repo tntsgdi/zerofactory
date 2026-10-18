@@ -502,6 +502,14 @@ func _laser(dt: float) -> void:
 			in_material = false
 			laser_lock = {}
 			return
+	# The front crawls through metal while the drone flies (or the piece drifts
+	# off), so a held button stretched the beam far past what the laser reaches
+	# (a line across the whole berth). Out of reach, the stroke ends where it got
+	# to; still held, a new one starts at the nearest point the beam reaches.
+	if cutting and front.distance_to(drone.global_position) > reach() * 1.1:
+		_finish_cut()
+		in_material = false
+		return
 	var desired := tail_target if tail_on else clamp_range(aim)
 	if lmb and (lmb_pressed or not cutting):
 		cutting = true
