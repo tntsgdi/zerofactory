@@ -849,7 +849,7 @@ func _draw_clamps() -> void:
 
 # the tug's acceleration along x (px/s², + to the right), from how it moves
 func tug_accel() -> float:
-	if game == null or game.state != "intro":
+	if game == null or not game.state in ["intro", "towout"]:
 		return 0.0
 	var h := 1.0 / 60.0
 	var tt: float = game.state_t
@@ -857,6 +857,8 @@ func tug_accel() -> float:
 
 
 func _tug_x(tt: float) -> float:
+	if game.state == "towout":
+		return game.ship_offset * pow(clampf(tt / game.TOW_T, 0.0, 1.0), 3.0) + stern.x * Geom.M
 	var x: float = game.ship_offset * (1.0 - Pal.ease_io(clampf(tt / 3.4, 0.0, 1.0))) + stern.x * Geom.M
 	if tt > 3.4:
 		x += pow(tt - 3.4, 2.0) * 900.0
@@ -864,6 +866,8 @@ func _tug_x(tt: float) -> float:
 
 
 func tug_pos() -> Vector2:
+	if game != null and game.state == "towout":
+		return Vector2(world.position.x + stern.x * Geom.M, stern.y * Geom.M)
 	if game == null or game.state != "intro":
 		return Vector2.INF
 	var tt: float = game.state_t

@@ -1,0 +1,44 @@
+{
+ "id": "berth",
+ "name": "BERTH",
+ "title": [
+  "空船坞",
+  "EMPTY BERTH"
+ ],
+ "contract": "",
+ "berth": true,
+ "length": 0.0,
+ "value": {
+  "metal": 0.0,
+  "total": 0.0
+ },
+ "clamps": [],
+ "room_names": {},
+ "gas": {
+  "rooms": {},
+  "vessels": {},
+  "valves": [],
+  "value": 0.0
+ },
+ "power": {
+  "bus": "",
+  "sources": [],
+  "isolated": [],
+  "lamps": {}
+ },
+ "fluids": {
+  "volumes": {},
+  "joins": [],
+  "value": {}
+ },
+ "ctrls_cfg": {},
+ "labels": {},
+ "hints": {},
+ "procedures": {},
+ "blueprint": {},
+ "pieces": [],
+ "joints": [],
+ "lines": [],
+ "ctrls": [],
+ "rooms": []
+}

@@ -436,11 +436,14 @@ func _draw_hud() -> void:
 	if g.state == "intro":
 		_intro_overlay(s)
 		return
+	if g.state == "towout":
+		_radio_box(s)
+		return
 	if not ending and g.state != "ending":
 		_world_tags()
 		_messages()
 		_cursor_label()
-		if not g.training and g.exam == null:
+		if not g.training and g.exam == null and not g.in_berth():
 			var bpk: float = g.blueprint.k if g.blueprint != null else 0.0
 			c.draw_set_transform(Vector2(-(1.0 - _in(0) * (1.0 - Pal.ease_io(bpk))) * 420.0, 0.0))
 			# booting: the edge and plate first, the content only once it is uncovered
@@ -458,7 +461,9 @@ func _draw_hud() -> void:
 		if g.warp:
 			_warp(s)
 		c.draw_set_transform(Vector2((1.0 - _in(1)) * 380.0, 0.0))
-		if _boot(1) < 0.45:
+		if g.in_berth():
+			pass
+		elif _boot(1) < 0.45:
 			UI.panel(c, Rect2(s.x - 290.0, 22, 268, 86), 0.82, 0.0, Pal.HEAT, _boot(1))
 		else:
 			_credits(s)
@@ -477,7 +482,7 @@ func _draw_hud() -> void:
 		_radio_box(s)
 		var ka := clampf((40.0 - g.playtime) / 3.0, 0.0, 1.0)
 		if ka > 0.01:
-			_text(g.txt("keys"), Vector2(s.x * 0.5, s.y - 6.0), 13, Pal.ink(0.55 * ka), font, 0)
+			_text(g.txt("keys_berth") % Keys.label("terminal") if g.in_berth() else g.txt("keys"), Vector2(s.x * 0.5, s.y - 6.0), 13, Pal.ink(0.55 * ka), font, 0)
 	# hurt vignette
 	if hurt > 0.0:
 		var e := hurt * hurt

@@ -131,6 +131,11 @@ var hints_on := true
 var messages: Array = []     # [key, world pos, t, text]
 var reveal_count := 0
 var ship_offset := 60.0 * 48.0
+# between contracts the berth stands empty (player 2026-10-18: "after a job,
+# don't go back to the menu, go back into the berth"): the finished ship is towed
+# out, the empty berth (ships/berth.json) takes over with the drone where it was
+static var carry := {}
+const TOW_T := 2.6
 var ended := false
 var slowmo := 0.0
 var hitstop_t := 0.0
@@ -379,6 +384,8 @@ func _ready() -> void:
 			story.on_arrive()
 		if bot != null and bot.get("skip_intro", false):
 			_end_intro()
+	if in_berth():
+		_enter_berth()
 
 
 func _is_test() -> bool:
@@ -469,11 +476,11 @@ func _process(dt: float) -> void:
 			hints_seen["late"] = true
 			Copy.say(radio, "L_late")
 		autosave_t += rdt
-		if autosave_t > 25.0:
+		if autosave_t > 25.0 and not in_berth():
 			autosave_t = 0.0
 			SaveGame.save(self)
 			hud.toast_saved()
-	if state == "play" and bot == null:
+	if state == "play" and bot == null and not in_berth():
 		_account(dt, rdt)
 	_read_input()
 	var dev_warp: bool = DevPanel.warp_on() and bot == null
@@ -492,6 +499,8 @@ func _process(dt: float) -> void:
 			_drone_upkeep(dt)
 		"ending":
 			_ending(rdt)
+		"towout":
+			_towout(rdt)
 	fx.step(dt)
 	if not menu_open:
 		radio.step(rdt, tools.cutting or (tools.held_piece != null and tools.tether_force > 0.2))
@@ -718,6 +727,7 @@ func open_console(which: String) -> void:
 		return
 	var term = load("res://scenes/terminal.tscn").instantiate()
 	term.overlay = true
+	term.between = in_berth()
 	term.tab = -1
 	term.game_ref = self
 	var layer := CanvasLayer.new()
@@ -740,6 +750,8 @@ func open_console(which: String) -> void:
 
 
 func open_contract() -> void:
+	if in_berth():
+		return
 	contract_open = true
 	hud.contract_changed()
 
@@ -880,6 +892,37 @@ func _intro(dt: float) -> void:
 		_end_intro()
 
 
+# the empty berth comes up as it was left: no tug, no contract card, the drone flying on
+func _enter_berth() -> void:
+	world.position.x = 0.0
+	for i in dock.clamps.size():
+		dock.clamp_t[i] = 1.0
+	state = "play"
+	state_t = 0.0
+	if not carry.is_empty():
+		drone.alive = true
+		drone.integrity = float(carry.get("integrity", 100.0))
+		drone.spawn_t = 3.0
+		drone.global_position = carry.pos
+		drone.linear_velocity = carry.vel
+		drone.reset_physics_interpolation()
+		cam_pos = carry.cam
+		zoom_now = float(carry.zoom)
+		zoom_target = CAM_ZOOM
+		carry = {}
+	elif not drone.alive:
+		_launch_drone()
+		cam_pos = drone.global_position
+		zoom_now = CAM_ZOOM
+	if hud != null:
+		hud.show_hint(txt("berth_hint") % Keys.label("terminal"))
+
+
+# no ship in: the berth between contracts
+func in_berth() -> bool:
+	return ship.get("berth", false)
+
+
 func _end_intro() -> void:
 	if state != "intro":
 		return
@@ -1009,7 +1052,7 @@ func goal() -> String:
 
 
 func career() -> bool:
-	return not job.is_empty() and not dev_job()
+	return (not job.is_empty() and not dev_job()) or (in_berth() and Career.usable())
 
 
 # a contract the developer built and started (DevPanel): played like any other, settled into nothing
@@ -1088,12 +1131,50 @@ func leave() -> void:
 		to_title()
 		return
 	Engine.time_scale = 1.0
-	# the screen closes on a heat line and the terminal opens out of it: after every
-	# contract, the opening ones too (the shop and the berth are there; an opening
-	# contract still to play waits on the market page)
-	hud.close_then(func():
-		get_tree().paused = false
-		get_tree().change_scene_to_file("res://scenes/terminal.tscn"))
+	get_tree().paused = false
+	# the tug takes what is left of the ship out, and the berth stays: the next
+	# contract is picked at the berth's computer (or with the terminal key)
+	_tow_out()
+
+
+func _tow_out() -> void:
+	if state == "towout":
+		return
+	state = "towout"
+	state_t = 0.0
+	hud.ending = false
+	tools.release_grab(false)
+	# what's still loose rides out with the hull
+	for b in world.bodies:
+		if is_instance_valid(b):
+			b.set_deferred("freeze", true)
+	cam_override = Vector2(21.0 * 48.0, -0.5 * 48.0)
+	zoom_override = 0.62
+	sfx.play("clamp")
+
+
+# the hull goes out the way it came in: the tug pulls it away, speeding up
+func _towout(rdt: float) -> void:
+	var k := clampf(state_t / TOW_T, 0.0, 1.0)
+	world.position.x = ship_offset * pow(k, 3.0)
+	for i in dock.clamps.size():
+		dock.clamp_t[i] = clampf(state_t / 0.4 - i * 0.25, 0.0, 1.0)
+	if state_t >= TOW_T and not _berth_asked:
+		_berth_asked = true
+		_to_berth()
+
+
+var _berth_asked := false
+
+
+func _to_berth() -> void:
+	carry = {"pos": drone.global_position, "vel": drone.linear_velocity, "cam": cam.position if cam != null else cam_pos,
+		"zoom": zoom_now, "integrity": drone.integrity if drone.alive else 100.0}
+	Game.start_ship = "berth"
+	Game.contract = {}
+	SaveGame.load_requested = false
+	var tree := get_tree()
+	Wipe.go(tree, func(): tree.change_scene_to_file("res://scenes/main.tscn"))
 
 
 # the career's contract in hand (the first one after training), or the terminal when there is none
@@ -1101,7 +1182,10 @@ static func play_career(tree: SceneTree) -> void:
 	Career.load_or_new()
 	var a: Dictionary = Career.sign_active()
 	if a.is_empty():
-		tree.change_scene_to_file("res://scenes/terminal.tscn")
+		start_ship = "berth"
+		contract = {}
+		SaveGame.load_requested = false
+		tree.change_scene_to_file("res://scenes/main.tscn")
 		return
 	contract = a
 	start_ship = a.get("ship", "gr7")
@@ -1403,7 +1487,7 @@ func on_debris_in(value: float, at: Vector2) -> void:
 
 
 func _check_done() -> void:
-	if state != "play" or training or exam != null:
+	if state != "play" or training or exam != null or in_berth():
 		return
 	for id in world.order:
 		if not world.pieces[id].gone and world.pieces[id].scope:

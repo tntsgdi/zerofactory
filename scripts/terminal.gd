@@ -113,6 +113,7 @@ var on_skill_changed: Callable
 var book: SkillBook
 var next_job := {}         # an opening contract still to play: the market shows it, alone
 var game_ref = null        # the contract in play, when opened over the berth
+var between := false       # opened over the empty berth, between contracts: nothing is locked
 var hover_home := false
 # page switches slide on a shared axis (player 2026-10-18: "the UI still isn't
 # smooth"): the old page out one way, the new one in from the other
@@ -157,10 +158,10 @@ func _ready() -> void:
 		Txt.load_settings(false)
 	Career.load_or_new()
 	Career.ensure_offers(Market.make)
-	next_job = Career.active() if not overlay and not Career.data.get("market", false) else {}
+	next_job = Career.active() if (not overlay or between) and not Career.data.get("market", false) else {}
 	# between contracts the home screen, the opening's first job straight on its card;
 	# over the berth whatever the game asked for (the home screen)
-	if not overlay:
+	if not overlay or between:
 		tab = 0 if not next_job.is_empty() else HOME
 	font = Fonts.get_font("Regular")
 	font_l = Fonts.get_font("Light")
@@ -215,7 +216,8 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_ALWAYS
 		if _locked(tab):
 			tab = HOME
-		say(Txt.t("tm_onsite_note"))
+		if not between:
+			say(Txt.t("tm_onsite_note"))
 		return
 	var dev := DevPanel.new()
 	dev.terminal = self
@@ -330,7 +332,7 @@ func _app_of(page: int) -> int:
 
 
 func _locked(page: int) -> bool:
-	return overlay and page != HOME and not page in ON_SITE
+	return overlay and not between and page != HOME and not page in ON_SITE
 
 
 func _lock_reason(page: int) -> String:
@@ -437,7 +439,9 @@ func _process(dt: float) -> void:
 		if leaving > 0.12 and not _wiping:
 			_wiping = true
 			var tree := get_tree()
-			Wipe.go(tree, func(): tree.change_scene_to_file("res://scenes/main.tscn"), "fold", leave_from)
+			Wipe.go(tree, func():
+				tree.paused = false
+				tree.change_scene_to_file("res://scenes/main.tscn"), "fold", leave_from)
 	queue_redraw()
 
 
@@ -800,7 +804,7 @@ func buy(it: Array, n: int = 1) -> void:
 	var id: String = it[0]
 	var price: float = it[2] * n
 	var d := Career.data
-	if overlay and it[1] in ["training", "upgrade", "facility", "loan"]:
+	if overlay and not between and it[1] in ["training", "upgrade", "facility", "loan"]:
 		_refuse(Txt.t("tm_onsite_no") if it[1] == "training" else Txt.t("tm_lock_equip"))
 		return
 	if it[1] == "training":
@@ -838,7 +842,7 @@ func buy(it: Array, n: int = 1) -> void:
 	if it[1] == "item":
 		d.items[id] = int(d.items.get(id, 0)) + n
 		# bought on site: straight into the stock of the job in hand
-		if overlay and game_ref != null:
+		if overlay and not between and game_ref != null:
 			var ji: Dictionary = game_ref.job.get("items", {})
 			ji[id] = int(ji.get(id, 0)) + n
 			game_ref.job.items = ji
@@ -1433,8 +1437,9 @@ func _top(s: Vector2, a: float) -> void:
 	var pr := Rect2(40, 22, 420, 72)
 	Hmi.plate(self, font_s, pr, Txt.t("tm_title"), 28, ka)
 	_text((company if company != "" else "BERTH 07") + "  ·  CHARON-DISPATCH", Vector2(pr.end.x + 24, 50), 14, Pal.ink(0.6 * ka), font_b)
-	Hmi.lamp(self, Vector2(pr.end.x + 32, 76), Hmi.warn_col() if overlay else Hmi.ok_col(), true, ka, 6.0)
-	_text(Txt.t("tm_onsite_short") if overlay else Txt.t("tm_online"), Vector2(pr.end.x + 48, 82), 15, Pal.heat(0.95 * ka, 1.2) if overlay else Pal.ink(0.75 * ka), font_b)
+	var onsite := overlay and not between
+	Hmi.lamp(self, Vector2(pr.end.x + 32, 76), Hmi.warn_col() if onsite else Hmi.ok_col(), true, ka, 6.0)
+	_text(Txt.t("tm_onsite_short") if onsite else Txt.t("tm_online"), Vector2(pr.end.x + 48, 82), 15, Pal.heat(0.95 * ka, 1.2) if onsite else Pal.ink(0.75 * ka), font_b)
 	var loan_c := Pal.heat(1.0, 1.3) if float(d.loan) > 0.0 else Pal.ink(0.98)
 	var mc := Pal.ink(0.98).lerp(Pal.ink(1.0, 1.5) if money_flash > 0.0 else Pal.heat(1.0, 1.4), absf(money_flash))
 	var cols := [
@@ -2157,7 +2162,7 @@ func _bottom(s: Vector2, a: float) -> void:
 					note = Txt.t("rt_pin_full")
 		7:
 			label = Txt.t("tm_training_btn") + "   Enter"
-			if overlay:
+			if overlay and not between:
 				ok = false
 				note = Txt.t("tm_onsite_no")
 	if label != "":
@@ -2170,7 +2175,7 @@ func _bottom(s: Vector2, a: float) -> void:
 		var swap := 1.0 if Txt.anim_level() == 0 else Pal.ease_out(clampf(_push_t / 0.16, 0.0, 1.0))
 		_go_live = ok
 		Hmi.push(self, font_s, r, shown, ok, 1.0 if hover_go else 0.0, a * _page_in(), t, shake, note, "ENTER" if label.ends_with("Enter") else "", 1.0 if press_t > 0.0 and tab_press == -2 else 0.0, _push_old, swap)
-	_text(Txt.t("tm_keys_onsite") if overlay else Txt.t("tm_keys"), Vector2(60, s.y - 34), 13, Pal.ink(0.45 * a), font)
+	_text(Txt.t("tm_keys_berth") if between else (Txt.t("tm_keys_onsite") if overlay else Txt.t("tm_keys")), Vector2(60, s.y - 34), 13, Pal.ink(0.45 * a), font)
 	if msg != "" and msg_t < 3.0:
 		var mk := clampf((3.0 - msg_t) / 0.4, 0.0, 1.0) * Pal.ease_out(clampf(msg_t / 0.2, 0.0, 1.0))
 		_text(msg, Vector2(60 + (1.0 - Pal.ease_out(clampf(msg_t / 0.25, 0.0, 1.0))) * 20.0, s.y - 60), 17, Pal.ink(0.95 * a * mk), font_b)
