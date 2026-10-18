@@ -108,6 +108,7 @@ func _physics_process(dt: float) -> void:
 					body = b
 					queue.erase(b)
 					body.set_meta("arm", true)
+					body.set_meta("arm_by", "crane")
 					path = _overhead(pos, body.global_transform * body.center_of_mass)
 					state = "reach"
 					break

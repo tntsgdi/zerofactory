@@ -82,6 +82,7 @@ func _physics_process(dt: float) -> void:
 				if takes(b):
 					body = b
 					body.set_meta("arm", true)
+					body.set_meta("arm_by", "arm")
 					state = "reach"
 					break
 			if state == "idle":

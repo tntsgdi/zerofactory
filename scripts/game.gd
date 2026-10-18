@@ -2494,6 +2494,16 @@ func mouth_release(zone: String, who: String) -> void:
 		mouths.erase(zone)
 
 
+# where the berth's machines can fly round the ship (scripts/nav.gd), made when first wanted
+var _nav = null
+
+
+func nav_grid():
+	if _nav == null:
+		_nav = preload("res://scripts/nav.gd").new(self)
+	return _nav
+
+
 # the hauling drones aboard (one or two)
 func haulers() -> Array:
 	var out: Array = []
