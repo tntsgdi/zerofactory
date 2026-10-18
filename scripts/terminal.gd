@@ -54,6 +54,7 @@ const REPAY_STEP := 5000.0
 var font: Font
 var font_l: Font
 var font_b: Font
+var font_s: Font
 var t := 0.0
 var tab := 0
 var sel := 0
@@ -74,6 +75,9 @@ var tab_w := Motion.Spring.new(216.0, 320.0, 0.82)
 var hover_k: Array = []    # per card / row: 0..1 lift
 var sel_k: Array = []      # per card / row: 0..1 chosen
 var deal_t := 0.0          # since the cards were dealt (re-dealt on every tab)
+# the self-test each time the terminal comes up (P.7, ~2 s; any key or click skips it)
+const BOOT_T := 2.0
+var boot_t := 0.0
 var money_roll := Motion.Roller.new(0.0, 9.0)
 var loan_roll := Motion.Roller.new(0.0, 9.0)
 var money_flash := 0.0     # >0 up (ink), <0 down (heat)
@@ -102,6 +106,13 @@ var on_skill_changed: Callable
 var book: SkillBook
 var next_job := {}         # an opening contract still to play: the market shows it, alone
 var _wiping := false       # the transition out has been asked for
+# a key's travel: the button or rocker last pressed sinks for a moment
+var press_t := 0.0
+var tab_press := -1
+# the console's own sounds: keys, stamps, refusals, the self-test
+var sfx: Sfx
+var _last_sel := -1
+var _boot_said := 0
 
 
 func _ready() -> void:
@@ -114,6 +125,7 @@ func _ready() -> void:
 	font = Fonts.get_font("Regular")
 	font_l = Fonts.get_font("Light")
 	font_b = Fonts.get_font("Medium")
+	font_s = Fonts.get_font("SemiBold")
 	money_roll.shown = float(Career.data.money)
 	money_roll.set_to(float(Career.data.money))
 	loan_roll.shown = float(Career.data.loan)
@@ -149,6 +161,11 @@ func _ready() -> void:
 	settings = SettingsPanel.new()
 	settings.testing = testing
 	add_child(settings)
+	sfx = Sfx.new()
+	add_child(sfx)
+	# on site (the left computers), with animation off, and under the tests' stills: up at once
+	if overlay or Txt.anim_level() == 0 or testing:
+		boot_t = BOOT_T
 	if overlay:
 		process_mode = Node.PROCESS_MODE_ALWAYS
 		set_tab(maxi(tab, 1))
@@ -186,6 +203,12 @@ func _ready() -> void:
 
 
 # the first time a debt from a botched job is cleared (at a settlement, or paid off here), once
+# straight to ready: the self-test cut short, the cards already dealt
+func _skip_boot() -> void:
+	boot_t = BOOT_T
+	deal_t = maxf(deal_t, 2.0)
+
+
 func _check_milestone() -> void:
 	var seen: Dictionary = Career.data.get("seen", {})
 	if not Career.data.get("paid_off", false) or seen.has("paid_off"):
@@ -233,6 +256,26 @@ func _process(dt: float) -> void:
 	t += dt
 	msg_t += dt
 	deal_t += dt
+	press_t = maxf(0.0, press_t - dt)
+	if press_t <= 0.0:
+		tab_press = -1
+	if sel != _last_sel:
+		if _last_sel >= 0 and boot_t >= BOOT_T:
+			sfx.play("menu", Vector2.INF, 0.45)
+		_last_sel = sel
+	# the self-test's two sounds: power on, ready
+	if _boot_said == 0 and boot_t > 0.02 and boot_t < BOOT_T:
+		_boot_said = 1
+		sfx.play("term", Vector2.INF, 0.7)
+	elif _boot_said == 1 and boot_t >= 1.5:
+		_boot_said = 2
+		sfx.play("ok", Vector2.INF, 0.6)
+	# the self-test: it only runs once the transition has opened the screen,
+	# and the cards are dealt as it brings the content up
+	if not Wipe.busy() and boot_t < BOOT_T:
+		boot_t += dt
+	if boot_t < 0.85:
+		deal_t = 0.0
 	if milestone >= 0.0:
 		milestone += dt
 	_step_motion(dt)
@@ -270,6 +313,9 @@ func _process(dt: float) -> void:
 func _gui_input(ev: InputEvent) -> void:
 	if settings.is_open or leaving >= 0.0:
 		return
+	if boot_t < BOOT_T and ev is InputEventMouseButton and ev.pressed:
+		_skip_boot()
+		return
 	if ev is InputEventMouseButton and ev.pressed and milestone >= 0.0:
 		if milestone > 1.5:
 			milestone = -1.0
@@ -302,6 +348,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if DevPanel.workbench_open and Txt.dev:
 		return
 	if not (ev is InputEventKey and ev.pressed and not ev.echo) or leaving >= 0.0:
+		return
+	if boot_t < BOOT_T and not overlay:
+		_skip_boot()
+		get_viewport().set_input_as_handled()
 		return
 	if overlay:
 		get_viewport().set_input_as_handled()
@@ -349,6 +399,10 @@ func close() -> void:
 func set_tab(i: int) -> void:
 	# on site the market is not open: contracts are signed between jobs
 	var lo := 1 if overlay else 0
+	tab_press = clampi(i, lo, 3)
+	press_t = 0.16
+	if clampi(i, lo, 3) != tab:
+		sfx.play("switch", Vector2.INF, 0.8)
 	if clampi(i, lo, 3) != tab:
 		deal_t = 0.0
 	tab = clampi(i, lo, 3)
@@ -451,6 +505,7 @@ func say(text: String) -> void:
 func act() -> void:
 	if tab == 3:
 		return
+	press_t = 0.16
 	if tab == 0 and not next_job.is_empty():
 		start_next()
 	elif tab == 0:
@@ -474,6 +529,7 @@ func take(i: int) -> void:
 		Game.contract = a
 		Game.start_ship = a.get("ship", "gr7")
 		SaveGame.load_requested = false
+		sfx.play("stamp", Vector2.INF, 1.0)
 		leaving = 0.0
 		return
 	var o: Dictionary = Career.accept(_offer_index(i))
@@ -483,6 +539,7 @@ func take(i: int) -> void:
 	Game.contract = o
 	Copy.say(radio, "T_contract_signed", "term")
 	SaveGame.load_requested = false
+	sfx.play("stamp", Vector2.INF, 1.0)
 	leaving = 0.0
 
 
@@ -497,6 +554,7 @@ func start_next() -> void:
 	Game.start_ship = a.get("ship", "gr7")
 	var saved := SaveGame.read(SaveGame.path) if SaveGame.exists() else {}
 	SaveGame.load_requested = not saved.is_empty() and saved.get("job", a).get("id", "") == a.get("id", "")
+	sfx.play("stamp", Vector2.INF, 1.0)
 	leaving = 0.0
 
 
@@ -589,12 +647,14 @@ func buy(it: Array, n: int = 1) -> void:
 # it could not be done: the button jolts, the funds flash, and it says why
 func _refuse(why: String) -> void:
 	shake = 1.0
+	sfx.play("deny", Vector2.INF, 0.8)
 	money_flash = -1.0
 	say(why)
 
 
 # a purchase: a bright pass along the row, and lights leaving the funds for it
 func _buy_fx(i: int) -> void:
+	sfx.play("stamp", Vector2.INF, 0.9)
 	sweep[i] = 0.0
 	var r := _item_rect(i) if tab == 1 else _go_rect()
 	for k in 14:
@@ -604,7 +664,7 @@ func _buy_fx(i: int) -> void:
 # ---------------------------------------------------------------- layout
 
 func _tab_rect(i: int) -> Rect2:
-	return Rect2(60 + i * 230, 132, 216, 44)
+	return Rect2(60 + i * 244, 132, 230, 50)
 
 
 func _item_rect(i: int) -> Rect2:
@@ -677,6 +737,7 @@ func _drone_c() -> Vector2:
 
 
 const DK := 4.0      # the drone drawn at four times its size on site
+const DArt = preload("res://scripts/drone_art.gd")
 
 
 func _anchor(i: int) -> Vector2:
@@ -744,11 +805,17 @@ func _wrap(s: String, pos: Vector2, w: float, size_px: int, col: Color, lines: i
 
 func _draw() -> void:
 	var s := size
-	var a := clampf(t / 0.35, 0.0, 1.0)
 	var lv := clampf(leaving / 0.45, 0.0, 1.0) if leaving >= 0.0 else 0.0
-	draw_rect(Rect2(Vector2.ZERO, s), Pal.BG)
-	_backdrop(s, a)
-	var ua := a * (1.0 - Pal.ease_in(lv))
+	draw_rect(Rect2(Vector2.ZERO, s), Hmi.BG)
+	# the self-test: the power line first, then each part as it comes up
+	Hmi.lamp_test = boot_t > 0.55 and boot_t < 0.95
+	if boot_t < 0.3:
+		var e := Pal.ease_out(clampf(boot_t / 0.28, 0.0, 1.0))
+		draw_rect(Rect2(s.x * 0.5 * (1.0 - e), s.y * 0.5 - 1, s.x * e, 2), Pal.heat(1.0, 2.6))
+		_self_test(s)
+		return
+	_backdrop(s, 1.0)
+	var ua := 1.0 - Pal.ease_in(lv)
 	_top(s, ua)
 	_tabs(ua)
 	match tab:
@@ -758,85 +825,95 @@ func _draw() -> void:
 			_shop(s, ua)
 		2:
 			_berth(s, ua)
-	_bottom(s, ua)
+	_bottom(s, ua * _bk(1.45, 1.8))
 	_sparks()
 	_radio(s, ua)
 	if leaving >= 0.0:
 		_leave(s, lv)
 	if milestone >= 0.0:
 		_milestone(s)
-	if t < 0.6:
-		var e := Pal.ease_out(clampf((t - 0.05) / 0.5, 0.0, 1.0))
-		var h := s.y * 0.5 * (1.0 - e)
-		draw_rect(Rect2(0, 0, s.x, h), Color(0, 0, 0, 1))
-		draw_rect(Rect2(0, s.y - h, s.x, h), Color(0, 0, 0, 1))
-		var la := 1.0 - clampf((t - 0.15) / 0.4, 0.0, 1.0)
-		draw_rect(Rect2(0, h - 1, s.x, 2), Pal.heat(la, 2.0))
-		draw_rect(Rect2(0, s.y - h - 1, s.x, 2), Pal.heat(la, 2.0))
+	_self_test(s)
+	Hmi.lamp_test = false
+
+
+# how far one part of the self-test has come (0 dark, 1 up), between two moments of it
+func _bk(a0: float, a1: float) -> float:
+	return Pal.ease_out(clampf((boot_t - a0) / maxf(a1 - a0, 0.001), 0.0, 1.0))
+
+
+# the self-test's log, typed in at the lower left while the terminal comes up
+func _self_test(s: Vector2) -> void:
+	if boot_t >= BOOT_T:
+		return
+	# typed while the frame comes up, gone as the cards are dealt
+	var fade := clampf((1.05 - boot_t) / 0.2, 0.0, 1.0)
+	if fade <= 0.0:
+		return
+	var lines := [Txt.t("tm_st_0"), Txt.t("tm_st_1"), Txt.t("tm_st_2"), Txt.t("tm_st_3"), Txt.t("tm_st_4"), Txt.t("tm_st_5")]
+	var y0 := s.y * 0.5 + 40.0 if boot_t < 0.3 else s.y - 300.0
+	for i in lines.size():
+		var start := 0.05 + i * 0.13
+		var n := int(clampf((boot_t - start) / 0.12, 0.0, 1.0) * lines[i].length())
+		if n <= 0:
+			continue
+		var col := Pal.tint(Pal.AIR, 0.9 * fade, 1.4) if i < lines.size() - 1 else Pal.tint(Pal.FLUID, fade, 1.8)
+		_text(lines[i].substr(0, n), Vector2(60, y0 + i * 24), 16, col, font_b)
 
 
 # the room the terminal sits in: a faint dot field drifting, a slow scan, dark corners
+# the console the terminal sits in: plate seams, a slow scan
 func _backdrop(s: Vector2, a: float) -> void:
-	for d in dust:
-		var p: Vector2 = d[0]
-		var q := Vector2(fposmod(p.x + t * d[1], 1.0) * s.x, p.y * s.y)
-		draw_rect(Rect2(q, Vector2(d[3], d[3])), Pal.ink((0.035 + 0.03 * sin(t * 0.7 + d[2])) * a))
+	var gx := 0.0
+	while gx < s.x:
+		draw_line(Vector2(gx, 0), Vector2(gx, s.y), Color(1, 1, 1, 0.018 * a), 1.0)
+		gx += 160.0
 	var sy := fposmod(t * 70.0, s.y + 200.0) - 100.0
-	draw_rect(Rect2(0, sy, s.x, 1), Pal.ink(0.025 * a))
-	draw_rect(Rect2(0, sy - 40, s.x, 40), Pal.ink(0.008 * a))
-	for i in 4:
-		var w := 30.0 + i * 30.0
-		draw_rect(Rect2(0, 0, w, s.y), Color(0, 0, 0, 0.05 * a))
-		draw_rect(Rect2(s.x - w, 0, w, s.y), Color(0, 0, 0, 0.05 * a))
+	draw_rect(Rect2(0, sy, s.x, 1), Pal.ink(0.02 * a))
 
 
 func _tabs(a: float) -> void:
 	for i in TABS.size():
 		var r := _tab_rect(i)
 		var on := tab == i
-		if hover_tab == i and not on:
-			Pal.band(self, r, 0.06 * a)
-		_text("%d  %s" % [i + 1, Txt.t("tm_tab_" + TABS[i])], r.position + Vector2(16, 29), 17, Pal.ink((0.95 if on else (0.7 if hover_tab == i else 0.45)) * a), font_b if on else font)
-	# the underline and its glow slide to the open tab on a spring
-	var ux: float = tab_x.x
-	var uw: float = tab_w.x
-	Pal.band(self, Rect2(ux, 132, uw, 44), 0.12 * a)
-	draw_rect(Rect2(ux, 174, uw, 2), Pal.heat(a, 1.1))
-	draw_rect(Rect2(ux + uw * 0.25, 176, uw * 0.5, 1), Pal.heat(0.4 * a, 1.6))
+		var ka := a * _bk(0.55 + i * 0.05, 0.8 + i * 0.05)
+		if ka <= 0.0:
+			continue
+		Hmi.rocker(self, font_s, r, "%d  %s" % [i + 1, Txt.t("tm_tab_" + TABS[i])], on, 1.0 if hover_tab == i else 0.0, ka, 1.0 if tab_press == i else 0.0)
 
 
 func _top(s: Vector2, a: float) -> void:
 	var d := Career.data
+	var ka := a * _bk(0.25, 0.6)
+	Hmi.raised(self, Rect2(0, 0, s.x, 116), ka, Hmi.HEAD)
 	var company: String = str(Career.data.get("company", ""))
-	_text((company if company != "" else "BERTH 07") + "  ·  CHARON-DISPATCH", Vector2(60, 56), 13, Pal.ink(0.55 * a), font)
-	_text(Txt.t("tm_title"), Vector2(60, 94), 30, Pal.ink(0.92 * a), font_l)
+	var pr := Rect2(40, 22, 420, 72)
+	Hmi.plate(self, font_s, pr, Txt.t("tm_title"), 28, ka)
+	_text((company if company != "" else "BERTH 07") + "  ·  CHARON-DISPATCH", Vector2(pr.end.x + 24, 50), 14, Pal.ink(0.6 * ka), font_b)
+	Hmi.lamp(self, Vector2(pr.end.x + 32, 76), Hmi.ok_col(), true, ka, 6.0)
+	_text(Txt.t("tm_online"), Vector2(pr.end.x + 48, 82), 15, Pal.ink(0.75 * ka), font_b)
 	var goal := Growth.find_track(str(d.get("growth_goal", "")))
 	if not goal.is_empty():
 		var id: String = goal[0]
 		var reason := Growth.reason(id)
 		var state := reason if reason != "" else Growth.text(["已攒够", "READY TO BUY"])
-		_text(Growth.text(["目标：%s · %s · 按 4 查看", "GOAL: %s · %s · 4 TO VIEW"]) % [Growth.text(goal[2]), state], Vector2(60, 118), 13, Pal.ink(0.65 * a), font)
-	var loan_c := Pal.heat(0.9 * a, 1.0) if float(d.loan) > 0.0 else Pal.ink(0.95 * a)
-	var mc := Pal.ink(0.95 * a).lerp(Pal.ink(1.0 * a, 1.5) if money_flash > 0.0 else Pal.heat(a, 1.4), absf(money_flash))
+		_text(Growth.text(["目标：%s · %s · 按 4 查看", "GOAL: %s · %s · 4 TO VIEW"]) % [Growth.text(goal[2]), state], Vector2(pr.end.x + 24, 108), 13, Pal.ink(0.6 * ka), font)
+	var loan_c := Pal.heat(1.0, 1.3) if float(d.loan) > 0.0 else Pal.ink(0.98)
+	var mc := Pal.ink(0.98).lerp(Pal.ink(1.0, 1.5) if money_flash > 0.0 else Pal.heat(1.0, 1.4), absf(money_flash))
 	var cols := [
-		[Txt.t("tm_money"), Pal.money(money_roll.shown), mc, money_flash],
-		[Txt.t("tm_loan"), Pal.money(loan_roll.shown), loan_c.lerp(Pal.ink(a, 1.5), maxf(0.0, -loan_flash)), loan_flash],
-		[Txt.t("tm_due"), Pal.money(minf(Career.INSTALLMENT, float(d.loan)) + snappedf(float(d.loan) * Career.INTEREST, 1.0)), Pal.ink(0.8 * a), 0.0],
-		[Txt.t("tm_rep"), Txt.t("rep_" + Career.level()), Pal.ink(0.95 * a), 0.0],
+		[Txt.t("tm_money"), Pal.money(money_roll.shown), mc, Hmi.ok_col()],
+		[Txt.t("tm_loan"), Pal.money(loan_roll.shown), loan_c.lerp(Pal.ink(1.0, 1.5), maxf(0.0, -loan_flash)), Hmi.warn_col() if float(d.loan) > 0.0 else Hmi.ok_col()],
+		[Txt.t("tm_due"), Pal.money(minf(Career.INSTALLMENT, float(d.loan)) + snappedf(float(d.loan) * Career.INTEREST, 1.0)), Pal.ink(0.9), Hmi.ok_col()],
+		[Txt.t("tm_rep"), Txt.t("rep_" + Career.level()), Pal.ink(0.98), Hmi.ok_col()],
 	]
 	for i in cols.size():
-		var x := s.x - 60 - (cols.size() - 1 - i) * 250
-		var ck := Pal.ease_out(clampf((t - 0.05 - i * 0.05) / 0.35, 0.0, 1.0))
-		var f: float = absf(cols[i][3])
-		_text(cols[i][0], Vector2(x, 56), 13, Pal.ink(0.4 * a * ck), font, 1)
-		_text(cols[i][1], Vector2(x, 92 - f * 3.0 + (1.0 - ck) * 10.0), 26, cols[i][2], font_l, 1)
-		if f > 0.0:
-			draw_rect(Rect2(x - 160, 100, 160 * f, 1), Pal.ink(0.5 * f * a, 1.4) if cols[i][3] > 0.0 else Pal.heat(0.6 * f * a, 1.4))
-	# reputation: how far to the next level, as a thin bar under the level name
+		var r := Rect2(s.x - 40 - (cols.size() - i) * 296 + 16, 18, 280, 80)
+		var ck := a * _bk(0.35 + i * 0.08, 0.7 + i * 0.08)
+		if ck <= 0.0:
+			continue
+		Hmi.readout(self, font_s, font_b, r, cols[i][0], cols[i][1], cols[i][2], cols[i][3], ck)
+	# reputation: how far to the next level, as a gauge under the level box
 	var nx := Career.to_next()
-	var lvx := s.x - 60
 	if nx > 0:
-		_text(Txt.t("tm_rep_next") % nx, Vector2(lvx, 120), 11, Pal.ink(0.35 * a), font, 1)
 		var lo := 0
 		var hi := 0
 		for l in Career.LEVELS:
@@ -844,11 +921,10 @@ func _top(s: Vector2, a: float) -> void:
 				lo = int(l[1])
 			elif hi == 0:
 				hi = int(l[1])
-		var pk := clampf(float(int(d.rep) - lo) / maxf(1.0, hi - lo), 0.0, 1.0) * Pal.ease_out(clampf((t - 0.3) / 0.6, 0.0, 1.0))
-		draw_rect(Rect2(lvx - 120, 101, 120, 2), Pal.ink(0.1 * a))
-		draw_rect(Rect2(lvx - 120, 101, 120 * pk, 2), Pal.heat(0.8 * a, 1.2))
-	var lw := (s.x - 120) * Pal.ease_out(clampf(t / 0.6, 0.0, 1.0))
-	draw_line(Vector2(60, 186), Vector2(60 + lw, 186), Pal.ink(0.12 * a), 1.0)
+		var pk := clampf(float(int(d.rep) - lo) / maxf(1.0, hi - lo), 0.0, 1.0)
+		var gk := a * _bk(0.7, 1.0)
+		Hmi.gauge(self, Rect2(s.x - 40 - 296 + 16, 101, 280, 10), pk, Pal.heat(1.0, 1.3), gk, 12)
+		_text(Txt.t("tm_rep_next") % nx, Vector2(s.x - 40, 126), 12, Pal.ink(0.5 * gk), font, 1)
 
 
 # risk stars pop in one after another
@@ -898,95 +974,97 @@ func _market(s: Vector2, a: float) -> void:
 		if o.get("story_card", false):
 			_story_card(o, r, k, hk, sk)
 			continue
-		# dealt from below, lifted on hover
+		# dealt from below, lifted on hover; the chosen one framed in heat
 		r.position.y += (1.0 - k) * 36.0 - hk * 6.0
-		draw_rect(Rect2(r.position + Vector2(0, 10 + hk * 6.0), r.size), Color(0, 0, 0, (0.25 + 0.2 * hk) * k))
-		UI.panel(self, r, k, sk)
+		Hmi.raised(self, r, k, Hmi.PANEL.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
+		if sk > 0.02:
+			draw_rect(r.grow(4.0), Pal.heat(sk * k, 1.4), false, 4.0)
 		var x := r.position.x + 28
 		var w := r.size.x - 56
 		var y := r.position.y
 		var row_k := func(n: int) -> float: return Pal.ease_out(clampf((deal_t - 0.15 - i * 0.07 - n * 0.035) / 0.3, 0.0, 1.0)) * a
 		var ty: Dictionary = Market.type_of(o.ship)
 		var scope: String = o.get("scope", "full")
-		# 1 · what kind of job, how risky, which ship
-		var sct := Txt.t("sc_" + scope)
-		var cw := font_b.get_string_size(sct, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 24.0
-		var chip := Rect2(x, y + 22, cw, 30)
-		var ccol: Color = Pal.HEAT if scope != "full" else Pal.INK
-		draw_rect(chip, Color(ccol.r, ccol.g, ccol.b, (0.18 if scope != "full" else 0.08) * k))
-		draw_rect(chip, Color(ccol.r, ccol.g, ccol.b, 0.7 * k), false, 1.2)
-		_text(sct, chip.get_center() + Vector2(0, 6), 16, Pal.ink(0.98 * k), font_b, 0)
-		_stars(int(o.stars), Vector2(chip.end.x + 22, y + 37), k, 0.25 + i * 0.07)
-		_text(Txt.t("tm_risk_" + str(int(o.stars))), Vector2(chip.end.x + 80, y + 43), 15, Pal.ink(0.75 * k), font)
-		_text(Txt.t("tm_contract_n") % o.id, Vector2(r.end.x - 28, y + 43), 13, Pal.ink(0.5 * k), font, 1)
-		_text("%s  ·  %s  ·  %d m" % [o.reg, (ty.name[0] if Txt.zh else ty.name[1]), int(ty.get("length", 0))], Vector2(x, y + 82), 17, Pal.ink(0.85 * row_k.call(0)), font_b)
-		# 2 · the number to choose by
+		# 1 · the plate: what kind of job; its lamp heat for a part job
+		var pl := Rect2(r.position.x + 18, y + 18, r.size.x - 36, 46)
+		Hmi.plate(self, font_s, pl, Txt.t("sc_" + scope), 21, k)
+		Hmi.lamp(self, Vector2(pl.end.x - 22, pl.get_center().y), Hmi.warn_col() if scope != "full" else Hmi.ok_col(), true, k, 7.0)
+		_text(Txt.t("tm_contract_n") % o.id, Vector2(pl.end.x - 44, pl.get_center().y + 6), 13, Pal.ink(0.5 * k), font, 1)
+		_text("%s  ·  %s  ·  %d m" % [o.reg, (ty.name[0] if Txt.zh else ty.name[1]), int(ty.get("length", 0))], Vector2(x, y + 98), 18, Pal.ink(0.9 * row_k.call(0)), font_s)
+		# 2 · the screen: the number to choose by, and the ship
+		var sc := Rect2(r.position.x + 18, y + 116, r.size.x - 36, 248)
+		var hk2: float = row_k.call(1)
+		Hmi.screen(self, sc, hk2)
 		var net := _net(o)
 		var cnt := Pal.ease_out(clampf((deal_t - 0.2 - i * 0.07) / 0.7, 0.0, 1.0))
-		var hk2: float = row_k.call(1)
-		_text(Txt.t("tm_net"), Vector2(x, y + 122), 14, Pal.ink(0.6 * hk2), font)
-		_text(Pal.money(snappedf(net * cnt, 100.0)), Vector2(x, y + 172), 46, Pal.ink(0.98 * hk2) if net >= 0.0 else Pal.heat(0.95 * hk2, 1.2), font_l)
-		_text(Txt.t("tm_per_min") % Pal.money(snappedf(_rate(o), 10.0)), Vector2(r.end.x - 28, y + 146), 17, Pal.ink(0.9 * hk2), font_b, 1)
-		_text(Txt.t("tm_minutes") % int(float(o.time) / 60.0), Vector2(r.end.x - 28, y + 172), 15, Pal.ink(0.6 * hk2), font, 1)
-		# the best of the three, said plainly
+		_text(Txt.t("tm_net"), sc.position + Vector2(16, 30), 15, Pal.ink(0.6 * hk2), font_b)
+		_text(Pal.money(snappedf(net * cnt, 100.0)), sc.position + Vector2(12, 104), 64, Pal.tint(Pal.AIR, hk2, 1.35) if net >= 0.0 else Pal.heat(0.95 * hk2, 1.3), font_l)
+		_text(Txt.t("tm_per_min") % Pal.money(snappedf(_rate(o), 10.0)), Vector2(sc.end.x - 16, sc.position.y + 32), 17, Pal.ink(0.9 * hk2), font_s, 1)
+		_text(Txt.t("tm_minutes") % int(float(o.time) / 60.0), Vector2(sc.end.x - 16, sc.position.y + 56), 14, Pal.ink(0.6 * hk2), font, 1)
+		_thumb(o, Rect2(sc.position.x + 16, sc.position.y + 126, sc.size.x - 32, 108), row_k.call(2))
+		# 3 · risk as a three-step gauge, and the best of the three said plainly
+		var rk2: float = row_k.call(3)
+		_text(Txt.t("tm_risk_h"), Vector2(x, y + 398), 15, Pal.ink(0.6 * rk2), font_b)
+		Hmi.gauge(self, Rect2(x + 56, y + 382, 186, 22), float(o.stars) / 3.0, Pal.heat(1.0, 1.3), rk2, 3)
+		_text(Txt.t("tm_risk_" + str(int(o.stars))), Vector2(x + 256, y + 399), 15, Pal.ink(0.8 * rk2), font_b)
 		var badges: Array = []
 		if i == best_net and os.size() > 1:
 			badges.append(Txt.t("tm_best_net"))
 		if i == best_rate and os.size() > 1:
 			badges.append(Txt.t("tm_best_rate"))
-		var bx := x
+		var bx := x + w
 		for bdg in badges:
-			var bw := font_b.get_string_size(bdg, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 16.0
-			draw_rect(Rect2(bx, y + 186, bw, 22), Pal.tint(Pal.FLUID, 0.16 * hk2, 1.0))
-			_text(bdg, Vector2(bx + 8, y + 202), 13, Pal.tint(Pal.FLUID, 0.95 * hk2, 1.1), font_b)
-			bx += bw + 8.0
-		# 3 · what the job is, on the ship
-		_thumb(o, Rect2(x, y + 222, w, 92), row_k.call(2))
+			var bw := font_s.get_string_size(bdg, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 18.0
+			bx -= bw
+			draw_rect(Rect2(bx, y + 380, bw, 26), Pal.tint(Pal.FLUID, 0.9 * rk2, 1.0))
+			_text(bdg, Vector2(bx + 9, y + 398), 14, Color(0.03, 0.05, 0.03, rk2), font_s)
+			bx -= 8.0
+		# 4 · what the job is, on the ship
 		var task := Market.scope_text(o) if scope != "full" else Txt.t("tm_task_full")
-		c_wrap(task, Vector2(x, y + 340), w, 15, Pal.ink(0.88 * row_k.call(3)))
+		c_wrap(task, Vector2(x, y + 440), w, 15, Pal.ink(0.88 * row_k.call(3)))
 		if Market.goal_text(o) != "":
-			_text(Market.goal_text(o), Vector2(x, y + 386), 13, Pal.tint(Pal.FLUID, 0.9 * row_k.call(3), 1.1), font_b)
-		# 4 · the money, line by line
+			_text(Market.goal_text(o), Vector2(x, y + 486), 13, Pal.tint(Pal.FLUID, 0.9 * row_k.call(3), 1.1), font_b)
+		# 5 · the money, line by line
 		var due := Career.due_for(o)
 		var lines := [
 			[Txt.t("tm_value"), Pal.money(float(o.value))],
 			[Txt.t("tm_fee"), "−" + Pal.money(float(o.fee))],
 			[Txt.t("tm_due_c"), "−" + Pal.money(due)],
 		]
-		for j in lines.size():
-			var yy := y + 414 + j * 26
-			var jk: float = row_k.call(4 + j)
-			_text(lines[j][0], Vector2(x, yy), 14, Pal.ink(0.6 * jk), font)
-			_text(lines[j][1], Vector2(r.end.x - 28, yy), 15, Pal.ink(0.85 * jk), font_b, 1)
+		for jx in lines.size():
+			var yy := y + 516 + jx * 28
+			var jk: float = row_k.call(4 + jx)
+			_text(lines[jx][0], Vector2(x, yy), 14, Pal.ink(0.6 * jk), font)
+			_text(lines[jx][1], Vector2(r.end.x - 28, yy), 16, Pal.ink(0.92 * jk), font_s, 1)
 		if float(Career.data.money) < float(o.fee):
-			_text(Txt.t("tm_borrow") % Pal.money(float(o.fee) - float(Career.data.money)), Vector2(x, y + 490), 13, Pal.heat(0.9 * k, 1.1), font)
-		# 5 · the paperwork: why it was scrapped, what the logs say, what is declared
+			_text(Txt.t("tm_borrow") % Pal.money(float(o.fee) - float(Career.data.money)), Vector2(x, y + 588), 13, Pal.heat(0.9 * k, 1.1), font)
+		# 6 · the paperwork: why it was scrapped, what the logs say, what is declared
 		var pk: float = row_k.call(8)
-		draw_line(Vector2(x, y + 496), Vector2(x + w, y + 496), Pal.ink(0.1 * pk), 1.0)
-		_text(Txt.t("tm_reason"), Vector2(x, y + 522), 13, Pal.ink(0.55 * pk), font)
-		_text(Copy.slot(o.reason), Vector2(x + 96, y + 522), 14, Pal.ink(0.8 * pk), font)
-		_text(Txt.t("tm_logs"), Vector2(x, y + 550), 13, Pal.ink(0.55 * pk), font)
-		var ly := y + 550.0
-		for li in o.logs.size():
+		draw_line(Vector2(x, y + 596), Vector2(x + w, y + 596), Color(0, 0, 0, 0.5 * pk), 2.0)
+		_text(Txt.t("tm_reason"), Vector2(x, y + 620), 13, Pal.ink(0.55 * pk), font)
+		_text(Copy.slot(o.reason), Vector2(x + 96, y + 620), 14, Pal.ink(0.8 * pk), font)
+		_text(Txt.t("tm_logs"), Vector2(x, y + 646), 13, Pal.ink(0.55 * pk), font)
+		var ly := y + 646.0
+		for li in mini(2, o.logs.size()):
 			_text("› " + Copy.slot(o.logs[li]), Vector2(x + 96, ly), 14, Pal.tint(Pal.AIR, 0.85 * pk, 1.0), font)
 			ly += 22.0
 		var parts: Array = []
 		for cg in o.get("cargo", []):
 			parts.append("%s %s" % [cg[0], Txt.cargo(cg[1])])
-		_text(Txt.t("tm_cargo"), Vector2(x, ly + 12), 13, Pal.ink(0.55 * pk), font)
-		c_wrap("  ·  ".join(parts) if not parts.is_empty() else Txt.t("tm_no_cargo"), Vector2(x, ly + 34), w, 14, Pal.ink(0.8 * pk))
-		# a survey report bought for this offer: typed in behind a scan line
+		_text(Txt.t("tm_cargo") + "  " + ("  ·  ".join(parts) if not parts.is_empty() else Txt.t("tm_no_cargo")), Vector2(x, ly + 14), 13, Pal.ink(0.7 * pk), font)
+		# a survey report bought for this offer: typed in behind a scan line, on its own screen
 		if o.has("intel"):
 			var it_t := intel_t.get(o.id, 9.0) as float
 			var shown := intel_text(o).substr(0, int(it_t * 40.0))
-			var ir := Rect2(x - 10, r.end.y - 64, w + 20, 48)
-			draw_rect(ir, Pal.tint(Pal.AIR, 0.08 * k, 1.0))
-			_text(Txt.t("tm_intel"), ir.position + Vector2(10, 20), 13, Pal.tint(Pal.AIR, 0.85 * k, 1.0), font)
-			_text(shown, ir.position + Vector2(10, 40), 14, Pal.tint(Pal.AIR, 0.95 * k, 1.0), font)
+			var ir := Rect2(r.position.x + 18, r.end.y - 70, r.size.x - 36, 52)
+			Hmi.screen(self, ir, k)
+			_text(Txt.t("tm_intel"), ir.position + Vector2(12, 20), 13, Pal.tint(Pal.AIR, 0.85 * k, 1.0), font)
+			_text(shown, ir.position + Vector2(12, 42), 14, Pal.tint(Pal.AIR, 0.95 * k, 1.2), font)
 			if it_t < 1.0:
 				draw_rect(Rect2(ir.position.x + ir.size.x * it_t, ir.position.y, 2, ir.size.y), Pal.tint(Pal.AIR, (1.0 - it_t) * k, 2.0))
 		else:
-			_text(Txt.t("tm_logs_note"), Vector2(x, r.end.y - 20), 13, Pal.ink(0.45 * pk), font)
+			_text(Txt.t("tm_logs_note"), Vector2(x, r.end.y - 18), 13, Pal.ink(0.45 * pk), font)
+
 
 
 func _net(o: Dictionary) -> float:
@@ -1067,16 +1145,24 @@ func _cy(pd: Dictionary) -> float:
 func _shop(_s: Vector2, a: float) -> void:
 	var sr := _schematic_rect()
 	var ka := Pal.ease_out(clampf(deal_t / 0.4, 0.0, 1.0)) * a
-	UI.panel(self, sr, ka)
+	# the drawing on its own screen, set in a panel with its plate
+	var pr := Rect2(sr.position.x - 8, sr.position.y - 8, sr.size.x + 16, sr.size.y + 16)
+	Hmi.raised(self, pr, ka)
+	Hmi.screen(self, sr, ka, true)
 	_schematic(sr, ka)
 	for i in FITTED:
 		_callout_box(i, ka)
-	# how to read the drawing
-	var lg := Txt.t("tm_legend")
-	_text(lg, Vector2(sr.get_center().x, sr.end.y - 14), 13, Pal.ink(0.55 * ka), font, 0)
-	# stock: a row of cells under the drawing
+	# how to read the lamps
+	var ly := sr.position.y + 30
+	var keys := [[Hmi.ok_col(), Txt.t("tm_lamp_have")], [Hmi.can_col(), Txt.t("tm_lamp_can")], [Hmi.warn_col(), Txt.t("tm_lamp_short")]]
+	var lx := sr.get_center().x - 160
+	for kk in keys:
+		Hmi.lamp(self, Vector2(lx, ly - 5), kk[0], true, ka, 6.0)
+		_text(kk[1], Vector2(lx + 16, ly), 14, Pal.ink(0.7 * ka), font_b)
+		lx += 120
+	# stock: a row of tiles under the drawing
 	var g := _grid_rect()
-	_text(Txt.t("tm_items"), g.position + Vector2(0, 22), 15, Pal.ink(0.6 * ka), font_b)
+	Hmi.plate(self, font_s, Rect2(g.position.x, g.position.y, 440, 30), Txt.t("tm_items"), 15, ka)
 	for i in range(FITTED, SHOP.size()):
 		_cell(i, ka)
 	_detail(a)
@@ -1088,50 +1174,33 @@ func _schematic(sr: Rect2, a: float) -> void:
 	var d := Career.data
 	var c := _drone_c()
 	var R := Drone.R * DK
-	# grid paper
-	var gx := sr.position.x + 20.0
-	while gx < sr.end.x - 10.0:
-		draw_line(Vector2(gx, sr.position.y + 10), Vector2(gx, sr.end.y - 10), Pal.ink(0.025 * a), 1.0)
-		gx += 40.0
-	var gy := sr.position.y + 20.0
-	while gy < sr.end.y - 10.0:
-		draw_line(Vector2(sr.position.x + 10, gy), Vector2(sr.end.x - 10, gy), Pal.ink(0.025 * a), 1.0)
-		gy += 40.0
 	# the berth: floor, tower, boom (in the right part of the drawing)
 	var bx0 := sr.position.x + sr.size.x * 0.52
 	var by := sr.position.y + sr.size.y * 0.24
 	var fy := sr.end.y - 40.0
 	var tx := sr.end.x - 40.0
-	draw_line(Vector2(bx0, fy), Vector2(sr.end.x - 16, fy), Pal.ink(0.35 * a), 1.6)
-	draw_line(Vector2(tx, fy), Vector2(tx, by - 20), Pal.ink(0.35 * a), 1.6)
-	draw_line(Vector2(tx - 12, fy), Vector2(tx - 12, by - 20), Pal.ink(0.2 * a), 1.0)
-	draw_line(Vector2(bx0, by), Vector2(tx, by), Pal.ink(0.35 * a), 1.6)
-	draw_line(Vector2(bx0, by - 12), Vector2(tx, by - 12), Pal.ink(0.2 * a), 1.0)
+	draw_line(Vector2(bx0, fy), Vector2(sr.end.x - 16, fy), Pal.tint(Pal.AIR, 0.5 * a), 1.6)
+	draw_line(Vector2(tx, fy), Vector2(tx, by - 20), Pal.tint(Pal.AIR, 0.5 * a), 1.6)
+	draw_line(Vector2(tx - 12, fy), Vector2(tx - 12, by - 20), Pal.tint(Pal.AIR, 0.3 * a), 1.0)
+	draw_line(Vector2(bx0, by), Vector2(tx, by), Pal.tint(Pal.AIR, 0.5 * a), 1.6)
+	draw_line(Vector2(bx0, by - 12), Vector2(tx, by - 12), Pal.tint(Pal.AIR, 0.3 * a), 1.0)
 	var zx := bx0
 	while zx < tx - 12:
-		draw_line(Vector2(zx, by), Vector2(zx + 12, by - 12), Pal.ink(0.15 * a), 1.0)
+		draw_line(Vector2(zx, by), Vector2(zx + 12, by - 12), Pal.tint(Pal.AIR, 0.22 * a), 1.0)
 		zx += 24.0
-	_text("BERTH 07", Vector2(bx0, by - 22), 13, Pal.ink(0.4 * a), font)
+	_text("BERTH 07", Vector2(bx0, by - 22), 14, Pal.tint(Pal.AIR, 0.7 * a), font_b)
 	# the hose mast from the floor
 	var pa := _anchor(2)
-	draw_line(Vector2(pa.x, fy), Vector2(pa.x, pa.y + 14), Pal.ink(0.35 * a), 1.6)
-	draw_rect(Rect2(pa + Vector2(-16, -10), Vector2(30, 26)), Pal.ink(0.5 * a), false, 1.4)
-	# the drone
-	var hexp := PackedVector2Array()
-	for i in 8:
-		hexp.append(c + Vector2.from_angle(TAU * i / 8.0 + PI / 8.0) * R)
-	draw_colored_polygon(hexp, Color(0.06, 0.064, 0.072, a))
-	var cl := hexp.duplicate()
-	cl.append(hexp[0])
-	draw_polyline(cl, Pal.ink(0.85 * a), 2.0, true)
-	for dv in [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP]:
-		var pc: Vector2 = c + dv * (R - 4.0)
-		var tg := Vector2(-dv.y, dv.x)
-		draw_line(pc + tg * 20.0, pc - tg * 20.0, Pal.ink(0.7 * a), 6.0)
-	draw_circle(c, 8.5 * DK, Color(0.03, 0.03, 0.035, a))
-	draw_arc(c, 8.5 * DK, 0.0, TAU, 40, Pal.ink(0.55 * a), 1.4, true)
-	draw_circle(c + Vector2(3.5, 0) * DK, 3.4 * DK, Pal.ink(0.9 * a))
-	_text("R-02", c + Vector2(-20, R + 36), 15, Pal.ink(0.6 * a), font_b)
+	draw_line(Vector2(pa.x, fy), Vector2(pa.x, pa.y + 14), Pal.tint(Pal.AIR, 0.5 * a), 1.6)
+	draw_rect(Rect2(pa + Vector2(-16, -10), Vector2(30, 26)), Pal.tint(Pal.AIR, 0.6 * a), false, 1.4)
+	# the drone: the airframe as it flies, drawn four times over in blueprint blue
+	var xf := Transform2D(0.0, Vector2(DK, DK), 0.0, c)
+	draw_set_transform_matrix(xf)
+	DArt.tint = Color(Pal.AIR.r * 1.1 * a, Pal.AIR.g * 1.1 * a, Pal.AIR.b * 1.1 * a)
+	DArt.draw(self, "arrowring", {"heading": -0.2, "tool": 1, "open": 1.0, "t": t, "thrust": Vector2.ZERO, "dash": false, "design": "arrowring", "base_xf": xf})
+	DArt.tint = Color(1, 1, 1)
+	draw_set_transform_matrix(Transform2D.IDENTITY)
+	_text("R-02", c + Vector2(-22, R + 40), 18, Pal.tint(Pal.AIR, 0.85 * a, 1.2), font_s)
 	# the four fitted upgrades
 	for i in FITTED:
 		var id: String = SHOP[i][0]
@@ -1155,7 +1224,7 @@ func _schematic(sr: Rect2, a: float) -> void:
 
 
 func _part(i: int, have: bool, a: float, off: Vector2) -> void:
-	var col := Pal.ink(0.95 * a) if have else Pal.ink(0.35 * a)
+	var col := Pal.tint(Pal.AIR, 0.95 * a, 1.3) if have else Pal.tint(Pal.AIR, 0.4 * a)
 	var w := 2.0 if have else 1.2
 	var c := _drone_c()
 	match i:
@@ -1214,35 +1283,36 @@ func _rect(r: Rect2, col: Color, w: float, solid: bool) -> void:
 
 
 # an upgrade's label on the drawing, joined to its part
+# an upgrade's plate on the drawing, joined to its part: its lamp says fitted,
+# can be had, or short of money
 func _callout_box(i: int, a: float) -> void:
 	var it: Array = SHOP[i]
 	var r := _item_rect(i)
 	var hk: float = hover_k[i].x
 	var sk: float = sel_k[i].x
 	var have: bool = Career.data.upgrades.has(it[0])
+	var short: bool = not have and float(Career.data.money) < float(it[2])
 	var k := Pal.ease_out(clampf((deal_t - 0.1 - i * 0.05) / 0.3, 0.0, 1.0)) * a
 	r.position.x += (1.0 - k) * (-30.0 if r.position.x < size.x * 0.3 else 30.0)
 	var p := _anchor(i)
 	var edge := Vector2(r.end.x if p.x > r.end.x else r.position.x, r.get_center().y)
-	draw_line(edge, p, Pal.ink((0.25 + 0.45 * maxf(hk, sk)) * k), 1.0, true)
-	draw_circle(p, 4.0, Pal.heat(k, 1.3) if sk > 0.5 else Pal.ink(0.7 * k))
-	UI.panel(self, r, k, sk)
-	_text(Txt.t(it[3]), r.position + Vector2(18, 28), 16, Pal.ink(0.95 * k), font_b)
-	var right: String
-	var col := Pal.ink(0.75 * k)
+	draw_line(edge, p, Pal.tint(Pal.AIR, (0.35 + 0.45 * maxf(hk, sk)) * k), 1.2, true)
+	draw_circle(p, 4.0, Pal.heat(k, 1.3) if sk > 0.5 else Pal.tint(Pal.AIR, 0.9 * k, 1.3))
+	Hmi.raised(self, r, k, Hmi.PANEL_LO.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
+	if sk > 0.02:
+		draw_rect(r.grow(3.0), Pal.heat(sk * k, 1.4), false, 3.0)
+	Hmi.lamp(self, r.position + Vector2(22, r.size.y * 0.5), Hmi.ok_col() if have else (Hmi.warn_col() if short else Hmi.can_col()), true, k)
+	_text(Txt.t(it[3]), r.position + Vector2(42, 28), 17, Pal.ink(0.96 * k), font_s)
 	if have:
-		right = "✓ " + Txt.t("tm_installed")
-		col = Pal.tint(Pal.FLUID, 0.85 * k, 1.1)
+		_text(Txt.t("tm_installed"), r.position + Vector2(42, 54), 16, Pal.tint(Pal.FLUID, 0.95 * k, 1.1), font_s)
 	else:
-		right = Pal.money(it[2])
-		if float(Career.data.money) < float(it[2]):
-			col = Pal.ink(0.4 * k)
-	_text(right, r.position + Vector2(18, 52), 15, col, font_b)
-	if not have and float(Career.data.money) < float(it[2]):
-		_text(Txt.t("tm_short_n") % Pal.money(float(it[2]) - float(Career.data.money)), Vector2(r.end.x - 14, r.position.y + 52), 13, Pal.heat(0.75 * k, 1.0), font, 1)
+		_text(Pal.money(it[2]), r.position + Vector2(42, 54), 16, Pal.ink((0.9 if not short else 0.55) * k), font_s)
+	if short:
+		_text(Txt.t("tm_short_n") % Pal.money(float(it[2]) - float(Career.data.money)), Vector2(r.end.x - 12, r.position.y + 54), 13, Pal.heat(0.9 * k, 1.2), font_b, 1)
 
 
 # a consumable: a cell with its mark, how many are in stock, and the price
+# a consumable: a tile with its mark, its stock window, the price
 func _cell(i: int, a: float) -> void:
 	var it: Array = SHOP[i]
 	var r := _item_rect(i)
@@ -1250,13 +1320,17 @@ func _cell(i: int, a: float) -> void:
 	var sk: float = sel_k[i].x
 	var k := Pal.ease_out(clampf((deal_t - 0.2 - (i - FITTED) * 0.05) / 0.3, 0.0, 1.0)) * a
 	r.position.y += (1.0 - k) * 24.0 - hk * 4.0
-	UI.panel(self, r, k, sk)
+	Hmi.raised(self, r, k, Hmi.PANEL.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
+	if sk > 0.02:
+		draw_rect(r.grow(3.0), Pal.heat(sk * k, 1.4), false, 3.0)
 	var n := int(Career.data.items.get(it[0], 0))
-	_icon(it[0], r.position + Vector2(36, 42), k)
-	_text("×%d" % n, Vector2(r.end.x - 16, r.position.y + 50), 28, Pal.ink((0.95 if n > 0 else 0.35) * k), font_l, 1)
-	_text(Txt.t(it[3]), r.position + Vector2(16, r.size.y - 44), 15, Pal.ink(0.9 * k), font_b)
+	_icon(it[0], r.position + Vector2(38, 44), k)
+	var sw := Rect2(r.end.x - 86, r.position.y + 14, 72, 52)
+	Hmi.screen(self, sw, k)
+	_text("×%d" % n, sw.get_center() + Vector2(0, 12), 30, Pal.tint(Pal.AIR, 0.95 * k, 1.4) if n > 0 else Pal.ink(0.35 * k), font_s, 0)
+	_text(Txt.t(it[3]), r.position + Vector2(16, r.size.y - 40), 16, Pal.ink(0.95 * k), font_s)
 	var afford := float(Career.data.money) >= float(it[2])
-	_text(Pal.money(it[2]), r.position + Vector2(16, r.size.y - 18), 14, Pal.ink((0.7 if afford else 0.35) * k), font)
+	_text(Pal.money(it[2]), r.position + Vector2(16, r.size.y - 14), 15, Pal.ink((0.8 if afford else 0.4) * k), font_b)
 	if sweep.has(i):
 		_sweep(r, sweep[i])
 
@@ -1273,11 +1347,13 @@ func _icon(id: String, p: Vector2, a: float) -> void:
 				var d := Vector2.from_angle(TAU * k / 8.0)
 				draw_line(p + d * 15.0, p + d * 21.0, Pal.heat(0.9 * a, 1.2), 2.0)
 		"spare":
+			# a spare airframe: the drone's own outline
 			var pts := PackedVector2Array()
-			for k in 9:
-				pts.append(p + Vector2.from_angle(TAU * k / 8.0 + PI / 8.0) * 17.0)
+			for v in DArt.ARROW:
+				pts.append(p + (v as Vector2) * 0.8)
+			pts.append(pts[0])
 			draw_polyline(pts, col, 1.8, true)
-			draw_circle(p, 5.0, col)
+			draw_circle(p + Vector2(-1.5, 0), 4.0, col)
 		"intel":
 			draw_rect(Rect2(p + Vector2(-13, -18), Vector2(26, 36)), col, false, 1.6)
 			for k in 4:
@@ -1301,15 +1377,18 @@ func _detail(a: float) -> void:
 	var id: String = it[0]
 	var d := Career.data
 	var ka := Pal.ease_out(clampf((deal_t - 0.12) / 0.35, 0.0, 1.0)) * a
-	UI.panel(self, r, ka, 1.0)
+	Hmi.raised(self, r, ka)
 	var x := r.position.x + 32
 	var w := r.size.x - 64
-	var y := r.position.y + 40
 	var kind := "tm_kind_it" if it[1] == "item" else ("tm_kind_fa" if it[1] == "facility" else "tm_kind_up")
-	_text(Txt.t(kind), Vector2(x, y), 14, Pal.tint(Pal.AIR, 0.85 * ka, 1.0), font)
-	_text(Txt.t(it[3]), Vector2(x, y + 42), 30, Pal.ink(0.96 * ka), font_l)
-	_wrap(Txt.t(it[4]), Vector2(x, y + 78), w, 16, Pal.ink(0.75 * ka))
-	y += 126
+	var pl := Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, 44)
+	Hmi.plate(self, font_s, pl, Txt.t(kind), 18, ka, Pal.tint(Pal.AIR, 0.95, 1.2))
+	var have0: bool = it[1] != "item" and Career.data.upgrades.has(id)
+	Hmi.lamp(self, Vector2(pl.end.x - 22, pl.get_center().y), Hmi.ok_col() if have0 else (Hmi.warn_col() if float(Career.data.money) < float(it[2]) else Hmi.can_col()), true, ka)
+	var y := r.position.y + 62
+	_text(Txt.t(it[3]), Vector2(x, y + 56), 36, Pal.ink(0.98 * ka), font_s)
+	_wrap(Txt.t(it[4]), Vector2(x, y + 92), w, 16, Pal.ink(0.78 * ka))
+	y += 140
 	var have: bool = it[1] != "item" and d.upgrades.has(id)
 	if it[1] != "item":
 		var rows: Array = STATS.get(id, [])
@@ -1317,11 +1396,20 @@ func _detail(a: float) -> void:
 		for row in rows:
 			var nv: String = Txt.t(row[1]) if str(row[1]).begins_with("sh_") else row[1]
 			var av: String = Txt.t(row[2]) if str(row[2]).begins_with("sh_") else row[2]
-			UI.compare(self, font, Rect2(x, y, w, 36), Txt.t(row[0]), nv, av, row[3], row[4] if not have else row[4], ka, 1.0 if have else grow)
-			y += 50
-		y += 10
-		_text(Txt.t("tm_strategy"), Vector2(x, y + 4), 14, Pal.ink(0.55 * ka), font)
-		_wrap(Txt.t("st_" + id), Vector2(x, y + 30), w, 18, Pal.ink(0.95 * ka))
+			_text(Txt.t(row[0]), Vector2(x, y + 14), 16, Pal.ink(0.7 * ka), font_b)
+			_text(nv + "  →  " + av, Vector2(x + w, y + 14), 17, Pal.ink(0.95 * ka), font_s, 1)
+			var nowk: float = row[3]
+			var aftk: float = row[4]
+			if have:
+				Hmi.gauge(self, Rect2(x, y + 24, w, 22), aftk, Pal.tint(Pal.FLUID, 1.0, 1.1), ka)
+			else:
+				Hmi.gauge(self, Rect2(x, y + 24, w, 22), nowk, Pal.ink(0.75), ka, 10, lerpf(nowk, aftk, grow))
+			y += 66
+		y += 6
+		var sc := Rect2(x - 10, y, w + 20, 96)
+		Hmi.screen(self, sc, ka)
+		_text(Txt.t("tm_strategy"), sc.position + Vector2(14, 26), 14, Pal.ink(0.6 * ka), font)
+		_wrap(Txt.t("st_" + id), sc.position + Vector2(14, 56), w - 8, 19, Pal.tint(Pal.AIR, 0.95 * ka, 1.2))
 	else:
 		var n := int(d.items.get(id, 0))
 		_text(Txt.t("tm_stock_n") % n, Vector2(x, y + 4), 18, Pal.ink(0.9 * ka), font_b)
@@ -1329,7 +1417,8 @@ func _detail(a: float) -> void:
 		_text(how, Vector2(x, y + 34), 15, Pal.ink(0.65 * ka), font)
 	# the money
 	if have:
-		_text("✓ " + Txt.t("tm_installed"), Vector2(x, r.end.y - 130), 20, Pal.tint(Pal.FLUID, 0.9 * ka, 1.1), font_b)
+		Hmi.lamp(self, Vector2(x + 10, r.end.y - 136), Hmi.ok_col(), true, ka, 9.0)
+		_text(Txt.t("tm_installed"), Vector2(x + 30, r.end.y - 128), 22, Pal.tint(Pal.FLUID, 0.95 * ka, 1.1), font_s)
 		return
 	var n2 := qty if it[1] == "item" else 1
 	var price: float = float(it[2]) * n2
@@ -1340,10 +1429,12 @@ func _detail(a: float) -> void:
 		for sgn in [-1, 1]:
 			var qr := _qty_rect(sgn)
 			var hv: bool = hover_minus if sgn < 0 else hover_plus
-			UI.panel(self, qr, ka, 1.0 if hv else 0.0)
-			_text("−" if sgn < 0 else "+", qr.get_center() + Vector2(0, 9), 24, Pal.ink(0.9 * ka), font_b, 0)
-		_text(str(qty), Vector2(_qty_rect(-1).end.x + 51, r.end.y - 142), 26, Pal.ink(0.95 * ka), font_b, 0)
-	draw_line(Vector2(x, my - 22), Vector2(x + w, my - 22), Pal.ink(0.1 * ka), 1.0)
+			Hmi.raised(self, qr, ka, Hmi.PANEL_HI if hv else Hmi.PANEL)
+			_text("−" if sgn < 0 else "+", qr.get_center() + Vector2(0, 9), 26, Pal.ink(0.95 * ka), font_s, 0)
+		var qw := Rect2(_qty_rect(-1).end.x + 14, _qty_rect(-1).position.y, 74, 48)
+		Hmi.screen(self, qw, ka)
+		_text(str(qty), qw.get_center() + Vector2(0, 11), 30, Pal.tint(Pal.AIR, 0.95 * ka, 1.3), font_s, 0)
+	draw_line(Vector2(x, my - 22), Vector2(x + w, my - 22), Color(0, 0, 0, 0.5 * ka), 2.0)
 	_text(Txt.t("tm_price"), Vector2(x, my), 15, Pal.ink(0.6 * ka), font)
 	_text(Pal.money(price), Vector2(x + w, my), 18, Pal.ink(0.95 * ka), font_b, 1)
 	_text(Txt.t("tm_after"), Vector2(x, my + 30), 15, Pal.ink(0.6 * ka), font)
@@ -1371,10 +1462,13 @@ func _berth(s: Vector2, a: float) -> void:
 	var d := Career.data
 	var fr := _finance_rect()
 	var k0 := Pal.ease_out(clampf((deal_t - 0.04) / 0.35, 0.0, 1.0)) * a
-	UI.panel(self, fr, k0, sel_k[0].x)
+	Hmi.raised(self, fr, k0, Hmi.PANEL.lerp(Hmi.PANEL_HI, sel_k[0].x * 0.6))
+	if sel_k[0].x > 0.02:
+		draw_rect(fr.grow(4.0), Pal.heat(sel_k[0].x * k0, 1.4), false, 4.0)
 	var x := fr.position.x + 36
 	var w := fr.size.x - 72
-	_text(Txt.t("tm_fin"), Vector2(x, fr.position.y + 50), 26, Pal.ink(0.95 * k0), font_l)
+	Hmi.plate(self, font_s, Rect2(fr.position.x + 18, fr.position.y + 18, fr.size.x - 36, 46), Txt.t("tm_fin"), 21, k0)
+	Hmi.lamp(self, Vector2(fr.end.x - 40, fr.position.y + 41), Hmi.warn_col() if float(d.loan) > 0.0 else Hmi.ok_col(), true, k0)
 	var loan := float(d.loan)
 	var amt := minf(repay_amt, _repay_max())
 	var loan2 := loan - amt
@@ -1389,18 +1483,22 @@ func _berth(s: Vector2, a: float) -> void:
 	var sl := _slider_rect()
 	_text(Txt.t("tm_fin_amt"), Vector2(x, sl.position.y - 26), 15, Pal.ink(0.6 * k0), font)
 	_text(Pal.money(amt), Vector2(sl.end.x, sl.position.y - 22), 26, Pal.ink(0.96 * k0), font_b, 1)
-	draw_rect(sl, Pal.ink(0.1 * k0))
 	var mx := _repay_max()
 	var f := amt / mx if mx > 0.0 else 0.0
-	draw_rect(Rect2(sl.position, Vector2(sl.size.x * f, sl.size.y)), Pal.heat(0.9 * k0, 1.1))
+	Hmi.gauge(self, Rect2(sl.position.x, sl.position.y - 8, sl.size.x, 24), f, Pal.heat(1.0, 1.3), k0, 20)
 	var kn := Vector2(sl.position.x + sl.size.x * f, sl.get_center().y)
-	draw_circle(kn, 11.0 if dragging else 9.0, Pal.ink(0.95 * k0))
-	draw_circle(kn, 4.0, Pal.heat(k0, 1.3))
+	var kr := Rect2(kn - Vector2(12, 20), Vector2(24, 40))
+	if dragging:
+		Hmi.sunk(self, kr, k0, Hmi.PANEL_HI)
+	else:
+		Hmi.raised(self, kr, k0, Hmi.PANEL_HI)
+	draw_line(kn + Vector2(0, -12), kn + Vector2(0, 12), Pal.heat(k0, 1.5), 2.0)
 	_text("$0", Vector2(sl.position.x, sl.end.y + 26), 13, Pal.ink(0.45 * k0), font)
 	_text(Pal.money(mx), Vector2(sl.end.x, sl.end.y + 26), 13, Pal.ink(0.45 * k0), font, 1)
 	# now → after the payment
 	var y := sl.end.y + 120
-	_text(Txt.t("tm_fin_after"), Vector2(x + w, y - 40), 13, Pal.ink(0.5 * k0), font, 1)
+	Hmi.screen(self, Rect2(x - 16, y - 66, w + 32, rows.size() * 36 + 76), k0)
+	_text(Txt.t("tm_fin_after"), Vector2(x + w, y - 40), 13, Pal.ink(0.55 * k0), font, 1)
 	for i in rows.size():
 		var yy := y + i * 36
 		var rk := Pal.ease_out(clampf((deal_t - 0.1 - i * 0.04) / 0.3, 0.0, 1.0)) * k0
@@ -1409,43 +1507,51 @@ func _berth(s: Vector2, a: float) -> void:
 		_text(Pal.money(rows[i][1]), Vector2(x + w - 230, yy), 17, Pal.ink((0.55 if changed else 0.9) * rk), font_b, 1)
 		if changed:
 			_text("→", Vector2(x + w - 200, yy), 16, Pal.ink(0.45 * rk), font)
-			_text(Pal.money(rows[i][2]), Vector2(x + w, yy), 17, Pal.ink(0.95 * rk) if i != 4 else Pal.heat(0.9 * rk, 1.1), font_b, 1)
-		draw_line(Vector2(x, yy + 12), Vector2(x + w, yy + 12), Pal.ink(0.05 * rk), 1.0)
+			_text(Pal.money(rows[i][2]), Vector2(x + w, yy), 17, Pal.tint(Pal.AIR, 0.95 * rk, 1.3) if i != 4 else Pal.heat(0.95 * rk, 1.2), font_s, 1)
+		draw_line(Vector2(x, yy + 12), Vector2(x + w, yy + 12), Pal.ink(0.06 * rk), 1.0)
 	if loan <= 0.0:
-		_text(Txt.t("tm_paid_off"), Vector2(x, fr.end.y - 130), 18, Pal.tint(Pal.FLUID, 0.9 * k0, 1.1), font_b)
+		Hmi.lamp(self, Vector2(x + 8, fr.end.y - 136), Hmi.ok_col(), true, k0, 8.0)
+		_text(Txt.t("tm_paid_off"), Vector2(x + 26, fr.end.y - 130), 18, Pal.tint(Pal.FLUID, 0.95 * k0, 1.1), font_s)
 	# training, and what opens later
 	var tr := _training_rect()
 	var k1 := Pal.ease_out(clampf((deal_t - 0.1) / 0.35, 0.0, 1.0)) * a
-	UI.panel(self, tr, k1, sel_k[1].x)
-	_text(Txt.t("tm_training"), tr.position + Vector2(32, 50), 24, Pal.ink(0.95 * k1), font_l)
-	_wrap(Txt.t("tm_training_d"), tr.position + Vector2(32, 84), tr.size.x - 64, 15, Pal.ink(0.65 * k1))
+	Hmi.raised(self, tr, k1, Hmi.PANEL.lerp(Hmi.PANEL_HI, sel_k[1].x * 0.6))
+	if sel_k[1].x > 0.02:
+		draw_rect(tr.grow(4.0), Pal.heat(sel_k[1].x * k1, 1.4), false, 4.0)
+	Hmi.plate(self, font_s, Rect2(tr.position.x + 18, tr.position.y + 18, tr.size.x - 36, 46), Txt.t("tm_training"), 21, k1)
+	Hmi.lamp(self, Vector2(tr.end.x - 40, tr.position.y + 41), Hmi.can_col(), true, k1)
+	_wrap(Txt.t("tm_training_d"), tr.position + Vector2(32, 100), tr.size.x - 64, 15, Pal.ink(0.75 * k1))
 	# the facilities: bought once, kept
 	var d2 := Career.data
-	_text(Txt.t("tm_facilities"), Vector2(tr.position.x, tr.end.y + 36), 15, Pal.ink(0.6 * k1), font_b)
+	Hmi.plate(self, font_s, Rect2(tr.position.x, tr.end.y + 12, 420, 30), Txt.t("tm_facilities"), 15, k1)
 	for j in BERTH.size() - 2:
 		var it: Array = BERTH[2 + j]
 		var fcr := _facility_rect(j)
 		var fk := Pal.ease_out(clampf((deal_t - 0.14 - j * 0.05) / 0.35, 0.0, 1.0)) * a
-		UI.panel(self, fcr, fk, sel_k[2 + j].x)
 		var have: bool = d2.upgrades.has(it[0])
 		var locked: bool = not have and REQUIRES.has(it[0]) and not d2.upgrades.has(REQUIRES[it[0]])
-		_text(Txt.t(it[3]), fcr.position + Vector2(20, 28), 16, Pal.ink(0.95 * fk), font_b)
+		Hmi.raised(self, fcr, fk, Hmi.PANEL_LO.lerp(Hmi.PANEL_HI, sel_k[2 + j].x * 0.7))
+		if sel_k[2 + j].x > 0.02:
+			draw_rect(fcr.grow(3.0), Pal.heat(sel_k[2 + j].x * fk, 1.4), false, 3.0)
+		var short2: bool = not have and float(d2.money) < float(it[2])
+		Hmi.lamp(self, fcr.position + Vector2(18, 24), Hmi.ok_col() if have else (Hmi.warn_col() if locked or short2 else Hmi.can_col()), true, fk, 6.0)
+		_text(Txt.t(it[3]), fcr.position + Vector2(34, 30), 16, Pal.ink(0.96 * fk), font_s)
 		# one that needs another bought first says so where its description goes
 		if locked:
-			_text(Txt.t("tm_needs") % Txt.t(_facility_name(REQUIRES[it[0]])), fcr.position + Vector2(20, 54), 12, Pal.heat(0.8 * fk, 1.1), font)
+			_text(Txt.t("tm_needs") % Txt.t(_facility_name(REQUIRES[it[0]])), fcr.position + Vector2(34, 56), 12, Pal.heat(0.85 * fk, 1.2), font_b)
 		else:
-			_wrap(Txt.t(it[4]), fcr.position + Vector2(20, 50), fcr.size.x - (190.0 if sel == 2 + j else 40.0), 12, Pal.ink(0.6 * fk))
+			_wrap(Txt.t(it[4]), fcr.position + Vector2(34, 52), fcr.size.x - (200.0 if sel == 2 + j else 50.0), 12, Pal.ink(0.65 * fk))
 		if sel != 2 + j:
-			var tag: String = "✓ " + Txt.t("tm_installed") if have else Pal.money(it[2])
-			_text(tag, Vector2(fcr.end.x - 20, fcr.position.y + 28), 15, Pal.tint(Pal.FLUID, 0.85 * fk, 1.1) if have else Pal.ink((0.9 if float(d2.money) >= float(it[2]) and not locked else 0.45) * fk), font_b, 1)
+			var tag: String = Txt.t("tm_installed") if have else Pal.money(it[2])
+			_text(tag, Vector2(fcr.end.x - 16, fcr.position.y + 30), 15, Pal.tint(Pal.FLUID, 0.95 * fk, 1.1) if have else Pal.ink((0.92 if not short2 and not locked else 0.45) * fk), font_s, 1)
 	var lr := Rect2(tr.position.x, _facility_rect(BERTH.size() - 3).end.y + 16, tr.size.x, 80)
 	var k2 := Pal.ease_out(clampf((deal_t - 0.16) / 0.35, 0.0, 1.0)) * a
-	UI.panel(self, lr, k2 * 0.6)
-	_text(Txt.t("tm_later_h"), lr.position + Vector2(32, 40), 14, Pal.ink(0.5 * k2), font)
+	Hmi.sunk(self, lr, k2)
+	_text(Txt.t("tm_later_h"), lr.position + Vector2(24, 32), 14, Pal.ink(0.55 * k2), font_b)
 	var names: Array = []
 	for n in LATER:
 		names.append(Txt.t(n))
-	_wrap("  ·  ".join(names), lr.position + Vector2(32, 72), lr.size.x - 64, 15, Pal.ink(0.5 * k2))
+	_wrap("  ·  ".join(names), lr.position + Vector2(24, 62), lr.size.x - 48, 15, Pal.ink(0.6 * k2))
 
 
 # ---------------------------------------------------------------- the button, the keys, the messages
@@ -1462,9 +1568,7 @@ func _bottom(s: Vector2, a: float) -> void:
 		0:
 			label = Txt.t("tm_take") + "   Enter"
 			if not next_job.is_empty():
-				label = Txt.t("tm_next_go") + "   Enter"
-				var gr := _go_rect()
-				UI.button(self, font_b, gr, label, 1.0 if hover_go else 0.0, true, a, t)
+				Hmi.push(self, font_s, _go_rect(), Txt.t("tm_next_go"), true, 1.0 if hover_go else 0.0, a, t, 0.0, "", "ENTER")
 				return
 			var o: Dictionary = offers()[sel] if sel < offers().size() else {}
 			if o.is_empty():
@@ -1507,9 +1611,7 @@ func _bottom(s: Vector2, a: float) -> void:
 					ok = false
 				else:
 					label = Txt.t("tm_buy_n") % Pal.money(fit[2])
-	var bk := Pal.back(clampf((t - 0.3) / 0.35, 0.0, 1.0), 2.0)
-	r = Rect2(r.position + Vector2(0, (1.0 - bk) * 20.0), r.size)
-	UI.button(self, font_b, r, label, 1.0 if hover_go else 0.0, ok, a, t, shake, note)
+	Hmi.push(self, font_s, r, label.replace("   Enter", ""), ok, 1.0 if hover_go else 0.0, a, t, shake, note, "ENTER" if label.ends_with("Enter") else "", 1.0 if press_t > 0.0 and tab_press < 0 else 0.0)
 	_text(Txt.t("tm_keys_onsite") if overlay else Txt.t("tm_keys"), Vector2(60, s.y - 34), 13, Pal.ink(0.45 * a), font)
 	if msg != "" and msg_t < 3.0:
 		var mk := clampf((3.0 - msg_t) / 0.4, 0.0, 1.0) * Pal.ease_out(clampf(msg_t / 0.2, 0.0, 1.0))
@@ -1533,9 +1635,8 @@ func _leave(s: Vector2, lv: float) -> void:
 	var g := Pal.ease_io(clampf(leaving / 0.4, 0.0, 1.0))
 	var full := Rect2(Vector2.ZERO, s)
 	var r := Rect2(leave_from.position.lerp(full.position, g), leave_from.size.lerp(full.size, g))
-	draw_rect(r, Color(0.03, 0.032, 0.037, 1.0))
-	draw_rect(r, Pal.ink(0.6 * (1.0 - g)), false, 1.2)
-	draw_rect(Rect2(r.position, Vector2(3, r.size.y)), Pal.heat(1.0 - g, 1.2))
+	Hmi.raised(self, r, 1.0, Hmi.PANEL_HI)
+	draw_rect(r.grow(4.0 * (1.0 - g)), Pal.heat(1.0 - g, 1.4), false, 4.0)
 	if not leave_offer.is_empty():
 		var tw := r.size.x * 0.8
 		_thumb(leave_offer, Rect2(r.get_center() - Vector2(tw * 0.5, tw * 0.11), Vector2(tw, tw * 0.22)), clampf(leaving / 0.15, 0.0, 1.0))
@@ -1552,22 +1653,22 @@ func _leave(s: Vector2, lv: float) -> void:
 # whenever the player likes (its story plays when it is)
 func _story_card(o: Dictionary, r: Rect2, k: float, hk: float, sk: float) -> void:
 	r.position.y += (1.0 - k) * 36.0 - hk * 6.0
-	draw_rect(Rect2(r.position + Vector2(0, 10 + hk * 6.0), r.size), Color(0, 0, 0, (0.25 + 0.2 * hk) * k))
-	UI.panel(self, r, k, sk, Pal.HEAT)
+	Hmi.raised(self, r, k, Hmi.PANEL.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
+	if sk > 0.02:
+		draw_rect(r.grow(4.0), Pal.heat(sk * k, 1.4), false, 4.0)
 	var x := r.position.x + 28
 	var y := r.position.y
 	var ty: Dictionary = Market.type_of(str(o.get("ship", "gr7")))
 	var d := Ship.load_data(str(o.get("ship", "gr7")))
-	# the pin: a heat chip across the top
-	var chip := Rect2(x, y + 22, font_b.get_string_size(Txt.t("tm_next_h"), HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 24.0, 30)
-	draw_rect(chip, Pal.heat(0.2 * k, 1.0))
-	draw_rect(chip, Pal.heat(0.8 * k, 1.1), false, 1.2)
-	_text(Txt.t("tm_next_h"), chip.get_center() + Vector2(0, 6), 16, Pal.ink(0.98 * k), font_b, 0)
+	var pl := Rect2(r.position.x + 18, y + 18, r.size.x - 36, 46)
+	Hmi.plate(self, font_s, pl, Txt.t("tm_next_h"), 21, k, Pal.heat(1.0, 1.3))
+	Hmi.lamp(self, Vector2(pl.end.x - 22, pl.get_center().y), Hmi.warn_col(), true, k, 7.0)
+	var sc := Rect2(r.position.x + 18, y + 80, r.size.x - 36, 300)
+	Hmi.screen(self, sc, k)
 	var nm: String = ((ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else str(d.get("name", "")))
-	_text(str(o.get("id", "")), Vector2(x, y + 100), 30, Pal.ink(0.96 * k), font_l)
-	_text(nm, Vector2(x, y + 132), 17, Pal.ink(0.8 * k), font_b)
-	_thumb(o, Rect2(x, y + 160, r.size.x - 56, 92), k)
-	y += 120.0
+	_text(str(o.get("id", "")), sc.position + Vector2(16, 70), 50, Pal.ink(0.98 * k), font_l)
+	_text(nm, sc.position + Vector2(16, 106), 19, Pal.ink(0.82 * k), font_s)
+	_thumb(o, Rect2(sc.position.x + 16, sc.position.y + 140, sc.size.x - 32, 140), k)
 	var rows := [
 		[Txt.t("mf_length"), "%d m" % int(float(d.get("length", 0.0)))],
 		[Txt.t("tm_value"), Pal.money(float(d.get("value", {}).get("total", 0.0)))],
@@ -1575,9 +1676,9 @@ func _story_card(o: Dictionary, r: Rect2, k: float, hk: float, sk: float) -> voi
 		[Txt.t("tm_minutes_h"), Txt.t("tm_min_n") % int(float(o.get("time", 0.0)) / 60.0) if float(o.get("time", 0.0)) > 0.0 else Txt.t("tm_no_limit")],
 	]
 	for i in rows.size():
-		_text(rows[i][0], Vector2(x, y + 190 + i * 40), 14, Pal.ink(0.55 * k), font)
-		_text(rows[i][1], Vector2(r.end.x - 28, y + 190 + i * 40), 18, Pal.ink(0.92 * k), font_b, 1)
-	_wrap(Txt.t("tm_next_d"), Vector2(x, y + 380), r.size.x - 56, 14, Pal.ink(0.6 * k), 4)
+		_text(rows[i][0], Vector2(x, y + 430 + i * 44), 15, Pal.ink(0.6 * k), font)
+		_text(rows[i][1], Vector2(r.end.x - 28, y + 430 + i * 44), 20, Pal.ink(0.95 * k), font_s, 1)
+	_wrap(Txt.t("tm_next_d"), Vector2(x, y + 620), r.size.x - 56, 15, Pal.heat(0.9 * k, 1.1), 3)
 
 
 func _next_card(s: Vector2, a: float) -> void:
@@ -1586,12 +1687,16 @@ func _next_card(s: Vector2, a: float) -> void:
 	if leaving >= 0.0:
 		return
 	r.position.y += (1.0 - k) * 36.0
-	UI.panel(self, r, k, 1.0)
+	Hmi.raised(self, r, k, Hmi.PANEL_HI)
+	draw_rect(r.grow(4.0), Pal.heat(k, 1.4), false, 4.0)
 	var x := r.position.x + 28
 	var y := r.position.y + 50
 	var ty: Dictionary = Market.type_of(str(next_job.get("ship", "gr7")))
 	var d := Ship.load_data(str(next_job.get("ship", "gr7")))
-	_text(Txt.t("tm_next_h"), Vector2(x, y), 14, Pal.ink(0.55 * k), font)
+	var pl := Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, 46)
+	Hmi.plate(self, font_s, pl, Txt.t("tm_next_first"), 21, k, Pal.heat(1.0, 1.3))
+	Hmi.lamp(self, Vector2(pl.end.x - 22, pl.get_center().y), Hmi.warn_col(), true, k, 7.0)
+	y += 50
 	var nm: String = ((ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else str(d.get("name", "")))
 	_text(str(next_job.get("id", "")), Vector2(x, y + 44), 30, Pal.ink(0.96 * k), font_l)
 	_text(nm, Vector2(x, y + 76), 17, Pal.ink(0.8 * k), font_b)
@@ -1603,7 +1708,7 @@ func _next_card(s: Vector2, a: float) -> void:
 	for i in rows.size():
 		_text(rows[i][0], Vector2(x, y + 130 + i * 40), 14, Pal.ink(0.55 * k), font)
 		_text(rows[i][1], Vector2(r.end.x - 28, y + 130 + i * 40), 18, Pal.ink(0.92 * k), font_b, 1)
-	_wrap(Txt.t("tm_next_d"), Vector2(x, y + 270), r.size.x - 56, 14, Pal.ink(0.6 * k), 4)
+	_wrap(Txt.t("tm_next_first_d"), Vector2(x, y + 270), r.size.x - 56, 15, Pal.ink(0.7 * k), 4)
 	# beside it: what the money is for, and what comes later
 	var hx := _item_rect(1).position.x
 	var hw := _item_rect(2).end.x - hx
