@@ -15,6 +15,34 @@ const ROW_BUY := 0       # and 1: what money buys, cheapest first, two rows
 const ROW_SHIP := 2
 const ROW_TIER := 3
 const PER_ROW := 7
+# what each upgrade and facility does, point by point (player 2026-10-18:
+# "at least give every upgrade point, the details"); %s is the mark key
+const POINTS := {
+	"net05": [["碎屑网自动收的碎片：0.1 t → 0.5 t", "Debris the net takes by itself: 0.1 t → 0.5 t"], ["更多碎片不用亲手拖", "More small debris you needn't tow"]],
+	"zones": [["现场按 K 划禁入区，最多 3 个", "Press K on site for a keep-out zone, up to 3"], ["搬运机、机械臂、吊车都不进去", "Haulers, the arm and the crane stay out"], ["在区内再按 K 取消", "K inside one clears it"]],
+	"pump2": [["抽气速度：1× → 2×", "Gas draw: 1× → 2×"], ["抽液速度：1× → 2×", "Fluid draw: 1× → 2×"]],
+	"scan_kit": [["检查设备时显示完好度", "Inspection shows equipment condition"], ["能发现结构暗伤（旧焊缝裂纹）", "Finds hidden structural damage (old weld cracks)"]],
+	"buffer": [["船坞近端上方加一个停放台", "A parking deck over the near end of the berth"], ["放上去的件被牵引场定住", "What you leave on it is held by a tractor field"], ["等你或机器来取", "Until you or a machine come for it"]],
+	"mouth_rail": [["熔炉口装上导轨", "The furnace mouth goes on a rail"], ["现场按 M 挪到无人机正下方", "Press M on site to run it under the drone"]],
+	"grapple5": [["抓钩上限：3 t → 5 t", "Grapple limit: 3 t → 5 t"], ["切下来的大块不用再切小", "Big cut-off chunks needn't be cut smaller"]],
+	"hauler": [["一台搬运无人机：用 %s 给漂浮零件打标记", "A hauling drone: mark floating pieces with %s"], ["它自己送到该去的回收口", "It takes them to the right mouth itself"], ["1.5 t 以内", "Up to 1.5 t"]],
+	"port2": [["船坞远端上方再开一个设备口", "A second equipment mouth over the far end"], ["长船后半截的设备不用绕远", "No long trip from a long ship's stern"]],
+	"hauler2": [["第二台搬运无人机", "A second hauling drone"], ["和第一台分着搬同一张标记清单", "Works the same marks as the first"], ["要先有初级搬运无人机", "Needs the basic hauler first"]],
+	"arm": [["悬臂上装一只回收机械臂", "A recovery arm on the boom"], ["自动把废金属送进熔炉", "Feeds scrap to the furnace by itself"], ["初级：慢，1 t 以内", "Basic: slow, up to 1 t"]],
+	"crane": [["船坞顶上的门式吊", "An overhead gantry crane"], ["12 t 以内整件吊走", "Lifts whole pieces up to 12 t"], ["用 %s 标记超过 1.5 t 的件给它", "Mark anything over 1.5 t for it with %s"]],
+	"berth88": [["船坞延长到约 88 m", "The berth extended to about 88 m"], ["能接 58–82 m 的船：M-14、MED-47、FR-26", "Takes ships of 58–82 m: M-14, MED-47, FR-26"], ["回收口挪到中段", "The mouths move mid-berth"]],
+}
+
+
+# its points in the current language
+static func points(id: String) -> Array:
+	var out: Array = []
+	for p in POINTS.get(id, []):
+		var s: String = p[0] if Txt.zh else p[1]
+		if s.contains("%s"):
+			s = s % Keys.label("mark")
+		out.append(s)
+	return out
 
 
 static func _tx(pair: Array) -> String:

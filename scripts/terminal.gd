@@ -893,7 +893,7 @@ func _item_rect(i: int) -> Rect2:
 
 # ---------------------------------------------------------------- the route page's map
 func _route_map() -> Rect2:
-	return Rect2(40, 200, size.x - 80, 560)
+	return Rect2(40, 200, size.x - 80, 584)
 
 
 func _route_rect(i: int) -> Rect2:
@@ -905,18 +905,18 @@ func _route_rect(i: int) -> Rect2:
 	match int(n.row):
 		Route.ROW_BUY, Route.ROW_BUY + 1:
 			var w := (m.size.x - 40.0 - 12.0 * (Route.PER_ROW - 1)) / Route.PER_ROW
-			return Rect2(m.position.x + 20 + int(n.col) * (w + 12.0), m.position.y + 20 + int(n.row) * 72, w, 60)
+			return Rect2(m.position.x + 20 + int(n.col) * (w + 12.0), m.position.y + 16 + int(n.row) * 84, w, 74)
 		Route.ROW_SHIP:
 			return Rect2(_ship_pos(int(n.col)) - Vector2(72, 92), Vector2(144, 196))
 		Route.ROW_TIER:
-			return Rect2(_rep_x(float(Growth.REP[int(n.col) + 2])) - 150, m.position.y + 420, 300, 60)
+			return Rect2(_rep_x(float(Growth.REP[int(n.col) + 2])) - 150, m.position.y + 446, 300, 60)
 	return Rect2(-100, -100, 1, 1)
 
 
 func _ship_pos(col: int) -> Vector2:
 	var m := _route_map()
 	var n := maxi(2, Market.POOL.size())
-	return Vector2(m.position.x + 120 + col * (m.size.x - 240) / (n - 1), m.position.y + 270)
+	return Vector2(m.position.x + 120 + col * (m.size.x - 240) / (n - 1), m.position.y + 296)
 
 
 # the reputation ruler: its four levels evenly apart
@@ -2500,7 +2500,7 @@ func _route_page(s: Vector2, a: float) -> void:
 			_:
 				_route_box(n, _route_rect(i), on, hk, k)
 	# the reputation ruler, the volumes on it, and where the career is
-	var ry := m.position.y + 500
+	var ry := m.position.y + 524
 	draw_line(Vector2(_rep_x(0), ry), Vector2(_rep_x(float(Career.LEVELS[-1][1])), ry), Pal.ink(0.3 * k), 2.0)
 	for l in Career.LEVELS:
 		var x := _rep_x(float(l[1]))
@@ -2553,40 +2553,47 @@ func _route_box(n: Dictionary, r: Rect2, on: bool, hk: float, k: float) -> void:
 	Hmi.raised(self, r, ka, Hmi.PANEL_HI if on else Hmi.PANEL.lerp(Hmi.PANEL_HI, hk * 0.5))
 	if pin and not on:
 		draw_rect(r.grow(2.0), Pal.heat(0.9 * k, 1.3), false, 2.0)
+	# installed: dimmed, a grey tick; affordable: cyan and lit; still short: heat, and by how much
+	var cyan := Pal.tint(Pal.AIR, 0.95 * k, 1.3)
+	var state_col := Pal.ink(0.5 * k) if done else (cyan if n.ready else Pal.heat(k, 1.25))
+	Hmi.lamp(self, r.position + Vector2(14, 16), Hmi.ok_col() if done else (Pal.tint(Pal.AIR, 1.0, 1.4) if n.ready else Hmi.warn_col()), not done, ka, 4.5)
 	var right := Pal.money(float(n.price)) if n.kind == "buy" else ""
 	var rw := font_b.get_string_size(right, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-	draw_string(font_s, r.position + Vector2(12, 21), ("★ " if pin else "") + str(n.name), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - rw - 34, 14, Pal.ink((0.95 if not done else 0.6) * k))
+	draw_string(font_s, r.position + Vector2(26, 21), ("★ " if pin else "") + str(n.name), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - rw - 46, 14, Pal.ink((0.95 if not done else 0.55) * k))
 	if right != "":
-		_text(right, Vector2(r.end.x - 12, r.position.y + 21), 13, Pal.ink((0.85 if not done else 0.5) * k), font_b, 1)
-	var col := green if done or n.ready else Pal.heat(k, 1.2)
-	Hmi.gauge(self, Rect2(r.position.x + 12, r.position.y + 29, r.size.x - 24, 6), _smooth("rb:" + str(n.key), Route.progress(n)), col, ka, 14)
-	var note := (Txt.t("rt_owned") if n.kind == "buy" else Txt.t("rt_open")) if done else Route.missing(n)
-	draw_string(font_b, r.position + Vector2(12, 52), note, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24, 12, green if done or n.ready else Pal.ink(0.6 * k))
+		_text(right, Vector2(r.end.x - 12, r.position.y + 21), 13, Pal.ink((0.9 if not done else 0.45) * k), font_b, 1)
+	if not done:
+		Hmi.gauge(self, Rect2(r.position.x + 12, r.position.y + 29, r.size.x - 24, 5), _smooth("rb:" + str(n.key), Route.progress(n)), cyan if n.ready else Pal.heat(k, 1.2), ka, 14)
+	var note := ("✓ " + (Txt.t("rt_owned") if n.kind == "buy" else Txt.t("rt_open"))) if done else (Txt.t("rt_can_buy") if n.ready else Route.missing(n))
+	draw_string(font_b, r.position + Vector2(12, 50), note, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24, 12, state_col)
+	var pts := Route.points(str(n.id)) if n.kind == "buy" else []
+	if not pts.is_empty():
+		draw_string(font, r.position + Vector2(12, 66), str(pts[0]), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24, 12, Pal.ink((0.62 if not done else 0.4) * k))
 
 
-# the chosen node: what it is, each condition with how far along, what comes of it
+# the chosen node: what it is; on the left each condition with how far along
+# and what comes of it, on the right what it does, point by point
 func _route_detail(s: Vector2, a: float) -> void:
 	var ns := _route_nodes()
 	if sel < 0 or sel >= ns.size():
 		return
 	var n: Dictionary = ns[sel]
 	var k := Pal.ease_out(clampf((deal_t - 0.1) / 0.35, 0.0, 1.0)) * a
-	var dr := Rect2(40, 776, s.x - 80, 168)
+	var dr := Rect2(40, 796, s.x - 80, 152)
 	Hmi.raised(self, dr, k, Hmi.PANEL_HI)
 	var green := Pal.tint(Pal.FLUID, 0.9 * k, 1.1)
 	var title: String = str(n.name)
 	var tw := clampf(font_s.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 60, 360, 720)
-	Hmi.plate(self, font_s, Rect2(dr.position.x + 18, dr.position.y + 16, tw, 44), title, 20, k)
-	draw_string(font_b, Vector2(dr.position.x + 40 + tw, dr.position.y + 45), str(n.get("note", "")), HORIZONTAL_ALIGNMENT_LEFT, dr.size.x - tw - 60, 15, Pal.ink(0.7 * k))
+	Hmi.plate(self, font_s, Rect2(dr.position.x + 18, dr.position.y + 14, tw, 40), title, 19, k)
+	var lw := dr.size.x * 0.48
 	var conds: Array = n.conds
-	var cw := minf(560.0, (dr.size.x - 60 - 40.0 * maxi(0, conds.size() - 1)) / maxi(1, conds.size()))
 	for i in conds.size():
 		var c: Dictionary = conds[i]
-		var cx := dr.position.x + 30 + i * (cw + 40)
+		var cy := dr.position.y + 72 + i * 22
 		var cc := green if c.ok else Pal.heat(k, 1.3)
-		_text(str(c.label), Vector2(cx, dr.position.y + 94), 15, Pal.ink(0.6 * k), font_b)
-		_text(("✓ " if c.ok else "") + str(c.now), Vector2(cx + cw, dr.position.y + 94), 18, cc, font_s, 1)
-		Hmi.gauge(self, Rect2(cx, dr.position.y + 106, cw, 10), _smooth("rd:%s:%d" % [n.key, i], float(c.frac)), cc, k, 16)
+		_text(str(c.label), Vector2(dr.position.x + 30, cy), 14, Pal.ink(0.6 * k), font_b)
+		_text(("✓ " if c.ok else "") + str(c.now), Vector2(dr.position.x + 30 + lw - 260, cy), 15, cc, font_s, 1)
+		Hmi.gauge(self, Rect2(dr.position.x + 40 + lw - 250, cy - 9, 220, 8), _smooth("rd:%s:%d" % [n.key, i], float(c.frac)), cc, k, 14)
 	var hint := ""
 	match str(n.kind):
 		"ship":
@@ -2595,7 +2602,19 @@ func _route_detail(s: Vector2, a: float) -> void:
 			hint = Txt.t("rt_owned") if n.done else (Txt.t("rt_buy_then") if n.ready else Txt.t("rt_buy_save"))
 		"tier":
 			hint = Txt.t("rt_tier_then") if n.done else Txt.t("rt_tier_d")
-	_text(hint, Vector2(dr.position.x + 30, dr.position.y + 150), 15, Pal.tint(Pal.AIR, 0.95 * k, 1.2), font_b)
+	draw_string(font_b, Vector2(dr.position.x + 30, dr.end.y - 12), hint, HORIZONTAL_ALIGNMENT_LEFT, lw - 30, 14, Pal.tint(Pal.AIR, 0.95 * k, 1.2))
+	# what it does
+	var px := dr.position.x + lw + 30
+	draw_line(Vector2(px - 18, dr.position.y + 16), Vector2(px - 18, dr.end.y - 16), Pal.ink(0.12 * k), 1.0)
+	_text(Txt.t("rt_points"), Vector2(px, dr.position.y + 38), 14, Pal.ink(0.5 * k), font_b)
+	var pts: Array = Route.points(str(n.id)) if n.kind == "buy" else []
+	if pts.is_empty() and str(n.get("note", "")) != "":
+		pts = [str(n.note)]
+	for i in pts.size():
+		var pk := Pal.ease_out(clampf((deal_t - 0.15 - i * 0.06) / 0.3, 0.0, 1.0)) * k
+		var py := dr.position.y + 70 + i * 26
+		draw_rect(Rect2(px + 2 + (1.0 - pk) * 10.0, py - 8, 6, 6), Pal.heat(pk, 1.3) if not n.done else Pal.ink(0.4 * pk))
+		draw_string(font_b, Vector2(px + 18 + (1.0 - pk) * 10.0, py), str(pts[i]), HORIZONTAL_ALIGNMENT_LEFT, dr.end.x - px - 40, 16, Pal.ink(0.9 * pk))
 
 
 # what was said over the radio: here, and on site what was said on the job

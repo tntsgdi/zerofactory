@@ -130,6 +130,12 @@ func _run() -> void:
 	term.sel = term._route_start()
 	await _frames(40)
 	Cap.save(root, "res://tests/out/route.png")
+	var tn2: Array = term.items()
+	for i in tn2.size():
+		if tn2[i].key == "buy:hauler2":
+			term.sel = i
+	await _frames(30)
+	Cap.save(root, "res://tests/out/route_buy.png")
 	Txt.zh = false
 	term.deal_t = 0.0
 	await _frames(40)
