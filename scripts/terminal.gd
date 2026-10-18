@@ -157,13 +157,18 @@ func _ready() -> void:
 	dev.terminal = self
 	dev.where = "terminal"
 	add_child(dev)
-	# the first time the market opens
-	if Career.data.get("market", false) and not Career.data.get("seen", {}).has("market"):
-		var seen: Dictionary = Career.data.get("seen", {})
+	# the first time the market opens (after the tug), the terminal says so; Liang's
+	# lines for it wait for the opening to be through (written for after the Heron)
+	var seen: Dictionary = Career.data.get("seen", {})
+	if Career.data.get("market", false) and not seen.has("market"):
 		seen["market"] = true
 		Career.data.seen = seen
 		Career.save()
 		Copy.say(radio, "T_market_open", "term")
+	if Career.data.get("market", false) and not seen.has("market_liang") and Career.story_job().is_empty() and Career.active().is_empty():
+		seen["market_liang"] = true
+		Career.data.seen = seen
+		Career.save()
 		for k in ["L_market_open_1", "L_market_open_2", "L_market_open_3"]:
 			Copy.say(radio, k)
 	_check_milestone()
@@ -200,8 +205,21 @@ func _is_test() -> bool:
 	return false
 
 
+# what the market shows: the pinned story contract first (when there is one),
+# then the offers, three cards in all
 func offers() -> Array:
-	return Career.data.get("offers", [])
+	var os: Array = Career.data.get("offers", [])
+	var sj: Dictionary = Career.story_job()
+	if sj.is_empty() or overlay:
+		return os
+	var card := sj.duplicate(true)
+	card.story_card = true
+	return [card] + os.slice(0, 2)
+
+
+# a shown card's place in the career's own offers (-1 for the story card)
+func _offer_index(i: int) -> int:
+	return i - 1 if not Career.story_job().is_empty() and not overlay else i
 
 
 func items() -> Array:
@@ -442,7 +460,17 @@ func take(i: int) -> void:
 		return
 	leave_from = _item_rect(i)
 	leave_offer = offers()[i].duplicate(true)
-	var o: Dictionary = Career.accept(i)
+	if offers()[i].get("story_card", false):
+		# the story contract: played as the opening contract it is
+		var a: Dictionary = Career.take_story()
+		if a.is_empty():
+			return
+		Game.contract = a
+		Game.start_ship = a.get("ship", "gr7")
+		SaveGame.load_requested = false
+		leaving = 0.0
+		return
+	var o: Dictionary = Career.accept(_offer_index(i))
 	if o.is_empty():
 		return
 	Game.start_ship = o.ship
@@ -846,6 +874,8 @@ func _market(s: Vector2, a: float) -> void:
 	var best_net := -1
 	var best_rate := -1
 	for i in os.size():
+		if os[i].get("story_card", false):
+			continue
 		if best_net < 0 or _net(os[i]) > _net(os[best_net]):
 			best_net = i
 		if best_rate < 0 or _rate(os[i]) > _rate(os[best_rate]):
@@ -858,6 +888,9 @@ func _market(s: Vector2, a: float) -> void:
 		var sk: float = sel_k[i].x
 		var k := Pal.ease_out(clampf((deal_t - 0.06 - i * 0.07) / 0.35, 0.0, 1.0)) * a
 		if leaving >= 0.0 and on:
+			continue
+		if o.get("story_card", false):
+			_story_card(o, r, k, hk, sk)
 			continue
 		# dealt from below, lifted on hover
 		r.position.y += (1.0 - k) * 36.0 - hk * 6.0
@@ -1509,6 +1542,38 @@ func _leave(s: Vector2, lv: float) -> void:
 
 
 # the opening contract waiting in the berth: one card, what it is and that the market opens after
+# the pinned story contract among the offers: the opening's next job, taken
+# whenever the player likes (its story plays when it is)
+func _story_card(o: Dictionary, r: Rect2, k: float, hk: float, sk: float) -> void:
+	r.position.y += (1.0 - k) * 36.0 - hk * 6.0
+	draw_rect(Rect2(r.position + Vector2(0, 10 + hk * 6.0), r.size), Color(0, 0, 0, (0.25 + 0.2 * hk) * k))
+	UI.panel(self, r, k, sk, Pal.HEAT)
+	var x := r.position.x + 28
+	var y := r.position.y
+	var ty: Dictionary = Market.type_of(str(o.get("ship", "gr7")))
+	var d := Ship.load_data(str(o.get("ship", "gr7")))
+	# the pin: a heat chip across the top
+	var chip := Rect2(x, y + 22, font_b.get_string_size(Txt.t("tm_next_h"), HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 24.0, 30)
+	draw_rect(chip, Pal.heat(0.2 * k, 1.0))
+	draw_rect(chip, Pal.heat(0.8 * k, 1.1), false, 1.2)
+	_text(Txt.t("tm_next_h"), chip.get_center() + Vector2(0, 6), 16, Pal.ink(0.98 * k), font_b, 0)
+	var nm: String = ((ty.name[0] if Txt.zh else ty.name[1]) if not ty.is_empty() else str(d.get("name", "")))
+	_text(str(o.get("id", "")), Vector2(x, y + 100), 30, Pal.ink(0.96 * k), font_l)
+	_text(nm, Vector2(x, y + 132), 17, Pal.ink(0.8 * k), font_b)
+	_thumb(o, Rect2(x, y + 160, r.size.x - 56, 92), k)
+	y += 120.0
+	var rows := [
+		[Txt.t("mf_length"), "%d m" % int(float(d.get("length", 0.0)))],
+		[Txt.t("tm_value"), Pal.money(float(d.get("value", {}).get("total", 0.0)))],
+		[Txt.t("tm_fee_story"), Pal.money(float(o.get("fee", 0.0)))],
+		[Txt.t("tm_minutes_h"), Txt.t("tm_min_n") % int(float(o.get("time", 0.0)) / 60.0) if float(o.get("time", 0.0)) > 0.0 else Txt.t("tm_no_limit")],
+	]
+	for i in rows.size():
+		_text(rows[i][0], Vector2(x, y + 190 + i * 40), 14, Pal.ink(0.55 * k), font)
+		_text(rows[i][1], Vector2(r.end.x - 28, y + 190 + i * 40), 18, Pal.ink(0.92 * k), font_b, 1)
+	_wrap(Txt.t("tm_next_d"), Vector2(x, y + 380), r.size.x - 56, 14, Pal.ink(0.6 * k), 4)
+
+
 func _next_card(s: Vector2, a: float) -> void:
 	var r := _item_rect(0)
 	var k := Pal.ease_out(clampf((deal_t - 0.06) / 0.35, 0.0, 1.0)) * a

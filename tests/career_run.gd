@@ -88,9 +88,10 @@ func _run() -> void:
 	Career.start_new()
 	check(Career.exists(), "the career file is written")
 	check(Career.active().get("id", "") == "TUG-001", "the first contract is the work tug")
-	# ---- the opening: the work tug, then S-09, each towed straight in after the last
-	for want in [["TUG-001", "tug"], ["S09-001", "s09"]]:
-		check(Career.active().get("id", "") == want[0] and Career.active().ship == want[1], "%s is next, on %s" % want)
+	# ---- the opening: the work tug, then S-09; after each the market is open with
+	# the next opening contract pinned on it (player 2026-10-17), taken from there
+	for want in [["TUG-001", "tug", "S09-001"], ["S09-001", "s09", Career.FIRST]]:
+		check(Career.active().get("id", "") == want[0] and Career.active().ship == want[1], "%s is next, on %s" % [want[0], want[1]])
 		Game.start_ship = Career.active().ship
 		Game.contract = Career.active()
 		var go = _game()
@@ -98,10 +99,20 @@ func _run() -> void:
 		check(go.job.get("id", "") == want[0] and go.fee == 0.0 and Txt.hint_tier == "standard", "%s: no fee, the one standard hint level" % want[0])
 		var ro: Dictionary = await _play(go)
 		print("  %s: " % want[0], ro.sum)
-		check(ro.sum.ended and ro.sum.incidents == 0 and not Career.data.market, "%s taken apart safely; the market still shut" % want[0])
+		check(ro.sum.ended and ro.sum.incidents == 0 and Career.data.market and Career.active().is_empty() and Career.story_job().get("id", "") == want[2],
+			"%s taken apart safely; the market open with %s pinned" % [want[0], want[2]])
 		go.queue_free()
 		await _frames(2)
-	check(Career.active().get("id", "") == Career.FIRST, "then GR-001")
+		var term: Node = load("res://scenes/terminal.tscn").instantiate()
+		root.add_child(term)
+		await _frames(3)
+		var shown: Array = term.offers()
+		check(shown.size() == 3 and shown[0].get("story_card", false) and shown[0].id == want[2] and not shown[1].get("story_card", false),
+			"the market: %s pinned first, then two offers to choose from (%d cards)" % [want[2], shown.size()])
+		term.take(0)
+		term.queue_free()
+		await _frames(2)
+	check(Career.active().get("id", "") == Career.FIRST and Career.active().has("kit"), "then GR-001, taken from its pinned card")
 	var money_open := float(Career.data.money)
 	check(money_open > 50000.0 and float(Career.data.loan) == 0.0, "the opening pays: funds %d, no debt" % money_open)
 	# ---- contract 3: GR-001
@@ -114,7 +125,7 @@ func _run() -> void:
 	print("  GR-001: ", r1.sum)
 	check(r1.sum.ended and r1.sum.incidents == 0, "GR-001 taken apart safely")
 	var cr: Dictionary = g1.career_result
-	check(not cr.is_empty() and not cr.prepaid and int(Career.data.done) == 3 and Career.data.market, "GR-001 settled with the career; the market opens")
+	check(not cr.is_empty() and not cr.prepaid and int(Career.data.done) == 3 and Career.data.market and Career.story_job().is_empty(), "GR-001 settled with the career; the opening is through, nothing pinned")
 	var expect_money: float = money_open + r1.sum.net + cr.bonus - cr.installment - cr.interest
 	check(absf(float(Career.data.money) - expect_money) < 1.0, "funds = net %d + bonuses %d − installment %d − interest %d = %d (%d)" % [r1.sum.net, cr.bonus, cr.installment, cr.interest, expect_money, Career.data.money])
 	check(float(Career.data.loan) == 0.0 and cr.installment == 0.0 and cr.interest == 0.0, "no debt from a clean first contract: loan %d" % Career.data.loan)

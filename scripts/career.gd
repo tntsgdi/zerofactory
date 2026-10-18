@@ -112,6 +112,8 @@ static func fresh() -> Dictionary:
 		"offers": [],
 		"active": opening(0),
 		"market": false,           # opens once the first contract is done
+		"story_job": {},           # the next opening contract, pinned on the market until taken
+		"opening_v": 2,            # 2: the market opens after the tug (2026-10-17)
 		"seed": randi(),
 		"archive": {},
 		"log": [],
@@ -148,10 +150,18 @@ static func load_or_new() -> Dictionary:
 			data.clues = Txt.clues.duplicate()
 			data.chapter_done = Txt.chapter_done
 			data.exam_grade = Txt.exam_grade
+		# a career from before the market opened early: the market's lines were
+		# all said when it opened, Liang's among them
+		if not d.is_empty() and not d.has("opening_v"):
+			var seen: Dictionary = data.get("seen", {})
+			if seen.has("market"):
+				seen["market_liang"] = true
+				data.seen = seen
 		for k in fresh():
 			if not data.has(k):
 				data[k] = fresh()[k]
 		_normalize()
+		_open_market_early()
 		sync_story()
 	return data
 
@@ -256,6 +266,34 @@ static func to_next() -> int:
 
 static func active() -> Dictionary:
 	return data.get("active", {})
+
+
+# the opening contract pinned on the market ({} once the opening is through)
+static func story_job() -> Dictionary:
+	return data.get("story_job", {})
+
+
+# take the pinned story contract: it becomes the contract in hand, kitted out now
+static func take_story() -> Dictionary:
+	var s: Dictionary = story_job()
+	if s.is_empty() or not active().is_empty():
+		return {}
+	data.story_job = {}
+	data.active = s
+	return sign_active()
+
+
+# a career saved under the old opening (each opening contract handed straight
+# over): one not started yet goes onto the market as the pinned story card
+static func _open_market_early() -> void:
+	var a: Dictionary = active()
+	if data.get("market", false) or a.is_empty() or a.has("kit"):
+		return
+	if opening_index(a) >= 1:
+		data.story_job = a
+		data.active = {}
+		data.market = true
+		data.offers = []
 
 
 # ---------------------------------------------------------------- the market
@@ -440,10 +478,14 @@ static func settle(r: Dictionary) -> Dictionary:
 	data.history.append({"id": a.get("id", "?"), "ship": a.get("ship", "gr7"), "net": gross - fee, "rate": r.get("rate", 0.0),
 		"grade": grade, "time": r.get("time", 0.0), "stars": a.get("stars", 0), "bonus": bonus, "loan": data.loan, "ops": r.get("ops", {}),
 		"goal": a.get("goal", ""), "scope": a.get("scope", "full"), "bonuses": r.get("bonuses", []), "incidents": r.get("incidents", []), "time_by": r.get("time_by", {})})
-	# the opening contracts follow one another; the market opens after the last of them
+	# the opening contracts follow one another, but the market opens after the
+	# first (player 2026-10-17: "after a contract I can't pick a ship any more"):
+	# the next one waits on it as a pinned story card, taken when the player likes
 	var oi := opening_index(a)
-	data.active = opening(oi + 1) if oi >= 0 and oi + 1 < OPENING.size() else {}
-	data.market = data.active.is_empty()
+	if oi >= 0:
+		data.story_job = opening(oi + 1) if oi + 1 < OPENING.size() else {}
+	data.active = {}
+	data.market = true
 	data.offers = []
 	var paid_off := _paid_off()
 	save()

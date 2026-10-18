@@ -60,6 +60,8 @@ func _run() -> void:
 	d.done = 1
 	d.money = 80000.0
 	d.seen = {"market": true}
+	# a fixed market: the career seed is random (randi), so each run drew other offers
+	d.seed = 41
 	Career.save()
 	# ---- the terminal: buy one of each, read a survey report
 	var term: Node = load("res://scenes/terminal.tscn").instantiate()
@@ -72,10 +74,15 @@ func _run() -> void:
 				term.buy(it)
 	var cost := 3000.0 + 9000.0 + 15000.0 + 6000.0
 	check(absf(float(d.money) - (before - cost)) < 1.0 and d.items.repair == 1 and d.items.ring == 1 and d.items.spare == 1 and d.items.intel == 1, "bought one of each for %s" % Pal.money(cost))
-	# the market has several ship types now: the first card is made a Heron (the ring goes into its keel)
-	if term.offers()[0].ship != "gr7":
-		for seed in range(900, 1000):
+	# the market has several ship types now: the first card is made a Heron (the ring goes into its keel),
+	# one without the live-cargo trap (its live feed is hosted on the keel: cutting the keel unpowered
+	# first is an arc, as it should be, and this is about the ring, not that trap)
+	var o0: Dictionary = term.offers()[0]
+	if o0.ship != "gr7" or "live_cargo" in o0.get("traps", []):
+		for seed in range(900, 1100):
 			var h := Market.offer_for(seed, Career.data, 1, "full", "gr7")
+			if "live_cargo" in h.get("traps", []):
+				continue
 			if ContractValidator.check(Variant.make(Ship.load_data("gr7"), h)).ok:
 				Career.data.offers[0] = h
 				term.dealt()
@@ -106,7 +113,7 @@ func _run() -> void:
 	g.drone.global_position = Vector2(14.0, 5.5) * M
 	g.breaching_ring()
 	await _frames(3)
-	check(g.world.order.size() > parts_before and g.stock("ring") == 0 and g.incidents.is_empty(), "breaching ring: K2 cut through in one go (%d → %d pieces), no accident" % [parts_before, g.world.order.size()])
+	check(g.world.order.size() > parts_before and g.stock("ring") == 0 and g.incidents.is_empty(), "breaching ring: K2 cut through in one go (%d → %d pieces), no accident (rings left %d, incidents %s)" % [parts_before, g.world.order.size(), g.stock("ring"), g.incidents])
 	var losses0: float = g.losses
 	g.drone.hurt(200.0, g.drone.global_position)
 	await _frames(3)
