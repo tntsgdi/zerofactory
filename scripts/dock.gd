@@ -41,6 +41,8 @@ const TROUGH_Y := 8.2               # m: the trough's lip; below it a body is in
 const TROUGH_X0 := 5.5
 static var TROUGH_X1 := 40.5        # stops short of the hazard mouth
 const CONVEY := 7.0                 # m/s along the trough
+const SUCK_H := 2.6                 # m: how far above the lip the trough's suction reaches
+const SUCK_ACC := 420.0             # px/s² at the lip
 const RAIL_SPEED := 4.0             # m/s: the movable furnace mouth along its rail
 static var metal_x := 21.0          # where the furnace mouth sits (it moves only with the rail upgrade)
 static var metal_home := 21.0       # where it sits at the start
@@ -130,6 +132,8 @@ var mouth_nodes := {}
 var _mouth_drawn := {}
 var overlay_node: Node2D
 var t := 0.0
+var suck_glow := 0.0        # lit while the suction draws something down
+var suck_x := 0.0
 
 
 func _init() -> void:
@@ -263,15 +267,26 @@ func _physics_process(dt: float) -> void:
 		var com: Vector2 = b.global_transform * b.center_of_mass
 		var held: bool = game.tools.held_body == b
 		var scrap := is_scrap(b)
-		# into the trough: scrap rides it to the furnace; anything else is lifted back out
+		# scrap rides the belt the moment any of it touches it, even on the
+		# grapple (which lets go); anything else is lifted back out
+		if scrap and touches_trough(b, com):
+			if held:
+				game.tools.release_grab(false)
+			_start_convey(b)
+			continue
 		if not held and in_trough(com):
-			if scrap:
-				_start_convey(b)
-				continue
 			if b.rejected_t <= 0.0:
 				b.rejected_t = 1.5
 				b.apply_central_impulse(Vector2(0, -260.0) * b.mass)
 				game.say("trough_only_scrap", com)
+		# scrap let go over the trough is drawn down onto the belt
+		if scrap and not held:
+			var k := suction(com)
+			if k > 0.0:
+				b.apply_central_force(Vector2(0.0, (SUCK_ACC * k + 90.0) * b.mass))
+				b.linear_velocity.x *= exp(-2.0 * dt)
+				suck_glow = 1.0
+				suck_x = com.x
 		# parked on the buffer platform: held still until something fetches it
 		if not held and b.get_meta("arm", false) == false and in_buffer(b):
 			b.linear_velocity *= exp(-5.0 * dt)
@@ -322,6 +337,7 @@ func _process(dt: float) -> void:
 	_step_swallow(dt)
 	_step_debris(dt)
 	_step_hoses(dt)
+	suck_glow = maxf(0.0, suck_glow - dt * 2.0)
 	for g in field_glow:
 		g[1] -= dt * 2.5
 	field_glow = field_glow.filter(func(g): return g[1] > 0.0)
@@ -385,6 +401,30 @@ func is_scrap(b) -> bool:
 static func in_trough(com: Vector2) -> bool:
 	var x := com.x / Geom.M
 	return com.y > TROUGH_Y * Geom.M and x > TROUGH_X0 and x < TROUGH_X1
+
+
+# any of the body's outline at or over the belt (inside the trough's length)
+func touches_trough(b, com: Vector2) -> bool:
+	var M := Geom.M
+	if com.y < (TROUGH_Y - 12.0) * M:
+		return false
+	var lip := TROUGH_Y * M - 2.0
+	for p in b.pieces:
+		for v in world.world_poly(p):
+			if v.y > lip and v.x > TROUGH_X0 * M and v.x < TROUGH_X1 * M:
+				return true
+	return false
+
+
+# how hard the suction over the trough pulls at a point: 1 at the lip, 0 at SUCK_H above it
+static func suction(com: Vector2) -> float:
+	var x := com.x / Geom.M
+	if x < TROUGH_X0 or x > TROUGH_X1:
+		return 0.0
+	var h := TROUGH_Y - com.y / Geom.M
+	if h < 0.0 or h > SUCK_H:
+		return 0.0
+	return 1.0 - h / SUCK_H
 
 
 # the point on the trough straight below p (where to push scrap down to)
@@ -957,6 +997,24 @@ func _trough_live() -> void:
 	var want := _wanted("metal")
 	if want:
 		draw_rect(Rect2(x0, y0 - 6, x1 - x0, 6), Pal.heat(0.12 + 0.08 * sin(t * 4.0), 1.2))
+	# the suction over the belt: a band that fades upward, chevrons falling into it,
+	# brighter while scrap is carried and where it draws something down
+	var sh := SUCK_H * M
+	var band := 0.05 + (0.07 + 0.04 * sin(t * 4.0) if want else 0.0) + 0.08 * suck_glow
+	draw_polygon(PackedVector2Array([Vector2(x0, y0 - sh), Vector2(x1, y0 - sh), Vector2(x1, y0), Vector2(x0, y0)]),
+		PackedColorArray([Pal.heat(0.0), Pal.heat(0.0), Pal.heat(band, 1.2), Pal.heat(band, 1.2)]))
+	if suck_glow > 0.0:
+		draw_texture_rect(game.fx.glow_tex, Rect2(Vector2(suck_x - 1.6 * M, y0 - sh * 0.8), Vector2(3.2 * M, sh)), false, Pal.heat(0.22 * suck_glow, 1.5))
+	var fall := fposmod(t * 0.9, 1.0)
+	var cx := x0 + 2.25 * M
+	while cx < x1 - 1.0 * M:
+		if absf(cx - mx) > 2.6 * M:
+			for j in 2:
+				var u := fposmod(fall + j * 0.5, 1.0)
+				var cy := y0 - sh * (1.0 - u) + 4.0
+				var ca := (0.10 + (0.30 if want else 0.0)) * sin(u * PI)
+				draw_polyline(PackedVector2Array([Vector2(cx - 6, cy - 4), Vector2(cx, cy + 2), Vector2(cx + 6, cy - 4)]), Pal.heat(ca, 1.3), 1.4, true)
+		cx += 3.0 * M
 	var ph := fposmod(t * CONVEY * M, 24.0)
 	var x := x0 + 6.0
 	while x < x1 - 6.0:
