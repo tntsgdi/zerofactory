@@ -62,28 +62,39 @@ func _run() -> void:
 	g.bot = {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "lmb": false, "move": Vector2.ZERO}
 	root.add_child(g)
 	await _frames(5)
-	check(g.consoles != null and g.hauler != null, "two computers in the berth (and the hauler bought at the terminal is here)")
+	check(g.consoles != null and g.hauler != null and Consoles.SPOTS.size() == 1, "one computer in the berth (and the hauler bought at the terminal is here)")
 	g.drone.global_position = Consoles.centre(0) + Vector2(60, 0)
 	await _frames(2)
-	check(g.consoles.near() == "shop", "the drone at the first: the shop")
-	g.open_console("shop")
+	check(g.consoles.near() == "terminal", "the drone at it: the berth terminal")
+	g.open_console(g.consoles.near())
 	await _frames(3)
 	var ui = g.console_ui
-	check(ui != null and ui.tab == 1 and g.get_tree().paused, "it opens the shop over the berth, play stopped")
+	check(ui != null and ui.tab == ui.HOME and g.get_tree().paused, "it opens the terminal's home screen over the berth, play stopped")
 	ui.set_tab(0)
-	check(ui.tab == 1, "the market page stays shut on site")
+	check(ui.tab == ui.HOME and ui.msg != "", "the contracts are locked on site and it says why (\"%s\")" % ui.msg)
+	ui.set_tab(1)
+	check(ui.tab == ui.HOME, "so is the equipment")
 	var m0 := float(Career.data.money)
 	var up: Array = ui.SHOP.filter(func(it): return it[1] == "upgrade")[0]
 	ui.buy(up)
-	check(Career.data.upgrades.has(up[0]) and float(Career.data.money) < m0 and not g.has_upgrade(up[0]), "bought there (%s): paid for, counts from the next contract" % up[0])
+	check(not Career.data.upgrades.has(up[0]) and float(Career.data.money) == m0, "nothing for later is sold on site (%s refused)" % up[0])
+	ui.set_tab(4)
+	var ring0: int = g.stock("ring")
+	ui.buy(ui.SHOP.filter(func(it): return it[0] == "ring")[0])
+	check(ui.tab == 4 and g.stock("ring") == ring0 + 1 and float(Career.data.money) < m0, "a consumable bought on site goes straight into this job's stock (%d → %d)" % [ring0, g.stock("ring")])
 	ui.close()
 	await _frames(3)
 	check(g.console_ui == null and not g.get_tree().paused and not g.paused_sim, "closed: play goes on")
-	g.drone.global_position = Consoles.centre(1) + Vector2(60, 0)
+	# the terminal key opens the same thing from anywhere
+	g.drone.global_position = Vector2(30.0, -6.0) * 48.0
 	await _frames(2)
-	g.open_console(g.consoles.near())
+	var ev := InputEventKey.new()
+	ev.keycode = KEY_B
+	ev.physical_keycode = KEY_B
+	ev.pressed = true
+	g._unhandled_input(ev)
 	await _frames(3)
-	check(g.console_ui != null and g.console_ui.tab == 2, "the second: berth management")
+	check(g.console_ui != null and g.console_ui.tab == g.console_ui.HOME, "the terminal key opens it away from the computer")
 	g.console_ui.close()
 	await _frames(2)
 

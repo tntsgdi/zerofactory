@@ -6,7 +6,9 @@ extends Node2D
 # the berth (play stops while it is open, Esc closes it). What is bought there
 # counts from the next contract. Only on a career's contracts.
 
-const SPOTS := [["shop", Vector2(-6.2, -3.8)], ["berth", Vector2(-6.2, -1.0)]]   # m: the screen's top-left
+# one computer now (player 2026-10-18: "two computers opening the same thing is
+# odd"): the berth terminal, the same device the terminal key opens anywhere
+const SPOTS := [["terminal", Vector2(-6.2, -2.4)]]   # m: the screen's top-left
 const SIZE := Vector2(1.3, 1.5)    # m
 const REACH := 2.6                 # m from the screen's centre
 
@@ -63,4 +65,4 @@ func _draw() -> void:
 		draw_string(font, Vector2(r.position.x, r.end.y + 16), game.txt("cn_" + id), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.ink(0.85 if on else 0.55))
 		if on:
 			var p := 0.6 + 0.4 * sin(t * 5.0)
-			draw_string(font, Vector2(r.position.x, r.position.y - 10), "[%s] %s" % [Keys.label("use"), game.txt("cn_open") + game.txt("cn_" + id)], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.heat(p, 1.3))
+			draw_string(font, Vector2(r.position.x, r.position.y - 10), "[%s] %s  ·  %s" % [Keys.label("use"), game.txt("cn_open") + game.txt("cn_" + id), game.txt("cn_anytime") % Keys.label("terminal")], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.heat(p, 1.3))

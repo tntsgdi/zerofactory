@@ -653,6 +653,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 			"use":
 				if consoles != null and state == "play" and consoles.near() != "":
 					open_console(consoles.near())
+			"terminal":
+				# the same terminal from anywhere in the berth
+				if consoles != null and state == "play":
+					open_console("terminal")
 			"zone":
 				if has_upgrade("zones"):
 					say(toggle_keepout(aim), aim + Vector2(0, -30))
@@ -714,7 +718,8 @@ func open_console(which: String) -> void:
 		return
 	var term = load("res://scenes/terminal.tscn").instantiate()
 	term.overlay = true
-	term.tab = 1 if which == "shop" else 2
+	term.tab = -1
+	term.game_ref = self
 	var layer := CanvasLayer.new()
 	layer.layer = 60
 	layer.process_mode = Node.PROCESS_MODE_ALWAYS

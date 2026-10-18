@@ -31,20 +31,29 @@ func _process(_dt: float) -> bool:
 	frame += 1
 	var l := "_en" if not Txt.zh else ""
 	match frame:
-		60:
+		40:
+			Cap.save(root, "res://tests/out/term_home%s.png" % l)
+			term.set_tab(0)
+		70:
 			Cap.save(root, "res://tests/out/term_market%s.png" % l)
 			term.set_tab(1)
-		90:
+		100:
 			Cap.save(root, "res://tests/out/term_shop%s.png" % l)
+			term.set_tab(4)
+		130:
+			Cap.save(root, "res://tests/out/term_supplies%s.png" % l)
+			term.set_tab(5)
+		160:
+			Cap.save(root, "res://tests/out/term_route%s.png" % l)
 			term.set_tab(2)
-		120:
+		190:
 			Cap.save(root, "res://tests/out/term_berth%s.png" % l)
 			Game.contract = term.offers()[1]
 			term.queue_free()
 			game = load("res://scenes/main.tscn").instantiate()
 			game.bot = {"skip_intro": true, "aim": Vector2(900, -300), "lmb": false, "move": Vector2.ZERO}
 			root.add_child(game)
-		170:
+		240:
 			Cap.save(root, "res://tests/out/term_card%s.png" % l)
 			return true
 	return false

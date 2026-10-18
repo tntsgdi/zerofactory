@@ -96,6 +96,10 @@ func _run() -> void:
 	purchase_button.grab_focus()
 	await press_key(KEY_ENTER)
 	check(g.grab_max() == 5.0 and g.has_upgrade("grapple5"), "Enter on focused purchase button fits 5 t grapple on current contract immediately")
+	# Esc: out of the manual to the terminal's home screen, Esc again: back to work
+	await press_key(KEY_ESCAPE)
+	await frames()
+	check(g.console_ui != null and term.tab == term.HOME, "Esc in the manual goes back to the terminal's home screen")
 	await press_key(KEY_ESCAPE)
 	await frames()
 	check(not paused and g.console_ui == null, "closing manual resumes same dismantling session")

@@ -47,6 +47,13 @@ const BERTH := [
 ]
 # a facility that only makes sense with another one bought first
 const REQUIRES := {"hauler2": "hauler"}
+# The terminal is one device (P.7 structure A, player 2026-10-18): a home screen
+# of apps; on site the same device, opened by its key or at the berth's
+# computer, with what can't be used there locked and the reason written on it.
+const HOME := -1
+# [the page it opens, its name] in tile order; keys 1–8 open them
+const APPS := [[0, "app_contracts"], [1, "app_equip"], [3, "app_skills"], [4, "app_supplies"], [2, "app_ledger"], [5, "app_route"], [6, "app_radio"], [7, "app_training"]]
+const ON_SITE := [3, 4, 5, 6]     # what works in the middle of a job
 # what berth management will offer later, named in one line
 const LATER := ["fa_scan"]
 const REPAY_STEP := 5000.0
@@ -105,10 +112,12 @@ var on_close: Callable
 var on_skill_changed: Callable
 var book: SkillBook
 var next_job := {}         # an opening contract still to play: the market shows it, alone
+var game_ref = null        # the contract in play, when opened over the berth
+var hover_home := false
 var _wiping := false       # the transition out has been asked for
 # a key's travel: the button or rocker last pressed sinks for a moment
 var press_t := 0.0
-var tab_press := -1
+var tab_press := -2         # the page whose key was just pressed (-2: none)
 # the console's own sounds: keys, stamps, refusals, the self-test
 var sfx: Sfx
 var _last_sel := -1
@@ -122,6 +131,10 @@ func _ready() -> void:
 	Career.load_or_new()
 	Career.ensure_offers(Market.make)
 	next_job = Career.active() if not overlay and not Career.data.get("market", false) else {}
+	# between contracts the home screen, the opening's first job straight on its card;
+	# over the berth whatever the game asked for (the home screen)
+	if not overlay:
+		tab = 0 if not next_job.is_empty() else HOME
 	font = Fonts.get_font("Regular")
 	font_l = Fonts.get_font("Light")
 	font_b = Fonts.get_font("Medium")
@@ -168,7 +181,8 @@ func _ready() -> void:
 		boot_t = BOOT_T
 	if overlay:
 		process_mode = Node.PROCESS_MODE_ALWAYS
-		set_tab(maxi(tab, 1))
+		if _locked(tab):
+			tab = HOME
 		say(Txt.t("tm_onsite_note"))
 		return
 	var dev := DevPanel.new()
@@ -247,7 +261,47 @@ func _offer_index(i: int) -> int:
 
 
 func items() -> Array:
-	return [] if tab == 3 else (offers() if tab == 0 else (SHOP if tab == 1 else BERTH))
+	match tab:
+		HOME: return APPS
+		0: return offers()
+		1: return _equip_items()
+		2: return [BERTH[0]]
+		4: return _supply_items()
+		7: return [BERTH[1]]
+	return []
+
+
+# the equipment page: the four fitted upgrades, then the berth's facilities
+func _equip_items() -> Array:
+	return SHOP.slice(0, FITTED) + BERTH.slice(2)
+
+
+func _supply_items() -> Array:
+	return SHOP.slice(FITTED)
+
+
+func _app_of(page: int) -> int:
+	for i in APPS.size():
+		if APPS[i][0] == page:
+			return i
+	return 0
+
+
+func _locked(page: int) -> bool:
+	return overlay and page != HOME and not page in ON_SITE
+
+
+func _lock_reason(page: int) -> String:
+	match page:
+		0: return Txt.t("tm_lock_contracts")
+		1: return Txt.t("tm_lock_equip")
+	return Txt.t("tm_lock_between")
+
+
+func _open_app(i: int) -> void:
+	if i < 0 or i >= APPS.size():
+		return
+	set_tab(APPS[i][0])
 
 
 # ---------------------------------------------------------------- input
@@ -258,7 +312,7 @@ func _process(dt: float) -> void:
 	deal_t += dt
 	press_t = maxf(0.0, press_t - dt)
 	if press_t <= 0.0:
-		tab_press = -1
+		tab_press = -2
 	if sel != _last_sel:
 		if _last_sel >= 0 and boot_t >= BOOT_T:
 			sfx.play("menu", Vector2.INF, 0.45)
@@ -287,9 +341,7 @@ func _process(dt: float) -> void:
 	for i in items().size():
 		if _item_rect(i).has_point(m):
 			hover = i
-	for i in TABS.size():
-		if _tab_rect(i).has_point(m):
-			hover_tab = i
+	hover_home = tab != HOME and _home_rect().has_point(m)
 	hover_go = _go_rect().has_point(m)
 	hover_minus = _has_qty() and _qty_rect(-1).has_point(m)
 	hover_plus = _has_qty() and _qty_rect(1).has_point(m)
@@ -323,8 +375,12 @@ func _gui_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
 		dragging = false
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		if hover_tab >= 0:
-			set_tab(hover_tab)
+		if hover_home:
+			set_tab(HOME)
+		elif tab == HOME and hover >= 0:
+			# a tile opens at a click
+			sel = hover
+			act()
 		elif hover_go:
 			act()
 		elif hover_minus:
@@ -359,9 +415,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 		if milestone > 1.5:
 			milestone = -1.0
 		return
+	# the key that opens it on site closes it again
+	if overlay and Keys.pressed(ev, "terminal"):
+		close()
+		return
 	match ev.physical_keycode:
-		KEY_1, KEY_2, KEY_3, KEY_4:
-			set_tab(ev.physical_keycode - KEY_1)
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8:
+			_open_app(ev.physical_keycode - KEY_1)
 		KEY_LEFT, KEY_A:
 			sel = maxi(0, sel - 1)
 			qty = 1
@@ -369,16 +429,25 @@ func _unhandled_input(ev: InputEvent) -> void:
 			sel = mini(items().size() - 1, sel + 1)
 			qty = 1
 		KEY_UP, KEY_W, KEY_EQUAL, KEY_KP_ADD:
-			_bump(1)
+			if tab == HOME:
+				sel = maxi(sel % 4, sel - 4)
+			else:
+				_bump(1)
 		KEY_DOWN, KEY_S, KEY_MINUS, KEY_KP_SUBTRACT:
-			_bump(-1)
+			if tab == HOME:
+				sel = mini(items().size() - 1, sel + 4)
+			else:
+				_bump(-1)
 		KEY_ENTER, KEY_SPACE:
 			act()
 		KEY_I:
 			if tab == 0:
 				use_intel(sel)
 		KEY_ESCAPE:
-			if overlay:
+			# out of an app to the home screen; from there, away
+			if tab != HOME:
+				set_tab(HOME)
+			elif overlay:
 				close()
 			elif not _wiping:
 				_wiping = true
@@ -397,15 +466,18 @@ func close() -> void:
 
 
 func set_tab(i: int) -> void:
-	# on site the market is not open: contracts are signed between jobs
-	var lo := 1 if overlay else 0
-	tab_press = clampi(i, lo, 3)
+	i = clampi(i, HOME, 7)
+	# on site what can't be used is locked: it says why and stays where it is
+	if _locked(i):
+		_refuse(_lock_reason(i))
+		return
 	press_t = 0.16
-	if clampi(i, lo, 3) != tab:
+	tab_press = i
+	if i != tab:
 		sfx.play("switch", Vector2.INF, 0.8)
-	if clampi(i, lo, 3) != tab:
 		deal_t = 0.0
-	tab = clampi(i, lo, 3)
+	var was := tab
+	tab = i
 	if book != null:
 		book.visible = tab == 3
 		if tab == 3:
@@ -413,7 +485,8 @@ func set_tab(i: int) -> void:
 			if not goal.is_empty():
 				book.selected = goal[0]
 			book.refresh()
-	sel = 0
+	# back home: the tile it came from is the chosen one
+	sel = _app_of(was) if tab == HOME and was != HOME else 0
 	qty = 1
 	repay_amt = _repay_default()
 
@@ -422,12 +495,12 @@ func set_tab(i: int) -> void:
 func _bump(d: int) -> void:
 	if _has_qty():
 		qty = clampi(qty + d, 1, 9)
-	elif tab == 2 and sel == 0:
+	elif tab == 2:
 		repay_amt = clampf(snappedf(repay_amt + d * REPAY_STEP, REPAY_STEP), 0.0, _repay_max())
 
 
 func _has_qty() -> bool:
-	return tab == 1 and sel >= FITTED and sel < SHOP.size()
+	return tab == 4
 
 
 func _repay_max() -> float:
@@ -503,17 +576,27 @@ func say(text: String) -> void:
 
 # take the selected contract, or buy the selected thing
 func act() -> void:
-	if tab == 3:
+	if tab == 3 or tab == 5 or tab == 6:
 		return
 	press_t = 0.16
-	if tab == 0 and not next_job.is_empty():
-		start_next()
-	elif tab == 0:
-		take(sel)
-	elif tab == 1:
-		buy(SHOP[sel] if sel < SHOP.size() else [], qty if _has_qty() else 1)
-	else:
-		buy(BERTH[sel] if sel < BERTH.size() else [])
+	match tab:
+		HOME:
+			_open_app(sel)
+		0:
+			if not next_job.is_empty():
+				start_next()
+			else:
+				take(sel)
+		1:
+			var eq := _equip_items()
+			buy(eq[sel] if sel < eq.size() else [])
+		2:
+			buy(BERTH[0])
+		4:
+			var sp := _supply_items()
+			buy(sp[sel] if sel < sp.size() else [], qty)
+		7:
+			buy(BERTH[1])
 
 
 func take(i: int) -> void:
@@ -593,8 +676,8 @@ func buy(it: Array, n: int = 1) -> void:
 	var id: String = it[0]
 	var price: float = it[2] * n
 	var d := Career.data
-	if overlay and it[1] in ["training"]:
-		_refuse(Txt.t("tm_onsite_no"))
+	if overlay and it[1] in ["training", "upgrade", "facility", "loan"]:
+		_refuse(Txt.t("tm_onsite_no") if it[1] == "training" else Txt.t("tm_lock_equip"))
 		return
 	if it[1] == "training":
 		# back to TS-1; finishing or leaving the course comes back here
@@ -630,6 +713,11 @@ func buy(it: Array, n: int = 1) -> void:
 	d.desk = desk
 	if it[1] == "item":
 		d.items[id] = int(d.items.get(id, 0)) + n
+		# bought on site: straight into the stock of the job in hand
+		if overlay and game_ref != null:
+			var ji: Dictionary = game_ref.job.get("items", {})
+			ji[id] = int(ji.get(id, 0)) + n
+			game_ref.job.items = ji
 	else:
 		d.upgrades[id] = 1
 		install[id] = 0.0
@@ -670,25 +758,61 @@ func _tab_rect(i: int) -> Rect2:
 func _item_rect(i: int) -> Rect2:
 	var s := size
 	match tab:
+		HOME:
+			return _tile_rect(i)
 		0:
 			var w := (s.x - 120 - 2 * 30) / 3.0
 			return Rect2(60 + i * (w + 30), 200, w, s.y - 336)
 		1:
 			if i < FITTED:
 				return _callout(i)
-			var g := _grid_rect()
-			var cw := (g.size.x - 3 * 16.0) / 4.0
-			return Rect2(g.position.x + (i - FITTED) * (cw + 16.0), g.position.y + 36, cw, g.size.y - 36)
-	if i >= 2:
-		return _facility_rect(i - 2)
-	return _finance_rect() if i == 0 else _training_rect()
+			return _facility_rect(i - FITTED)
+		2:
+			return _finance_rect()
+		4:
+			return _supply_rect(i)
+		7:
+			return _training_page_rect()
+	return Rect2(-100, -100, 1, 1)
+
+
+# the home screen's tiles: two rows of four
+func _tile_rect(i: int) -> Rect2:
+	var s := size
+	var area := Rect2(40, 204, s.x - 80, s.y - 204 - 64)
+	var gap := 22.0
+	var w := (area.size.x - gap * 3.0) / 4.0
+	var h := (area.size.y - gap) / 2.0
+	return Rect2(area.position.x + (i % 4) * (w + gap), area.position.y + (i / 4) * (h + gap), w, h)
+
+
+# the consumables page: four tiles, two by two, left of the detail
+func _supply_rect(i: int) -> Rect2:
+	var l := _left_rect()
+	var gap := 22.0
+	var w := (l.size.x - gap) / 2.0
+	var h := (l.size.y - gap) / 2.0
+	return Rect2(l.position.x + (i % 2) * (w + gap), l.position.y + (i / 2) * (h + gap), w, h)
+
+
+func _training_page_rect() -> Rect2:
+	var s := size
+	return Rect2(s.x * 0.5 - 520, 200, 1040, s.y - 336)
+
+
+# the header's way home
+func _home_rect() -> Rect2:
+	return Rect2(600, 134, 220, 46)
 
 
 # the facilities in two columns under the training panel
+# the facilities on the equipment page: under the drawing, five to a row
 func _facility_rect(j: int) -> Rect2:
-	var tr := _training_rect()
-	var w := (tr.size.x - 16.0) * 0.5
-	return Rect2(tr.position.x + (j % 2) * (w + 16.0), tr.end.y + 52 + (j / 2) * 82, w, 74)
+	var g := _grid_rect()
+	var gap := 12.0
+	var w := (g.size.x - gap * 4.0) / 5.0
+	var h := (g.size.y - 40.0 - gap) / 2.0
+	return Rect2(g.position.x + (j % 5) * (w + gap), g.position.y + 40.0 + (j / 5) * (h + gap), w, h)
 
 
 func _facility_name(id: String) -> String:
@@ -770,21 +894,21 @@ func _qty_rect(d: int) -> Rect2:
 
 
 func _go_rect() -> Rect2:
-	if tab == 3:
-		return Rect2(-100, -100, 1, 1)
 	var s := size
 	match tab:
 		0:
 			var w := (s.x - 120 - 2 * 30) / 3.0
 			return Rect2(go_x.x, s.y - 122, w, 62)
-		1:
+		1, 4:
 			var r := _detail_rect()
 			return Rect2(r.position.x + 32, r.end.y - 100, r.size.x - 64, 68)
-	if sel >= 2:
-		var fr := _facility_rect(sel - 2)
-		return Rect2(fr.end.x - 150, fr.position.y + 14, 136, 46)
-	var f := _finance_rect() if sel == 0 else _training_rect()
-	return Rect2(f.position.x + 36, f.end.y - 100, f.size.x - 72, 68)
+		2:
+			var f := _finance_rect()
+			return Rect2(f.position.x + 36, f.end.y - 100, f.size.x - 72, 68)
+		7:
+			var tr := _training_page_rect()
+			return Rect2(tr.position.x + 40, tr.end.y - 110, tr.size.x - 80, 72)
+	return Rect2(-100, -100, 1, 1)
 
 
 func _text(s: String, pos: Vector2, size_px: int, col: Color, f: Font = null, align: int = -1) -> void:
@@ -817,14 +941,24 @@ func _draw() -> void:
 	_backdrop(s, 1.0)
 	var ua := 1.0 - Pal.ease_in(lv)
 	_top(s, ua)
-	_tabs(ua)
+	_crumb(ua)
 	match tab:
+		HOME:
+			_home(s, ua)
 		0:
 			_market(s, ua)
 		1:
 			_shop(s, ua)
 		2:
 			_berth(s, ua)
+		4:
+			_supplies(s, ua)
+		5:
+			_route_page(s, ua)
+		6:
+			_radio_page(s, ua)
+		7:
+			_training_page(s, ua)
 	_bottom(s, ua * _bk(1.45, 1.8))
 	_sparks()
 	_radio(s, ua)
@@ -871,14 +1005,24 @@ func _backdrop(s: Vector2, a: float) -> void:
 	draw_rect(Rect2(0, sy, s.x, 1), Pal.ink(0.02 * a))
 
 
-func _tabs(a: float) -> void:
-	for i in TABS.size():
-		var r := _tab_rect(i)
-		var on := tab == i
-		var ka := a * _bk(0.55 + i * 0.05, 0.8 + i * 0.05)
-		if ka <= 0.0:
-			continue
-		Hmi.rocker(self, font_s, r, "%d  %s" % [i + 1, Txt.t("tm_tab_" + TABS[i])], on, 1.0 if hover_tab == i else 0.0, ka, 1.0 if tab_press == i else 0.0)
+func _crumb(a: float) -> void:
+	var ka := a * _bk(0.55, 0.85)
+	if ka <= 0.0:
+		return
+	var pr := Rect2(40, 134, 540, 46)
+	var where: String = Txt.t("tm_home") if tab == HOME else Txt.t("tm_home") + "   ›   " + Txt.t(APPS[_app_of(tab)][1])
+	Hmi.plate(self, font_s, pr, where, 20, ka)
+	Hmi.lamp(self, Vector2(pr.end.x - 22, pr.get_center().y), Pal.heat(1.0, 1.6), true, ka, 6.0)
+	if tab != HOME:
+		var hr := _home_rect()
+		if tab_press == HOME and press_t > 0.0:
+			Hmi.sunk(self, hr, ka, Hmi.PANEL_HI)
+		else:
+			Hmi.raised(self, hr, ka, Hmi.PANEL_HI if hover_home else Hmi.PANEL)
+		_text(Txt.t("tm_home_btn"), hr.position + Vector2(18, 30), 18, Pal.ink(0.95 * ka), font_s)
+		_text("ESC", Vector2(hr.end.x - 14, hr.position.y + 30), 14, Pal.ink(0.5 * ka), font_b, 1)
+	if overlay:
+		_text(Txt.t("tm_onsite_head") % Keys.label("terminal"), Vector2(size.x - 40, 164), 15, Pal.heat(0.9 * ka, 1.2), font_b, 1)
 
 
 func _top(s: Vector2, a: float) -> void:
@@ -1160,11 +1304,12 @@ func _shop(_s: Vector2, a: float) -> void:
 		Hmi.lamp(self, Vector2(lx, ly - 5), kk[0], true, ka, 6.0)
 		_text(kk[1], Vector2(lx + 16, ly), 14, Pal.ink(0.7 * ka), font_b)
 		lx += 120
-	# stock: a row of tiles under the drawing
+	# the berth's facilities: a grid under the drawing
 	var g := _grid_rect()
-	Hmi.plate(self, font_s, Rect2(g.position.x, g.position.y, 440, 30), Txt.t("tm_items"), 15, ka)
-	for i in range(FITTED, SHOP.size()):
-		_cell(i, ka)
+	Hmi.plate(self, font_s, Rect2(g.position.x, g.position.y, 440, 30), Txt.t("tm_facilities"), 15, ka)
+	var eq := _equip_items()
+	for k in range(FITTED, eq.size()):
+		_fac_cell(k, eq[k], ka)
 	_detail(a)
 
 
@@ -1312,25 +1457,49 @@ func _callout_box(i: int, a: float) -> void:
 
 
 # a consumable: a cell with its mark, how many are in stock, and the price
+# a facility on the equipment page: lamp, name, price or fitted
+func _fac_cell(i: int, it: Array, a: float) -> void:
+	var r := _item_rect(i)
+	var hk: float = hover_k[i].x if i < hover_k.size() else 0.0
+	var sk: float = sel_k[i].x if i < sel_k.size() else 0.0
+	var k := Pal.ease_out(clampf((deal_t - 0.18 - (i - FITTED) * 0.03) / 0.3, 0.0, 1.0)) * a
+	var d := Career.data
+	var have: bool = d.upgrades.has(it[0])
+	var locked: bool = not have and REQUIRES.has(it[0]) and not d.upgrades.has(REQUIRES[it[0]])
+	var short: bool = not have and float(d.money) < float(it[2])
+	Hmi.raised(self, r, k, Hmi.PANEL_LO.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
+	if sk > 0.02:
+		draw_rect(r.grow(3.0), Pal.heat(sk * k, 1.4), false, 3.0)
+	Hmi.lamp(self, r.position + Vector2(16, 20), Hmi.ok_col() if have else (Hmi.warn_col() if locked or short else Hmi.can_col()), true, k, 5.0)
+	_text(Txt.t(it[3]), r.position + Vector2(30, 26), 14, Pal.ink(0.95 * k), font_s)
+	_text(Txt.t("tm_installed") if have else Pal.money(it[2]), r.position + Vector2(30, r.size.y - 12), 13, Pal.tint(Pal.FLUID, 0.95 * k, 1.1) if have else Pal.ink((0.85 if not short and not locked else 0.45) * k), font_b)
+
+
 # a consumable: a tile with its mark, its stock window, the price
 func _cell(i: int, a: float) -> void:
-	var it: Array = SHOP[i]
+	var it: Array = _supply_items()[i]
 	var r := _item_rect(i)
 	var hk: float = hover_k[i].x
 	var sk: float = sel_k[i].x
-	var k := Pal.ease_out(clampf((deal_t - 0.2 - (i - FITTED) * 0.05) / 0.3, 0.0, 1.0)) * a
+	var k := Pal.ease_out(clampf((deal_t - 0.1 - i * 0.05) / 0.3, 0.0, 1.0)) * a
 	r.position.y += (1.0 - k) * 24.0 - hk * 4.0
 	Hmi.raised(self, r, k, Hmi.PANEL.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
 	if sk > 0.02:
 		draw_rect(r.grow(3.0), Pal.heat(sk * k, 1.4), false, 3.0)
 	var n := int(Career.data.items.get(it[0], 0))
-	_icon(it[0], r.position + Vector2(38, 44), k)
-	var sw := Rect2(r.end.x - 86, r.position.y + 14, 72, 52)
+	var sc := Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, r.size.y * 0.5)
+	Hmi.screen(self, sc, k)
+	draw_set_transform(sc.get_center(), 0.0, Vector2(2.0, 2.0))
+	_icon(it[0], Vector2.ZERO, k)
+	draw_set_transform(Vector2.ZERO)
+	var sw := Rect2(r.end.x - 110, sc.end.y + 16, 92, 60)
 	Hmi.screen(self, sw, k)
-	_text("×%d" % n, sw.get_center() + Vector2(0, 12), 30, Pal.tint(Pal.AIR, 0.95 * k, 1.4) if n > 0 else Pal.ink(0.35 * k), font_s, 0)
-	_text(Txt.t(it[3]), r.position + Vector2(16, r.size.y - 40), 16, Pal.ink(0.95 * k), font_s)
+	_text("×%d" % n, sw.get_center() + Vector2(0, 13), 34, Pal.tint(Pal.AIR, 0.95 * k, 1.4) if n > 0 else Pal.ink(0.35 * k), font_s, 0)
+	_text(Txt.t(it[3]), Vector2(r.position.x + 22, sc.end.y + 46), 24, Pal.ink(0.96 * k), font_s)
 	var afford := float(Career.data.money) >= float(it[2])
-	_text(Pal.money(it[2]), r.position + Vector2(16, r.size.y - 14), 15, Pal.ink((0.8 if afford else 0.4) * k), font_b)
+	_text(Pal.money(it[2]), Vector2(r.position.x + 22, sc.end.y + 78), 18, Pal.ink((0.85 if afford else 0.4) * k), font_b)
+	var how: String = Txt.t("tm_use_auto") if it[0] == "spare" else (Txt.t("tm_use_intel_at") if it[0] == "intel" else Txt.t("tm_use") % USE_KEY[it[0]])
+	_text(how, Vector2(r.position.x + 22, r.end.y - 18), 14, Pal.tint(Pal.AIR, 0.85 * k, 1.1), font_b)
 	if sweep.has(i):
 		_sweep(r, sweep[i])
 
@@ -1371,9 +1540,10 @@ func _sweep(r: Rect2, sw: float) -> void:
 # and the money: price, what is left after, and what the next contract fee would borrow
 func _detail(a: float) -> void:
 	var r := _detail_rect()
-	if sel < 0 or sel >= SHOP.size():
+	var list := items()
+	if sel < 0 or sel >= list.size():
 		return
-	var it: Array = SHOP[sel]
+	var it: Array = list[sel]
 	var id: String = it[0]
 	var d := Career.data
 	var ka := Pal.ease_out(clampf((deal_t - 0.12) / 0.35, 0.0, 1.0)) * a
@@ -1408,8 +1578,11 @@ func _detail(a: float) -> void:
 		y += 6
 		var sc := Rect2(x - 10, y, w + 20, 96)
 		Hmi.screen(self, sc, ka)
-		_text(Txt.t("tm_strategy"), sc.position + Vector2(14, 26), 14, Pal.ink(0.6 * ka), font)
-		_wrap(Txt.t("st_" + id), sc.position + Vector2(14, 56), w - 8, 19, Pal.tint(Pal.AIR, 0.95 * ka, 1.2))
+		if Txt.has("st_" + id):
+			_text(Txt.t("tm_strategy"), sc.position + Vector2(14, 26), 14, Pal.ink(0.6 * ka), font)
+			_wrap(Txt.t("st_" + id), sc.position + Vector2(14, 56), w - 8, 19, Pal.tint(Pal.AIR, 0.95 * ka, 1.2))
+		elif REQUIRES.has(id) and not d.upgrades.has(REQUIRES[id]):
+			_text(Txt.t("tm_needs") % Txt.t(_facility_name(REQUIRES[id])), sc.position + Vector2(14, 56), 18, Pal.heat(0.95 * ka, 1.2), font_s)
 	else:
 		var n := int(d.items.get(id, 0))
 		_text(Txt.t("tm_stock_n") % n, Vector2(x, y + 4), 18, Pal.ink(0.9 * ka), font_b)
@@ -1512,47 +1685,25 @@ func _berth(s: Vector2, a: float) -> void:
 	if loan <= 0.0:
 		Hmi.lamp(self, Vector2(x + 8, fr.end.y - 136), Hmi.ok_col(), true, k0, 8.0)
 		_text(Txt.t("tm_paid_off"), Vector2(x + 26, fr.end.y - 130), 18, Pal.tint(Pal.FLUID, 0.95 * k0, 1.1), font_s)
-	# training, and what opens later
-	var tr := _training_rect()
+	# the books: the contracts done, newest first
+	var hr := _training_rect()
+	hr.size.y = fr.size.y
 	var k1 := Pal.ease_out(clampf((deal_t - 0.1) / 0.35, 0.0, 1.0)) * a
-	Hmi.raised(self, tr, k1, Hmi.PANEL.lerp(Hmi.PANEL_HI, sel_k[1].x * 0.6))
-	if sel_k[1].x > 0.02:
-		draw_rect(tr.grow(4.0), Pal.heat(sel_k[1].x * k1, 1.4), false, 4.0)
-	Hmi.plate(self, font_s, Rect2(tr.position.x + 18, tr.position.y + 18, tr.size.x - 36, 46), Txt.t("tm_training"), 21, k1)
-	Hmi.lamp(self, Vector2(tr.end.x - 40, tr.position.y + 41), Hmi.can_col(), true, k1)
-	_wrap(Txt.t("tm_training_d"), tr.position + Vector2(32, 100), tr.size.x - 64, 15, Pal.ink(0.75 * k1))
-	# the facilities: bought once, kept
-	var d2 := Career.data
-	Hmi.plate(self, font_s, Rect2(tr.position.x, tr.end.y + 12, 420, 30), Txt.t("tm_facilities"), 15, k1)
-	for j in BERTH.size() - 2:
-		var it: Array = BERTH[2 + j]
-		var fcr := _facility_rect(j)
-		var fk := Pal.ease_out(clampf((deal_t - 0.14 - j * 0.05) / 0.35, 0.0, 1.0)) * a
-		var have: bool = d2.upgrades.has(it[0])
-		var locked: bool = not have and REQUIRES.has(it[0]) and not d2.upgrades.has(REQUIRES[it[0]])
-		Hmi.raised(self, fcr, fk, Hmi.PANEL_LO.lerp(Hmi.PANEL_HI, sel_k[2 + j].x * 0.7))
-		if sel_k[2 + j].x > 0.02:
-			draw_rect(fcr.grow(3.0), Pal.heat(sel_k[2 + j].x * fk, 1.4), false, 3.0)
-		var short2: bool = not have and float(d2.money) < float(it[2])
-		Hmi.lamp(self, fcr.position + Vector2(18, 24), Hmi.ok_col() if have else (Hmi.warn_col() if locked or short2 else Hmi.can_col()), true, fk, 6.0)
-		_text(Txt.t(it[3]), fcr.position + Vector2(34, 30), 16, Pal.ink(0.96 * fk), font_s)
-		# one that needs another bought first says so where its description goes
-		if locked:
-			_text(Txt.t("tm_needs") % Txt.t(_facility_name(REQUIRES[it[0]])), fcr.position + Vector2(34, 56), 12, Pal.heat(0.85 * fk, 1.2), font_b)
-		else:
-			_wrap(Txt.t(it[4]), fcr.position + Vector2(34, 52), fcr.size.x - (200.0 if sel == 2 + j else 50.0), 12, Pal.ink(0.65 * fk))
-		if sel != 2 + j:
-			var tag: String = Txt.t("tm_installed") if have else Pal.money(it[2])
-			_text(tag, Vector2(fcr.end.x - 16, fcr.position.y + 30), 15, Pal.tint(Pal.FLUID, 0.95 * fk, 1.1) if have else Pal.ink((0.92 if not short2 and not locked else 0.45) * fk), font_s, 1)
-	var lr := Rect2(tr.position.x, _facility_rect(BERTH.size() - 3).end.y + 16, tr.size.x, 80)
-	var k2 := Pal.ease_out(clampf((deal_t - 0.16) / 0.35, 0.0, 1.0)) * a
-	Hmi.sunk(self, lr, k2)
-	_text(Txt.t("tm_later_h"), lr.position + Vector2(24, 32), 14, Pal.ink(0.55 * k2), font_b)
-	var names: Array = []
-	for n in LATER:
-		names.append(Txt.t(n))
-	_wrap("  ·  ".join(names), lr.position + Vector2(24, 62), lr.size.x - 48, 15, Pal.ink(0.6 * k2))
-
+	Hmi.raised(self, hr, k1)
+	Hmi.plate(self, font_s, Rect2(hr.position.x + 18, hr.position.y + 18, hr.size.x - 36, 46), Txt.t("tm_history"), 21, k1)
+	var hist: Array = Career.data.get("history", [])
+	var sc := Rect2(hr.position.x + 18, hr.position.y + 80, hr.size.x - 36, hr.size.y - 98)
+	Hmi.screen(self, sc, k1)
+	if hist.is_empty():
+		_text(Txt.t("tm_history_none"), sc.position + Vector2(16, 40), 16, Pal.ink(0.55 * k1), font)
+	var hy := sc.position.y + 40
+	for n in mini(hist.size(), 14):
+		var h: Dictionary = hist[hist.size() - 1 - n]
+		var net := float(h.get("net", 0.0))
+		_text(str(h.get("id", "?")), Vector2(sc.position.x + 16, hy), 16, Pal.ink(0.9 * k1), font_s)
+		_text("%d%%" % int(round(float(h.get("rate", 0.0)) * 100.0)), Vector2(sc.position.x + sc.size.x * 0.55, hy), 15, Pal.ink(0.7 * k1), font_b, 1)
+		_text(("+" if net >= 0.0 else "") + Pal.money(net), Vector2(sc.end.x - 16, hy), 17, Pal.tint(Pal.AIR, 0.95 * k1, 1.3) if net >= 0.0 else Pal.heat(0.95 * k1, 1.3), font_s, 1)
+		hy += 32
 
 # ---------------------------------------------------------------- the button, the keys, the messages
 
@@ -1577,13 +1728,18 @@ func _bottom(s: Vector2, a: float) -> void:
 				_text(Txt.t("tm_use_intel") % int(d.items.intel), Vector2(60, s.y - 84), 14, Pal.tint(Pal.AIR, 0.85 * a, 1.0), font)
 			if float(d.money) < float(o.fee):
 				note = Txt.t("tm_borrow") % Pal.money(float(o.fee) - float(d.money))
-		1:
-			var it: Array = SHOP[sel] if sel < SHOP.size() else []
+		1, 4:
+			var list := items()
+			var it: Array = list[sel] if sel < list.size() else []
 			if it.is_empty():
 				return
 			var price: float = float(it[2]) * (qty if it[1] == "item" else 1)
 			if it[1] != "item" and d.upgrades.has(it[0]):
 				label = "✓ " + Txt.t("tm_installed")
+				ok = false
+			elif REQUIRES.has(it[0]) and not d.upgrades.has(REQUIRES[it[0]]):
+				label = Pal.money(price)
+				note = Txt.t("tm_needs") % Txt.t(_facility_name(REQUIRES[it[0]]))
 				ok = false
 			elif float(d.money) < price:
 				label = Txt.t("tm_buy_n") % Pal.money(price)
@@ -1591,27 +1747,19 @@ func _bottom(s: Vector2, a: float) -> void:
 				ok = false
 			else:
 				label = Txt.t("tm_buy_n") % Pal.money(price) + "   Enter"
-		_:
-			if sel == 0:
-				var amt := minf(repay_amt, _repay_max())
-				ok = amt > 0.0
-				label = Txt.t("tm_repay_n") % Pal.money(amt) + ("   Enter" if ok else "")
-				if not ok:
-					note = Txt.t("tm_repay_none")
-			elif sel == 1:
-				label = Txt.t("tm_training_btn") + "   Enter"
-			else:
-				var fit: Array = BERTH[sel]
-				if d.upgrades.has(fit[0]):
-					label = "✓ " + Txt.t("tm_installed")
-					ok = false
-				elif float(d.money) < float(fit[2]):
-					label = Pal.money(fit[2])
-					note = Txt.t("tm_short_n") % Pal.money(float(fit[2]) - float(d.money))
-					ok = false
-				else:
-					label = Txt.t("tm_buy_n") % Pal.money(fit[2])
-	Hmi.push(self, font_s, r, label.replace("   Enter", ""), ok, 1.0 if hover_go else 0.0, a, t, shake, note, "ENTER" if label.ends_with("Enter") else "", 1.0 if press_t > 0.0 and tab_press < 0 else 0.0)
+		2:
+			var amt := minf(repay_amt, _repay_max())
+			ok = amt > 0.0
+			label = Txt.t("tm_repay_n") % Pal.money(amt) + ("   Enter" if ok else "")
+			if not ok:
+				note = Txt.t("tm_repay_none")
+		7:
+			label = Txt.t("tm_training_btn") + "   Enter"
+			if overlay:
+				ok = false
+				note = Txt.t("tm_onsite_no")
+	if label != "":
+		Hmi.push(self, font_s, r, label.replace("   Enter", ""), ok, 1.0 if hover_go else 0.0, a, t, shake, note, "ENTER" if label.ends_with("Enter") else "", 1.0 if press_t > 0.0 and tab_press == -2 else 0.0)
 	_text(Txt.t("tm_keys_onsite") if overlay else Txt.t("tm_keys"), Vector2(60, s.y - 34), 13, Pal.ink(0.45 * a), font)
 	if msg != "" and msg_t < 3.0:
 		var mk := clampf((3.0 - msg_t) / 0.4, 0.0, 1.0) * Pal.ease_out(clampf(msg_t / 0.2, 0.0, 1.0))
@@ -1801,3 +1949,161 @@ func _radio(s: Vector2, a: float) -> void:
 	draw_rect(Rect2(r.position, Vector2(3, r.size.y)), Pal.tint(Pal.AIR, k, 1.0) if term else Pal.heat(k, 1.0))
 	_text(Txt.t("tut_term") if term else Txt.t("tut_liang"), r.position + Vector2(18, 22), 12, Pal.ink(0.5 * k), font)
 	draw_multiline_string(font, r.position + Vector2(90, 30), shown, HORIZONTAL_ALIGNMENT_LEFT, 700, 18, 2, Pal.ink(0.95 * k))
+
+
+# ---------------------------------------------------------------- the home screen and its new pages
+
+func _home(s: Vector2, a: float) -> void:
+	var d := Career.data
+	var sj := Career.story_job()
+	for i in APPS.size():
+		var page: int = APPS[i][0]
+		var r := _tile_rect(i)
+		var k := Pal.ease_out(clampf((deal_t - 0.04 - i * 0.04) / 0.3, 0.0, 1.0)) * a
+		if k <= 0.0:
+			continue
+		var locked := _locked(page)
+		var hk: float = hover_k[i].x if i < hover_k.size() else 0.0
+		var on := i == sel
+		r.position.y += (1.0 - k) * 30.0 - (hk * 5.0 if not locked else 0.0)
+		var ka := k * (0.62 if locked else 1.0)
+		Hmi.raised(self, r, ka, Hmi.PANEL_HI if on and not locked else Hmi.PANEL.lerp(Hmi.PANEL_HI, hk * 0.5))
+		if on:
+			draw_rect(r.grow(4.0), Pal.heat(k, 1.4) if not locked else Pal.heat(0.5 * k, 1.0), false, 4.0)
+		var sc := Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, r.size.y * 0.5)
+		Hmi.screen(self, sc, ka)
+		_app_icon(page, sc.get_center(), (1.0 if not locked else 0.35) * k)
+		var line := ""
+		var lamp := Hmi.can_col()
+		match page:
+			0:
+				line = (Txt.t("tm_tile_first") % str(next_job.get("id", ""))) if not next_job.is_empty() else (Txt.t("tm_tile_offers") % offers().size() + ((Txt.t("tm_tile_pinned") % str(sj.get("id", ""))) if not sj.is_empty() else ""))
+				lamp = Hmi.warn_col() if not sj.is_empty() or not next_job.is_empty() else Hmi.ok_col()
+			1:
+				var ups := 0
+				for it in SHOP.slice(0, FITTED):
+					if d.upgrades.has(it[0]):
+						ups += 1
+				var fac := 0
+				for it in BERTH.slice(2):
+					if d.upgrades.has(it[0]):
+						fac += 1
+				line = Txt.t("tm_tile_equip") % [ups, FITTED, fac, BERTH.size() - 2]
+			3:
+				line = Txt.t("tm_tile_skills") % [Growth.progress(), Growth.TRACKS.size() * 3]
+				lamp = Hmi.ok_col()
+			4:
+				var parts: Array = []
+				for it in _supply_items():
+					parts.append("%s ×%d" % [Txt.t(it[3]), int(d.items.get(it[0], 0))])
+				line = "  ·  ".join(parts)
+			2:
+				line = Txt.t("tm_tile_ledger") % [Pal.money(float(d.loan)), Pal.money(minf(Career.INSTALLMENT, float(d.loan)) + snappedf(float(d.loan) * Career.INTEREST, 1.0))]
+				lamp = Hmi.warn_col() if float(d.loan) > 0.0 else Hmi.ok_col()
+			5:
+				line = Txt.t("tm_tile_route")
+			6:
+				line = Txt.t("tm_tile_radio") % _radio_lines().size()
+				lamp = Hmi.ok_col()
+			7:
+				line = Txt.t("tm_tile_training")
+		Hmi.lamp(self, Vector2(r.end.x - 30, sc.end.y + 32), lamp if not locked else Pal.ink(0.3), not locked, k)
+		_text("%d  %s" % [i + 1, Txt.t(APPS[i][1])], Vector2(r.position.x + 22, sc.end.y + 44), 28, Pal.ink((0.98 if not locked else 0.45) * k), font_s)
+		draw_string(font_b, Vector2(r.position.x + 22, sc.end.y + 78), line, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 44, 15, Pal.ink((0.8 if not locked else 0.4) * k))
+		if locked:
+			draw_string(font_b, Vector2(r.position.x + 22, sc.end.y + 106), Txt.t("tm_locked") + _lock_reason(page), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 44, 14, Pal.heat(0.9 * k, 1.2))
+		else:
+			draw_string(font_b, Vector2(r.position.x + 22, sc.end.y + 106), Txt.t(APPS[i][1] + "_d"), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 44, 14, Pal.tint(Pal.AIR, 0.9 * k, 1.2))
+
+
+func _app_icon(page: int, c: Vector2, a: float) -> void:
+	var col := Pal.tint(Pal.AIR, 0.95 * a, 1.3)
+	match page:
+		0:
+			for k in 3:
+				draw_rect(Rect2(c + Vector2(-70 + k * 50, -36 + k * 6), Vector2(44, 64)), col, false, 2.0)
+		1:
+			var xf := Transform2D(0.0, Vector2(2.6, 2.6), 0.0, c)
+			draw_set_transform_matrix(xf)
+			DArt.tint = Color(Pal.AIR.r * a, Pal.AIR.g * a, Pal.AIR.b * a)
+			DArt.draw(self, "arrowring", {"heading": -0.3, "tool": 0, "open": 0.4, "t": 1.0, "thrust": Vector2.ZERO, "dash": false, "design": "arrowring", "base_xf": xf})
+			DArt.tint = Color(1, 1, 1)
+			draw_set_transform_matrix(Transform2D.IDENTITY)
+		3:
+			draw_rect(Rect2(c + Vector2(-40, -40), Vector2(80, 80)), col, false, 2.0)
+			for k in 4:
+				draw_line(c + Vector2(-26, -22 + k * 14), c + Vector2(26, -22 + k * 14), col, 1.6)
+		4:
+			draw_arc(c, 30.0, 0.0, TAU, 28, Pal.heat(a, 1.4), 3.0, true)
+			draw_rect(Rect2(c + Vector2(-6, -20), Vector2(12, 40)), col)
+			draw_rect(Rect2(c + Vector2(-20, -6), Vector2(40, 12)), col)
+		2:
+			for k in 5:
+				draw_rect(Rect2(c + Vector2(-60 + k * 26, 30 - k * 12), Vector2(18, 10 + k * 12)), col)
+		5:
+			var pts := PackedVector2Array([c + Vector2(-80, 20), c + Vector2(-30, -10), c + Vector2(20, 14), c + Vector2(80, -24)])
+			draw_polyline(pts, col, 2.0, true)
+			for q in pts:
+				draw_circle(q, 6.0, col)
+		6:
+			for k in 3:
+				draw_arc(c + Vector2(-30, 0), 16.0 + k * 16, -0.8, 0.8, 12, col, 2.0, true)
+			draw_circle(c + Vector2(-30, 0), 6.0, col)
+		7:
+			draw_rect(Rect2(c + Vector2(-60, -30), Vector2(120, 60)), col, false, 2.0)
+			draw_circle(c, 10.0, col)
+
+
+# the consumables page: the four tiles, and the chosen one's detail with how many to buy
+func _supplies(_s: Vector2, a: float) -> void:
+	for i in _supply_items().size():
+		_cell(i, a)
+	_detail(a)
+
+
+# what there is to work for, on its own page
+func _route_page(s: Vector2, a: float) -> void:
+	var r := Rect2(40, 200, s.x - 80, s.y - 336)
+	var k := Pal.ease_out(clampf(deal_t / 0.35, 0.0, 1.0)) * a
+	Hmi.raised(self, r, k)
+	Hmi.plate(self, font_s, Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, 46), Txt.t("app_route"), 21, k)
+	_outlook(Rect2(r.position.x + 36, r.position.y + 90, r.size.x - 72, r.size.y - 110), k)
+
+
+# what was said over the radio: here, and on site what was said on the job
+func _radio_lines() -> Array:
+	var out: Array = radio.history.duplicate()
+	if game_ref != null and game_ref.radio != null:
+		out = game_ref.radio.history.duplicate() + out
+	return out
+
+
+func _radio_page(s: Vector2, a: float) -> void:
+	var r := Rect2(40, 200, s.x - 80, s.y - 336)
+	var k := Pal.ease_out(clampf(deal_t / 0.35, 0.0, 1.0)) * a
+	Hmi.raised(self, r, k)
+	Hmi.plate(self, font_s, Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, 46), Txt.t("app_radio"), 21, k)
+	var sc := Rect2(r.position.x + 18, r.position.y + 80, r.size.x - 36, r.size.y - 98)
+	Hmi.screen(self, sc, k)
+	var lines := _radio_lines()
+	if lines.is_empty():
+		_text(Txt.t("tm_radio_none"), sc.position + Vector2(20, 44), 17, Pal.ink(0.55 * k), font)
+	var y := sc.position.y + 44
+	for n in mini(lines.size(), 16):
+		var ln: Array = lines[lines.size() - 1 - n]
+		var who: String = str(ln[1])
+		_text(Txt.t("who_" + who) if Txt.has("who_" + who) else who, Vector2(sc.position.x + 20, y), 15, Pal.tint(Pal.AIR, 0.9 * k, 1.2), font_s)
+		draw_string(font, Vector2(sc.position.x + 180, y), str(ln[0]), HORIZONTAL_ALIGNMENT_LEFT, sc.size.x - 200, 16, Pal.ink(0.9 * k))
+		y += 34
+
+
+# training on its own page: what it is, and the button to go
+func _training_page(s: Vector2, a: float) -> void:
+	var r := _training_page_rect()
+	var k := Pal.ease_out(clampf(deal_t / 0.35, 0.0, 1.0)) * a
+	Hmi.raised(self, r, k)
+	Hmi.plate(self, font_s, Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, 46), Txt.t("tm_training"), 21, k)
+	var sc := Rect2(r.position.x + 18, r.position.y + 80, r.size.x - 36, 300)
+	Hmi.screen(self, sc, k, true)
+	_app_icon(7, sc.get_center(), k)
+	_wrap(Txt.t("tm_training_d"), Vector2(r.position.x + 40, sc.end.y + 50), r.size.x - 80, 18, Pal.ink(0.85 * k), 3)

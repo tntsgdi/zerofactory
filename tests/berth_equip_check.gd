@@ -111,13 +111,13 @@ func _run() -> void:
 	for id in ["crane", "port2", "buffer", "zones"]:
 		term.buy(items[id])
 	check(["crane", "port2", "buffer", "zones"].all(func(id): return Career.data.upgrades.has(id)), "crane, second equipment bay, buffer platform, work zones all bought ($%d left)" % int(Career.data.money))
-	term.tab = 2
+	term.tab = 1
 	var last: Rect2 = term._facility_rect(term.BERTH.size() - 3)
 	var all_in := true
 	for j in term.BERTH.size() - 2:
 		var r: Rect2 = term._facility_rect(j)
 		all_in = all_in and r.end.x <= term.size.x - 40 and r.end.y <= term.size.y - 110
-	check(all_in, "all %d facilities fit on the berth page (the last ends at %d of %d px)" % [term.BERTH.size() - 2, int(last.end.y), int(term.size.y)])
+	check(all_in, "all %d facilities fit on the equipment page (the last ends at %d of %d px)" % [term.BERTH.size() - 2, int(last.end.y), int(term.size.y)])
 	term.queue_free()
 	await _frames(2)
 
