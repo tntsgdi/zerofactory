@@ -66,7 +66,7 @@ func _haul(mass: float, kit: Dictionary) -> Dictionary:
 			turn = maxf(turn, absf(angle_difference(a0, b.rotation)))
 			spin = maxf(spin, absf(b.angular_velocity))
 		vmax = maxf(vmax, b.linear_velocity.length())
-		if "frames" in OS.get_cmdline_user_args() and int(t * 60) % 12 == 0 and mass < 1.0:
+		if "frames" in OS.get_cmdline_user_args() and int(t * 60) % 12 == 0 and absf(mass - 2.5) < 0.1:
 			print("   t %.1f drone %s v %s | load %s v %s w %.2f | tow %.2f force %.2f contacts %d" % [t, (g.drone.global_position / M).snapped(Vector2(0.1, 0.1)), g.drone.linear_velocity.round(), ((b.global_transform * b.center_of_mass) / M).snapped(Vector2(0.1, 0.1)), b.linear_velocity.round(), b.angular_velocity, g.drone.tow_k, g.tools.tether_force, b.get_contact_count()])
 	var v_rel: float = b.linear_velocity.length()
 	if "trace" in OS.get_cmdline_user_args():

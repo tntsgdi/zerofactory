@@ -40,10 +40,12 @@ var ghost := 0.0
 var ghost_dir := Vector2.ZERO
 var _ghost_check := 0.0
 
-# Let go off the grapple without a fling, a load settles where it was let go
-# (player 2026-10-17: "it stops when you let go") instead of drifting on.
-const SETTLE_T := 1.0
-const SETTLE_K := 3.5          # 1/s: speed lost while settling
+# Let go off the grapple without a fling, a load carries its way and eases to
+# a stop by itself (player 2026-10-18: "the inertia still isn't strong", after
+# 2026-10-17's "it stops when you let go"): about 12 m from full haul speed,
+# a few metres from a careful let-go.
+const SETTLE_T := 4.0
+const SETTLE_K := 0.8          # 1/s: speed lost while settling
 var settle := 0.0
 
 var cols := {}              # piece id -> Array of CollisionPolygon2D

@@ -44,6 +44,7 @@ var external := Vector2.ZERO
 var tow_k := 0.0
 var tow_u := Vector2.ZERO
 var tow_v := 0.0
+var tow_h := 0.0          # 0..1: the line about to snap, the hold-back gets hard
 var assist := true             # flight assist: holds position, kills side drift
 var assist_k := 1.0            # 0..1 for the HUD switch animation
 
@@ -139,10 +140,10 @@ func _physics_process(dt: float) -> void:
 	if tow_k > 0.0:
 		var away := acc.dot(tow_u)
 		if away > 0.0:
-			acc -= tow_u * away * tow_k * 0.6
+			acc -= tow_u * away * tow_k * lerpf(0.3, 0.9, tow_h)
 		var lead := linear_velocity.dot(tow_u) - tow_v
 		if lead > 0.0:
-			acc -= tow_u * minf(lead * 12.0, accel * 3.0) * tow_k
+			acc -= tow_u * minf(lead * lerpf(5.0, 12.0, tow_h), accel * lerpf(1.5, 3.0, tow_h)) * tow_k
 	thrust = acc / ACCEL
 	apply_central_force(acc * mass)
 	if external != Vector2.ZERO:

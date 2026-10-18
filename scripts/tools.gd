@@ -10,7 +10,7 @@ const GRAB_MAX_T := 3.0
 const EMPTY_SPEED := 2600.0
 const K_TETHER := 34.0
 const FMAX := 3.0 * 175.0
-const BRAKE := 2.0          # x the towing force, for slowing a load down
+const BRAKE := 1.4          # x the towing force, for slowing a load down (heavy is slow to stop too)
 const HANG := 0.12          # share of the tether's turn on the load (the rest goes through its centre)
 const SPIN_DAMP := 2.0      # 1/s: a held load's spin dies away
 const FLICK := 220.0        # px/s faster than the drone at let-go: a throw, not a let-go
@@ -839,6 +839,7 @@ func grab_point() -> Vector2:
 
 func physics_step(dt: float) -> void:
 	drone.tow_k = 0.0
+	drone.tow_h = 0.0
 	if held_piece == null:
 		return
 	if held_piece.gone or not drone.alive:
@@ -892,11 +893,19 @@ func physics_step(dt: float) -> void:
 		held_body.apply_central_force(f)
 		held_body.apply_torque(r.cross(f) * HANG)
 		held_body.angular_velocity *= exp(-SPIN_DAMP * stable * dt)
-		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.35) / (stable * sqrt(haul))
+		# the load pulls back on the drone, and a load near the grapple's limit
+		# holds it back once the line is stretched; a light one hardly does
+		# (player 2026-10-18: "what is this damping feel?")
+		var heavy := clampf(m / game.grab_max(), 0.2, 1.0)
+		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.2 * heavy) / (stable * sqrt(haul))
 		var over: float = g.distance_to(drone.global_position) - tether_reach
 		drone.tow_u = (drone.global_position - g).normalized()
-		drone.tow_k = clampf((over - 1.0 * Geom.M) / (2.0 * Geom.M), 0.0, 1.0)
-		drone.tow_v = vg.dot(drone.tow_u) + 60.0
+		# soft while the line stretches, then hard in the last metre before it would snap
+		var snap_over: float = reach(3) * 1.35 - tether_reach
+		var hard := clampf((over - (snap_over - 1.2 * Geom.M)) / (0.8 * Geom.M), 0.0, 1.0)
+		drone.tow_k = maxf(clampf((over - 0.6 * Geom.M) / (1.6 * Geom.M), 0.0, 1.0) * heavy, hard)
+		drone.tow_h = hard
+		drone.tow_v = vg.dot(drone.tow_u) + 140.0 * (1.0 - hard)
 	else:
 		# still fixed to the ship: the beam pulls, the fixings decide
 		var m2: float = world.group_mass(held_piece)
