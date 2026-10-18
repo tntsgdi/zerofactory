@@ -114,6 +114,9 @@ var book: SkillBook
 var next_job := {}         # an opening contract still to play: the market shows it, alone
 var game_ref = null        # the contract in play, when opened over the berth
 var hover_home := false
+var hover_goal := -1       # one of the header's two goals under the pointer
+var _route_frame := -1
+var _route_cache: Array = []
 var _wiping := false       # the transition out has been asked for
 # a key's travel: the button or rocker last pressed sinks for a moment
 var press_t := 0.0
@@ -156,7 +159,7 @@ func _ready() -> void:
 		Career.save()
 	for i in 90:
 		dust.append([Vector2(randf(), randf()), randf_range(0.002, 0.012), randf() * TAU, randf_range(0.6, 1.6)])
-	for i in 16:
+	for i in 32:
 		hover_k.append(Motion.Spring.new(0.0, 380.0, 0.7))
 		sel_k.append(Motion.Spring.new(0.0, 300.0, 0.8))
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -267,8 +270,18 @@ func items() -> Array:
 		1: return _equip_items()
 		2: return [BERTH[0]]
 		4: return _supply_items()
+		5: return _route_nodes()
 		7: return [BERTH[1]]
 	return []
+
+
+# the route page's nodes, built once a frame
+func _route_nodes() -> Array:
+	var f := Engine.get_process_frames()
+	if f != _route_frame:
+		_route_frame = f
+		_route_cache = Route.nodes()
+	return _route_cache
 
 
 # the equipment page: the four fitted upgrades, then the berth's facilities
@@ -342,6 +355,11 @@ func _process(dt: float) -> void:
 		if _item_rect(i).has_point(m):
 			hover = i
 	hover_home = tab != HOME and _home_rect().has_point(m)
+	hover_goal = -1
+	if boot_t >= BOOT_T:
+		for i in Route.MAX_PINS:
+			if _goal_rect(i).has_point(m):
+				hover_goal = i
 	hover_go = _go_rect().has_point(m)
 	hover_minus = _has_qty() and _qty_rect(-1).has_point(m)
 	hover_plus = _has_qty() and _qty_rect(1).has_point(m)
@@ -375,7 +393,9 @@ func _gui_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
 		dragging = false
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		if hover_home:
+		if hover_goal >= 0:
+			_open_goal(hover_goal)
+		elif hover_home:
 			set_tab(HOME)
 		elif tab == HOME and hover >= 0:
 			# a tile opens at a click
@@ -393,7 +413,7 @@ func _gui_input(ev: InputEvent) -> void:
 			_slide_to(ev.position.x)
 		elif hover >= 0:
 			# a second click on a market card takes it; elsewhere a click only chooses
-			if sel == hover and tab == 0:
+			if sel == hover and (tab == 0 or tab == 5):
 				act()
 			if sel != hover:
 				qty = 1
@@ -423,18 +443,28 @@ func _unhandled_input(ev: InputEvent) -> void:
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8:
 			_open_app(ev.physical_keycode - KEY_1)
 		KEY_LEFT, KEY_A:
-			sel = maxi(0, sel - 1)
+			if tab == 5:
+				_route_move(-1, 0)
+			else:
+				sel = maxi(0, sel - 1)
 			qty = 1
 		KEY_RIGHT, KEY_D:
-			sel = mini(items().size() - 1, sel + 1)
+			if tab == 5:
+				_route_move(1, 0)
+			else:
+				sel = mini(items().size() - 1, sel + 1)
 			qty = 1
 		KEY_UP, KEY_W, KEY_EQUAL, KEY_KP_ADD:
-			if tab == HOME:
+			if tab == 5:
+				_route_move(0, -1)
+			elif tab == HOME:
 				sel = maxi(sel % 4, sel - 4)
 			else:
 				_bump(1)
 		KEY_DOWN, KEY_S, KEY_MINUS, KEY_KP_SUBTRACT:
-			if tab == HOME:
+			if tab == 5:
+				_route_move(0, 1)
+			elif tab == HOME:
 				sel = mini(items().size() - 1, sel + 4)
 			else:
 				_bump(-1)
@@ -487,6 +517,9 @@ func set_tab(i: int) -> void:
 			book.refresh()
 	# back home: the tile it came from is the chosen one
 	sel = _app_of(was) if tab == HOME and was != HOME else 0
+	if tab == 5:
+		_route_frame = -1
+		sel = _route_start()
 	qty = 1
 	repay_amt = _repay_default()
 
@@ -576,7 +609,7 @@ func say(text: String) -> void:
 
 # take the selected contract, or buy the selected thing
 func act() -> void:
-	if tab == 3 or tab == 5 or tab == 6:
+	if tab == 3 or tab == 6:
 		return
 	press_t = 0.16
 	match tab:
@@ -595,8 +628,29 @@ func act() -> void:
 		4:
 			var sp := _supply_items()
 			buy(sp[sel] if sel < sp.size() else [], qty)
+		5:
+			_pin(sel)
 		7:
 			buy(BERTH[1])
+
+
+# the route page: the chosen node pinned as a goal, or no longer
+func _pin(i: int) -> void:
+	var ns := _route_nodes()
+	if i < 0 or i >= ns.size():
+		return
+	var n: Dictionary = ns[i]
+	if n.done and not Route.pinned(n.key):
+		_refuse(Txt.t("rt_done"))
+		return
+	var was := Route.pinned(n.key)
+	if not Route.toggle(n.key):
+		_refuse(Txt.t("gr_save_failed") if Txt.has("gr_save_failed") else "SAVE FAILED")
+		return
+	_route_frame = -1
+	sfx.play("ok" if not was else "switch", Vector2.INF, 0.6)
+	msg = (Txt.t("rt_unpinned") if was else Txt.t("rt_pinned_msg")) % n.name.split(" · ")[0]
+	msg_t = 0.0
 
 
 func take(i: int) -> void:
@@ -771,9 +825,99 @@ func _item_rect(i: int) -> Rect2:
 			return _finance_rect()
 		4:
 			return _supply_rect(i)
+		5:
+			return _route_rect(i)
 		7:
 			return _training_page_rect()
 	return Rect2(-100, -100, 1, 1)
+
+
+# ---------------------------------------------------------------- the route page's map
+func _route_map() -> Rect2:
+	return Rect2(40, 200, size.x - 80, 560)
+
+
+func _route_rect(i: int) -> Rect2:
+	var ns := _route_nodes()
+	if i < 0 or i >= ns.size():
+		return Rect2(-100, -100, 1, 1)
+	var n: Dictionary = ns[i]
+	var m := _route_map()
+	match int(n.row):
+		Route.ROW_BUY, Route.ROW_BUY + 1:
+			var w := (m.size.x - 40.0 - 12.0 * (Route.PER_ROW - 1)) / Route.PER_ROW
+			return Rect2(m.position.x + 20 + int(n.col) * (w + 12.0), m.position.y + 20 + int(n.row) * 72, w, 60)
+		Route.ROW_SHIP:
+			return Rect2(_ship_pos(int(n.col)) - Vector2(72, 92), Vector2(144, 196))
+		Route.ROW_TIER:
+			return Rect2(_rep_x(float(Growth.REP[int(n.col) + 2])) - 150, m.position.y + 420, 300, 60)
+	return Rect2(-100, -100, 1, 1)
+
+
+func _ship_pos(col: int) -> Vector2:
+	var m := _route_map()
+	var n := maxi(2, Market.POOL.size())
+	return Vector2(m.position.x + 120 + col * (m.size.x - 240) / (n - 1), m.position.y + 270)
+
+
+# the reputation ruler: its four levels evenly apart
+func _rep_x(rep: float) -> float:
+	var m := _route_map()
+	var x0 := m.position.x + 120
+	var w := m.size.x - 240
+	var ticks: Array = Career.LEVELS.map(func(l): return float(l[1]))
+	for j in ticks.size() - 1:
+		if rep <= ticks[j + 1]:
+			return x0 + w * (j + (rep - ticks[j]) / maxf(1.0, ticks[j + 1] - ticks[j])) / (ticks.size() - 1)
+	return x0 + w
+
+
+# where the chosen node starts: the first pin on the map, else the next ship to open
+func _route_start() -> int:
+	var ns := _route_nodes()
+	for k in Route.pins():
+		for i in ns.size():
+			if ns[i].key == k:
+				return i
+	for i in ns.size():
+		if ns[i].kind == "ship" and not ns[i].done:
+			return i
+	return 0
+
+
+# arrows on the map: along a row, or to the nearest node of the next row up or down
+func _route_move(dx: int, dy: int) -> void:
+	var ns := _route_nodes()
+	if ns.is_empty():
+		return
+	sel = clampi(sel, 0, ns.size() - 1)
+	var row: int = ns[sel].row
+	if dx != 0:
+		var best := sel
+		var bx := INF
+		var cx := _route_rect(sel).get_center().x
+		for i in ns.size():
+			if ns[i].row != row or i == sel:
+				continue
+			var x := _route_rect(i).get_center().x
+			if signf(x - cx) == float(dx) and absf(x - cx) < bx:
+				bx = absf(x - cx)
+				best = i
+		sel = best
+		return
+	var r := row + dy
+	while r >= Route.ROW_BUY and r <= Route.ROW_TIER:
+		var best := -1
+		var bd := INF
+		var cx := _route_rect(sel).get_center().x
+		for i in ns.size():
+			if ns[i].row == r and absf(_route_rect(i).get_center().x - cx) < bd:
+				bd = absf(_route_rect(i).get_center().x - cx)
+				best = i
+		if best >= 0:
+			sel = best
+			return
+		r += dy
 
 
 # the home screen's tiles: two rows of four
@@ -905,6 +1049,8 @@ func _go_rect() -> Rect2:
 		2:
 			var f := _finance_rect()
 			return Rect2(f.position.x + 36, f.end.y - 100, f.size.x - 72, 68)
+		5:
+			return Rect2(s.x * 0.5 - 320, s.y - 118, 640, 60)
 		7:
 			var tr := _training_page_rect()
 			return Rect2(tr.position.x + 40, tr.end.y - 110, tr.size.x - 80, 72)
@@ -1021,8 +1167,66 @@ func _crumb(a: float) -> void:
 			Hmi.raised(self, hr, ka, Hmi.PANEL_HI if hover_home else Hmi.PANEL)
 		_text(Txt.t("tm_home_btn"), hr.position + Vector2(18, 30), 18, Pal.ink(0.95 * ka), font_s)
 		_text("ESC", Vector2(hr.end.x - 14, hr.position.y + 30), 14, Pal.ink(0.5 * ka), font_b, 1)
-	if overlay:
-		_text(Txt.t("tm_onsite_head") % Keys.label("terminal"), Vector2(size.x - 40, 164), 15, Pal.heat(0.9 * ka, 1.2), font_b, 1)
+	_goal_strip(ka)
+
+
+# the right of the breadcrumb row: the one or two goals, on every page
+func _goal_box() -> Rect2:
+	return Rect2(840, 134, size.x - 880, 46)
+
+
+func _goal_rect(i: int) -> Rect2:
+	var r := _goal_box()
+	var x := r.position.x + 132
+	var gw := (r.end.x - x) / float(Route.MAX_PINS)
+	return Rect2(x + i * gw, r.position.y, gw, r.size.y)
+
+
+func _goal_strip(ka: float) -> void:
+	var r := _goal_box()
+	Hmi.sunk(self, r, ka)
+	_text(Txt.t("rt_goals"), Vector2(r.position.x + 18, r.position.y + 29), 14, Pal.ink(0.55 * ka), font_b)
+	var gs := Route.goals()
+	if gs.is_empty():
+		_text(Txt.t("rt_all_done"), Vector2(r.position.x + 132, r.position.y + 29), 15, Pal.tint(Pal.FLUID, 0.9 * ka, 1.1), font_b)
+		return
+	for i in gs.size():
+		var n: Dictionary = gs[i]
+		var g := _goal_rect(i)
+		var hk := 1.0 if i == hover_goal else 0.0
+		if hk > 0.0:
+			draw_rect(g.grow(-3), Pal.ink(0.05 * ka))
+		var pin: bool = n.get("pinned", false)
+		var ready: bool = n.ready
+		var col := Pal.tint(Pal.FLUID, 0.9 * ka, 1.1) if ready else Pal.heat(ka, 1.3)
+		Hmi.lamp(self, Vector2(g.position.x + 8, g.get_center().y), col if pin else Pal.ink(0.4 * ka), pin, ka, 5.0)
+		var name: String = ("★ " if pin else "") + str(n.name).split(" · ")[0]
+		var miss := Route.missing(n)
+		var mw := font_b.get_string_size(miss, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		# no room for every want: the first one
+		if mw > g.size.x * 0.5:
+			miss = miss.split(" · ")[0]
+			mw = font_b.get_string_size(miss, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		draw_string(font_s, Vector2(g.position.x + 22, g.position.y + 22), name, HORIZONTAL_ALIGNMENT_LEFT, maxf(40.0, g.size.x - mw - 54), 15, Pal.ink((0.95 if pin else 0.7) * ka))
+		_text(miss, Vector2(g.end.x - 18, g.position.y + 22), 13, col if pin or ready else Pal.ink(0.55 * ka), font_b, 1)
+		Hmi.gauge(self, Rect2(g.position.x + 22, g.position.y + 31, g.size.x - 40, 7), Route.progress(n), col if pin else Pal.ink(0.5 * ka), ka, 20)
+
+
+# a goal in the header clicked: its node on the route page (a skill: the skill book)
+func _open_goal(i: int) -> void:
+	var gs := Route.goals()
+	if i < 0 or i >= gs.size():
+		return
+	var n: Dictionary = gs[i]
+	if n.kind == "skill":
+		set_tab(3)
+		return
+	if tab != 5:
+		set_tab(5)
+	var ns := _route_nodes()
+	for j in ns.size():
+		if ns[j].key == n.key:
+			sel = j
 
 
 func _top(s: Vector2, a: float) -> void:
@@ -1033,14 +1237,8 @@ func _top(s: Vector2, a: float) -> void:
 	var pr := Rect2(40, 22, 420, 72)
 	Hmi.plate(self, font_s, pr, Txt.t("tm_title"), 28, ka)
 	_text((company if company != "" else "BERTH 07") + "  ·  CHARON-DISPATCH", Vector2(pr.end.x + 24, 50), 14, Pal.ink(0.6 * ka), font_b)
-	Hmi.lamp(self, Vector2(pr.end.x + 32, 76), Hmi.ok_col(), true, ka, 6.0)
-	_text(Txt.t("tm_online"), Vector2(pr.end.x + 48, 82), 15, Pal.ink(0.75 * ka), font_b)
-	var goal := Growth.find_track(str(d.get("growth_goal", "")))
-	if not goal.is_empty():
-		var id: String = goal[0]
-		var reason := Growth.reason(id)
-		var state := reason if reason != "" else Growth.text(["已攒够", "READY TO BUY"])
-		_text(Growth.text(["目标：%s · %s · 按 4 查看", "GOAL: %s · %s · 4 TO VIEW"]) % [Growth.text(goal[2]), state], Vector2(pr.end.x + 24, 108), 13, Pal.ink(0.6 * ka), font)
+	Hmi.lamp(self, Vector2(pr.end.x + 32, 76), Hmi.warn_col() if overlay else Hmi.ok_col(), true, ka, 6.0)
+	_text(Txt.t("tm_onsite_short") if overlay else Txt.t("tm_online"), Vector2(pr.end.x + 48, 82), 15, Pal.heat(0.95 * ka, 1.2) if overlay else Pal.ink(0.75 * ka), font_b)
 	var loan_c := Pal.heat(1.0, 1.3) if float(d.loan) > 0.0 else Pal.ink(0.98)
 	var mc := Pal.ink(0.98).lerp(Pal.ink(1.0, 1.5) if money_flash > 0.0 else Pal.heat(1.0, 1.4), absf(money_flash))
 	var cols := [
@@ -1753,6 +1951,20 @@ func _bottom(s: Vector2, a: float) -> void:
 			label = Txt.t("tm_repay_n") % Pal.money(amt) + ("   Enter" if ok else "")
 			if not ok:
 				note = Txt.t("tm_repay_none")
+		5:
+			var ns := _route_nodes()
+			if sel >= ns.size():
+				return
+			var n: Dictionary = ns[sel]
+			if Route.pinned(n.key):
+				label = Txt.t("rt_unpin") % str(n.name).split(" · ")[0] + "   Enter"
+			elif n.done:
+				label = Txt.t("rt_done")
+				ok = false
+			else:
+				label = Txt.t("rt_pin") % str(n.name).split(" · ")[0] + "   Enter"
+				if Route.pins().size() >= Route.MAX_PINS:
+					note = Txt.t("rt_pin_full")
 		7:
 			label = Txt.t("tm_training_btn") + "   Enter"
 			if overlay:
@@ -2001,7 +2213,8 @@ func _home(s: Vector2, a: float) -> void:
 				line = Txt.t("tm_tile_ledger") % [Pal.money(float(d.loan)), Pal.money(minf(Career.INSTALLMENT, float(d.loan)) + snappedf(float(d.loan) * Career.INTEREST, 1.0))]
 				lamp = Hmi.warn_col() if float(d.loan) > 0.0 else Hmi.ok_col()
 			5:
-				line = Txt.t("tm_tile_route")
+				var gs := Route.goals()
+				line = Txt.t("tm_tile_route") if gs.is_empty() else ("★ " if gs[0].get("pinned", false) else "") + str(gs[0].name).split(" · ")[0] + " · " + Route.missing(gs[0])
 			6:
 				line = Txt.t("tm_tile_radio") % _radio_lines().size()
 				lamp = Hmi.ok_col()
@@ -2063,11 +2276,150 @@ func _supplies(_s: Vector2, a: float) -> void:
 
 # what there is to work for, on its own page
 func _route_page(s: Vector2, a: float) -> void:
-	var r := Rect2(40, 200, s.x - 80, s.y - 336)
+	var m := _route_map()
 	var k := Pal.ease_out(clampf(deal_t / 0.35, 0.0, 1.0)) * a
-	Hmi.raised(self, r, k)
-	Hmi.plate(self, font_s, Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, 46), Txt.t("app_route"), 21, k)
-	_outlook(Rect2(r.position.x + 36, r.position.y + 90, r.size.x - 72, r.size.y - 110), k)
+	Hmi.screen(self, m, k, true)
+	var ns := _route_nodes()
+	var green := Pal.tint(Pal.FLUID, 0.9 * k, 1.1)
+	var byk := {}
+	for i in ns.size():
+		byk[ns[i].key] = i
+	# the berth extension hangs over the ships that need it; a facility over the one it needs first
+	if byk.has("buy:berth88"):
+		var br := _route_rect(byk["buy:berth88"])
+		for i in ns.size():
+			if ns[i].kind == "ship" and float(ns[i].length) > Dock.STANDARD - 6.0:
+				var p := _ship_pos(int(ns[i].col))
+				draw_line(Vector2(br.get_center().x, br.end.y), p + Vector2(0, -84), green if ns[i].done else Pal.ink(0.35 * k), 2.0, true)
+	for need in REQUIRES:
+		if byk.has("buy:" + need) and byk.has("buy:" + REQUIRES[need]):
+			var a0 := _route_rect(byk["buy:" + REQUIRES[need]])
+			var a1 := _route_rect(byk["buy:" + need])
+			var lc := green if ns[byk["buy:" + REQUIRES[need]]].done else Pal.ink(0.35 * k)
+			if absf(a0.position.y - a1.position.y) < 1.0:
+				var yb := a0.end.y + 6.0
+				draw_polyline(PackedVector2Array([Vector2(a0.get_center().x, a0.end.y), Vector2(a0.get_center().x, yb), Vector2(a1.get_center().x, yb), Vector2(a1.get_center().x, a1.end.y)]), lc, 2.0, true)
+			else:
+				draw_line(a0.get_center(), a1.get_center(), lc, 2.0, true)
+	# the ships' line: lit as far as it is open, the next one in heat
+	var first_open := -1
+	for i in ns.size():
+		if ns[i].kind == "ship" and not ns[i].done and first_open < 0:
+			first_open = int(ns[i].col)
+	var nship := Market.POOL.size()
+	for c in nship - 1:
+		var lc := green if first_open < 0 or c + 1 < first_open else (Pal.heat(0.9 * k, 1.3) if c + 1 == first_open else Pal.ink(0.25 * k))
+		draw_line(_ship_pos(c), _ship_pos(c + 1), lc, 4.0 if lc == green else 2.5, true)
+	for i in ns.size():
+		var n: Dictionary = ns[i]
+		var hk: float = hover_k[i].x if i < hover_k.size() else 0.0
+		var on := i == sel
+		match int(n.row):
+			Route.ROW_SHIP:
+				_route_ship(n, _ship_pos(int(n.col)), int(n.col) == first_open, on, hk, k)
+			_:
+				_route_box(n, _route_rect(i), on, hk, k)
+	# the reputation ruler, the volumes on it, and where the career is
+	var ry := m.position.y + 500
+	draw_line(Vector2(_rep_x(0), ry), Vector2(_rep_x(float(Career.LEVELS[-1][1])), ry), Pal.ink(0.3 * k), 2.0)
+	for l in Career.LEVELS:
+		var x := _rep_x(float(l[1]))
+		draw_line(Vector2(x, ry - 8), Vector2(x, ry + 8), Pal.ink(0.6 * k), 2.0)
+		_text(Txt.t("rep_" + l[0]) + " · %d" % int(l[1]), Vector2(x, ry + 26), 13, Pal.ink(0.6 * k), font_b, 0)
+	var rep := int(Career.data.get("rep", 0))
+	var me := _rep_x(float(rep))
+	draw_colored_polygon(PackedVector2Array([Vector2(me, ry + 4), Vector2(me - 9, ry + 20), Vector2(me + 9, ry + 20)]), Pal.heat(k, 1.6))
+	_text(Txt.t("rt_you") % rep, Vector2(me, ry + 46), 14, Pal.heat(k, 1.3), font_s, 0)
+	_route_detail(s, a)
+
+
+func _route_ship(n: Dictionary, p: Vector2, next: bool, on: bool, hk: float, k: float) -> void:
+	var green := Pal.tint(Pal.FLUID, 0.9 * k, 1.1)
+	var open: bool = n.done
+	var pin := Route.pinned(n.key)
+	p.y -= hk * 4.0
+	draw_circle(p, 26.0, Color(0.02, 0.024, 0.028, k))
+	if open:
+		draw_circle(p, 18.0, green)
+	var rc := green if open else (Pal.heat(k, 1.5) if next or pin else Pal.ink(0.4 * k))
+	draw_arc(p, 26.0, 0.0, TAU, 36, rc, 3.0 if next else 2.0, true)
+	if next:
+		draw_arc(p, 34.0 + 3.0 * sin(t * 3.0), 0.0, TAU, 40, Pal.heat(0.5 * k, 1.3), 2.0, true)
+	if on:
+		draw_rect(Rect2(p - Vector2(72, 92), Vector2(144, 196)), Pal.heat(k, 1.4), false, 3.0)
+	elif hk > 0.0:
+		draw_rect(Rect2(p - Vector2(72, 92), Vector2(144, 196)), Pal.ink(0.3 * hk * k), false, 1.5)
+	var lit := open or next or pin
+	_text(("★ " if pin else "") + str(n.cls), p + Vector2(0, -60), 22, Pal.heat(k, 1.3) if pin else Pal.ink((0.95 if lit else 0.55) * k), font_s, 0)
+	# the type's name under its letters, if it fits between the nodes
+	var sub := "%s · %d m" % [n.short, int(n.length)]
+	if font_b.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x > 210.0:
+		sub = "%d m" % int(n.length)
+	_text(sub, p + Vector2(0, -38), 13, Pal.ink((0.8 if lit else 0.5) * k), font_b, 0)
+	# what it still waits for, one want to a line
+	var lines: Array = []
+	if open:
+		lines = [Txt.t("rt_stripped") % int(n.stripped) if int(n.stripped) > 0 else Txt.t("rt_open")]
+	else:
+		lines = Array(Route.missing(n).split(" · "))
+	for j in lines.size():
+		_text(str(lines[j]), p + Vector2(0, 58 + j * 18), 12 if j > 0 else 13, green if open else (Pal.heat(k, 1.3) if next or pin else Pal.ink(0.55 * k)), font_b, 0)
+
+
+func _route_box(n: Dictionary, r: Rect2, on: bool, hk: float, k: float) -> void:
+	var green := Pal.tint(Pal.FLUID, 0.9 * k, 1.1)
+	var pin := Route.pinned(n.key)
+	var done: bool = n.done
+	r.position.y -= hk * 3.0
+	var ka := k * (0.6 if done else 1.0)
+	Hmi.raised(self, r, ka, Hmi.PANEL_HI if on else Hmi.PANEL.lerp(Hmi.PANEL_HI, hk * 0.5))
+	if on:
+		draw_rect(r.grow(4.0), Pal.heat(k, 1.4), false, 3.0)
+	elif pin:
+		draw_rect(r.grow(2.0), Pal.heat(0.9 * k, 1.3), false, 2.0)
+	var right := Pal.money(float(n.price)) if n.kind == "buy" else ""
+	var rw := font_b.get_string_size(right, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+	draw_string(font_s, r.position + Vector2(12, 21), ("★ " if pin else "") + str(n.name), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - rw - 34, 14, Pal.ink((0.95 if not done else 0.6) * k))
+	if right != "":
+		_text(right, Vector2(r.end.x - 12, r.position.y + 21), 13, Pal.ink((0.85 if not done else 0.5) * k), font_b, 1)
+	var col := green if done or n.ready else Pal.heat(k, 1.2)
+	Hmi.gauge(self, Rect2(r.position.x + 12, r.position.y + 29, r.size.x - 24, 6), Route.progress(n), col, ka, 14)
+	var note := (Txt.t("rt_owned") if n.kind == "buy" else Txt.t("rt_open")) if done else Route.missing(n)
+	draw_string(font_b, r.position + Vector2(12, 52), note, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24, 12, green if done or n.ready else Pal.ink(0.6 * k))
+
+
+# the chosen node: what it is, each condition with how far along, what comes of it
+func _route_detail(s: Vector2, a: float) -> void:
+	var ns := _route_nodes()
+	if sel < 0 or sel >= ns.size():
+		return
+	var n: Dictionary = ns[sel]
+	var k := Pal.ease_out(clampf((deal_t - 0.1) / 0.35, 0.0, 1.0)) * a
+	var dr := Rect2(40, 776, s.x - 80, 168)
+	Hmi.raised(self, dr, k, Hmi.PANEL_HI)
+	var green := Pal.tint(Pal.FLUID, 0.9 * k, 1.1)
+	var title: String = str(n.name)
+	var tw := clampf(font_s.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 60, 360, 720)
+	Hmi.plate(self, font_s, Rect2(dr.position.x + 18, dr.position.y + 16, tw, 44), title, 20, k)
+	draw_string(font_b, Vector2(dr.position.x + 40 + tw, dr.position.y + 45), str(n.get("note", "")), HORIZONTAL_ALIGNMENT_LEFT, dr.size.x - tw - 60, 15, Pal.ink(0.7 * k))
+	var conds: Array = n.conds
+	var cw := minf(560.0, (dr.size.x - 60 - 40.0 * maxi(0, conds.size() - 1)) / maxi(1, conds.size()))
+	for i in conds.size():
+		var c: Dictionary = conds[i]
+		var cx := dr.position.x + 30 + i * (cw + 40)
+		var cc := green if c.ok else Pal.heat(k, 1.3)
+		_text(str(c.label), Vector2(cx, dr.position.y + 94), 15, Pal.ink(0.6 * k), font_b)
+		_text(("✓ " if c.ok else "") + str(c.now), Vector2(cx + cw, dr.position.y + 94), 18, cc, font_s, 1)
+		Hmi.gauge(self, Rect2(cx, dr.position.y + 106, cw, 10), float(c.frac), cc, k, 16)
+	var hint := ""
+	match str(n.kind):
+		"ship":
+			hint = (Txt.t("rt_ship_done") % int(n.stripped)) if n.done else Txt.t("rt_ship_then")
+		"buy":
+			hint = Txt.t("rt_owned") if n.done else (Txt.t("rt_buy_then") if n.ready else Txt.t("rt_buy_save"))
+		"tier":
+			hint = Txt.t("rt_tier_then") if n.done else Txt.t("rt_tier_d")
+	_text(hint, Vector2(dr.position.x + 30, dr.position.y + 150), 15, Pal.tint(Pal.AIR, 0.95 * k, 1.2), font_b)
 
 
 # what was said over the radio: here, and on site what was said on the job

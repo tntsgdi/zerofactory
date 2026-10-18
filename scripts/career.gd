@@ -106,6 +106,7 @@ static func fresh() -> Dictionary:
 		"rep": 0,
 		"upgrades": {},
 		"growth_goal": "",
+		"route_goals": [],         # up to two pinned on the route page (Route.pins)
 		"items": {},
 		"done": 0,
 		"history": [],

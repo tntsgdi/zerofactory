@@ -98,10 +98,14 @@ static func set_goal(id: String) -> bool:
 	if find_track(id).is_empty():
 		return false
 	var old: String = str(Career.data.get("growth_goal", ""))
+	var old_pins: Array = Career.data.get("route_goals", []).duplicate()
 	Career.data.growth_goal = id
+	# the savings goal is one of the route's two pinned goals
+	Route.pin_skill(id)
 	if Career.save():
 		return true
 	Career.data.growth_goal = old
+	Career.data.route_goals = old_pins
 	return false
 
 # Only skills and their legacy aliases are fitted mid-contract. Facilities keep
