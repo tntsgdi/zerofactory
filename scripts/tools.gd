@@ -10,6 +10,10 @@ const GRAB_MAX_T := 3.0
 const EMPTY_SPEED := 2600.0
 const K_TETHER := 34.0
 const FMAX := 3.0 * 175.0
+const BRAKE := 2.0          # x the towing force, for slowing a load down
+const HANG := 0.12          # share of the tether's turn on the load (the rest goes through its centre)
+const SPIN_DAMP := 5.0      # 1/s: a held load's spin dies away
+const FLICK := 220.0        # px/s faster than the drone at let-go: a throw, not a let-go
 
 var game: Game
 var world: World
@@ -801,6 +805,11 @@ func release_grab(thrown: bool) -> void:
 	if held_body != null and is_instance_valid(held_body):
 		held_body.tethered = false
 		held_body.set_meta("hauled", true)
+		# a flick (the load swung out faster than the drone flies) keeps its
+		# momentum; any other let-go settles the load where it is
+		var flung: bool = thrown and (held_body.linear_velocity - drone.linear_velocity).length() > FLICK
+		if not flung:
+			held_body.settle = FreeBody.SETTLE_T
 	held_body = null
 	held_piece = null
 	latched = false
@@ -816,6 +825,7 @@ func grab_point() -> Vector2:
 
 
 func physics_step(dt: float) -> void:
+	drone.tow_k = 0.0
 	if held_piece == null:
 		return
 	if held_piece.gone or not drone.alive:
@@ -849,15 +859,29 @@ func physics_step(dt: float) -> void:
 					if j.alive and j.type == "crack" and held_body.pieces.any(func(q): return q.id == j.a or q.id == j.b):
 						game.on_snap(j)
 						break
+		# The tether pulls the load as a whole (through its centre of mass), so a
+		# load caught off-centre no longer swings round on the line; a small share
+		# of the turn still hangs it from where it was caught, and its spin is
+		# damped hard. Slightly overdamped: it follows without bobbing.
 		var r: Vector2 = g - held_body.global_transform * held_body.center_of_mass
-		var vg: Vector2 = held_body.linear_velocity + Vector2(-r.y, r.x) * held_body.angular_velocity
-		var c := 2.0 * 0.85 * sqrt(K_TETHER * m) * game.skill_value("grapple_stable")
+		var vg: Vector2 = held_body.linear_velocity
+		var stable: float = game.skill_value("grapple_stable")
+		var haul: float = game.skill_value("haul_speed")
+		var c := 2.0 * 1.05 * sqrt(K_TETHER * m) * stable
 		var f: Vector2 = (tether_target - g) * K_TETHER - (vg - drone.linear_velocity) * c
-		var force_max := FMAX * maxf(1.0, game.grab_max() / 5.0)
-		f = f.limit_length(force_max)
-		tether_force = f.length() / force_max
-		held_body.apply_force(f, g - held_body.global_position)
-		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.7) / game.skill_value("grapple_stable")
+		var force_max := FMAX * maxf(1.0, game.grab_max() / 5.0) * haul
+		# stopping a load gets more of the grapple than getting it going
+		var cap := force_max * (BRAKE if f.dot(vg) < 0.0 else 1.0)
+		f = f.limit_length(cap)
+		tether_force = minf(1.0, f.length() / force_max)
+		held_body.apply_central_force(f)
+		held_body.apply_torque(r.cross(f) * HANG)
+		held_body.angular_velocity *= exp(-SPIN_DAMP * stable * dt)
+		drone.external -= f.limit_length(Drone.ACCEL * drone.mass * 0.7) / (stable * sqrt(haul))
+		var over: float = g.distance_to(drone.global_position) - tether_reach
+		drone.tow_u = (drone.global_position - g).normalized()
+		drone.tow_k = clampf((over - 0.5 * Geom.M) / (1.5 * Geom.M), 0.0, 1.0)
+		drone.tow_v = vg.dot(drone.tow_u) + 60.0
 	else:
 		# still fixed to the ship: the beam pulls, the fixings decide
 		var m2: float = world.group_mass(held_piece)

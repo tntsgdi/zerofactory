@@ -40,7 +40,7 @@ func _run() -> void:
 	Career.data.rep = 30
 	Career.data.done = 10
 	Career.save()
-	check(Growth.TRACKS.size() == 16 and Growth.progress() == 0, "16 routes / 48 volumes; stock equipment is level zero")
+	check(Growth.TRACKS.size() == 17 and Growth.progress() == 0, "17 routes / 51 volumes; stock equipment is level zero")
 	var funds := float(Career.data.money)
 	for row in Growth.TRACKS:
 		for tier in range(1, 4):
@@ -53,7 +53,7 @@ func _run() -> void:
 	check(Growth.set_goal("drive"), "savings goal is persisted through the career writer")
 	Career.data = {}
 	Career.load_or_new()
-	check(Growth.progress() == 48 and Career.data.growth_goal == "drive", "all 48 levels and savings goal survive career disk roundtrip")
+	check(Growth.progress() == 51 and Career.data.growth_goal == "drive", "all 51 levels and savings goal survive career disk roundtrip")
 	Career.data = Career.fresh()
 	Career.data.upgrades = {"scan_kit": 1, "grapple5": 1, "pump2": 1}
 	check(Growth.progress() == 3 and Growth.price("grapple_mass") == 97500.0, "old purchases credited as volume I; next price is volume II")
@@ -103,7 +103,7 @@ func _run() -> void:
 		while Growth.level(Career.data.upgrades, row[0]) < 3:
 			Growth.buy(row[0])
 	g.fit_skills()
-	check(g.grab_max() == 8.0 and g.tools.reach(3) == 8.0 * Geom.M, "expert grapple has 8 t capacity and 8 m reach")
+	check(g.grab_max() == 8.0 and g.tools.reach(3) == 9.0 * Geom.M and g.skill_value("haul_speed") == 1.9, "expert grapple has 8 t capacity, 9 m reach and 1.9x haul")
 	check(g.tools.reach(1) == 12.0 * Geom.M and g.tools.reach(5) == 9.0 * Geom.M, "meter and hose reach used by actual tool targeting")
 	check(g.sys.pump_k() == 3.6, "gas and liquid pump code uses expert throughput")
 	g.tools.tool = 4

@@ -40,6 +40,12 @@ var ghost := 0.0
 var ghost_dir := Vector2.ZERO
 var _ghost_check := 0.0
 
+# Let go off the grapple without a fling, a load settles where it was let go
+# (player 2026-10-17: "it stops when you let go") instead of drifting on.
+const SETTLE_T := 0.45
+const SETTLE_K := 9.0          # 1/s: speed lost while settling
+var settle := 0.0
+
 var cols := {}              # piece id -> Array of CollisionPolygon2D
 var age := 0.0
 var rejected_t := 0.0
@@ -169,6 +175,13 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		if not tethered:
 			state.linear_velocity = state.linear_velocity.limit_length(CALM_SPEED)
 			state.angular_velocity = clampf(state.angular_velocity, -1.0, 1.0)
+	if settle > 0.0:
+		settle -= state.step
+		if tethered:
+			settle = 0.0
+		else:
+			state.linear_velocity *= exp(-SETTLE_K * state.step)
+			state.angular_velocity *= exp(-SETTLE_K * state.step)
 	# nothing loose outruns the collision: a hard knock still sends it flying,
 	# just not through a wall
 	if state.linear_velocity.length() > MAX_SPEED:

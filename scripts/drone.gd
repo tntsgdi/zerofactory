@@ -30,6 +30,11 @@ var smoke_t := 0.0
 var input := {"move": Vector2.ZERO, "dash": false, "brake": false, "hold": false}
 var hold_at := Vector2.INF   # where the drone is held while the hold key is down
 var external := Vector2.ZERO
+# a heavy load on a taut tether holds the drone back (set by the grapple each
+# step): it can't fly away from the load much faster than the load follows
+var tow_k := 0.0
+var tow_u := Vector2.ZERO
+var tow_v := 0.0
 var assist := true             # flight assist: holds position, kills side drift
 var assist_k := 1.0            # 0..1 for the HUD switch animation
 
@@ -122,6 +127,13 @@ func _physics_process(dt: float) -> void:
 		acc = ((hold_at - global_position) * 40.0 - linear_velocity * 12.0 - external / mass).limit_length(accel * BRAKE_K * 2.0)
 	else:
 		hold_at = Vector2.INF
+	if tow_k > 0.0:
+		var away := acc.dot(tow_u)
+		if away > 0.0:
+			acc -= tow_u * away * tow_k
+		var lead := linear_velocity.dot(tow_u) - tow_v
+		if lead > 0.0:
+			acc -= tow_u * minf(lead * 12.0, accel * 3.0) * tow_k
 	thrust = acc / ACCEL
 	apply_central_force(acc * mass)
 	if external != Vector2.ZERO:
