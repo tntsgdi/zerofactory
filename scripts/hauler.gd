@@ -55,6 +55,10 @@ var _clear := 0.0
 var _avoid_skip: Array = []      # bodies it does not ease round (what it goes for, what it carries)
 var _last_pos := Vector2.ZERO
 var _move := Vector2.ZERO
+# what its jets are doing: its real acceleration (player 2026-10-18: speeding
+# up blows backwards, slowing down is a reverse burn — strictly)
+var _acc := Vector2.ZERO
+var _vel0 := Vector2.ZERO
 
 
 func _init() -> void:
@@ -140,6 +144,8 @@ func _physics_process(dt: float) -> void:
 	if game == null or game.paused_sim or game.state != "play":
 		return
 	t += dt
+	_acc = _acc.lerp((vel - _vel0) / maxf(dt, 0.001), 1.0 - exp(-14.0 * dt))
+	_vel0 = vel
 	if pos == Vector2.ZERO:
 		pos = home()
 	game.nav_grid().step(dt)
@@ -190,7 +196,11 @@ func _physics_process(dt: float) -> void:
 				_done()
 				return
 			var target: Vector2 = body.global_transform * body.center_of_mass
-			if _fly(target, dt, 6.0) or pos.distance_to(target) < 6.0:
+			var bv: Vector2 = body.linear_velocity
+			# a drifting load is caught by matching its speed first (strict inertia:
+			# no knock as it grips), then the two move as one
+			var met := _fly(target, dt, 6.0, bv) or pos.distance_to(target) < 6.0
+			if met and (vel - bv).length() < 8.0:
 				body.freeze_mode = RigidBody2D.FREEZE_MODE_KINEMATIC
 				body.set_deferred("freeze", true)
 				body.collision_layer = 0
@@ -228,7 +238,7 @@ func _physics_process(dt: float) -> void:
 				body.collision_layer = 1
 				body.collision_mask = FreeBody.MASK
 				body.set_deferred("freeze", false)
-				body.linear_velocity = Dock.ZONES[zone].face * -60.0 + vel * 0.4
+				body.linear_velocity = Dock.ZONES[zone].face * -60.0 + vel
 				body.set_meta("arm", false)
 				body.remove_meta("arm_by")
 				body.set_meta("arm_drop", t)
@@ -267,7 +277,8 @@ func _load() -> float:
 
 # fly toward `to` along the navigation grid like the operator's drone: speed
 # up, keep to the path, brake in to arrive. true once there and slow.
-func _fly(to: Vector2, dt: float, arrive: float = ARRIVE) -> bool:
+# tv: the velocity to arrive with (a drifting load is met at its own speed)
+func _fly(to: Vector2, dt: float, arrive: float = ARRIVE, tv: Vector2 = Vector2.ZERO) -> bool:
 	var Nav = preload("res://scripts/nav.gd")
 	var ld := _load()
 	var clear: float = Nav.LOAD_CLEAR if ld > 0.0 else Nav.EMPTY_CLEAR
@@ -291,9 +302,10 @@ func _fly(to: Vector2, dt: float, arrive: float = ARRIVE) -> bool:
 	# brake in: the speed it can still stop from over what is left
 	var speed := minf(vmax, sqrt(2.0 * acc * 0.75 * maxf(0.0, left - arrive * 0.5)))
 	var dir := (nxt - pos).normalized() if left > 0.5 else Vector2.ZERO
-	var want := dir * speed + _avoid() * vmax * 0.5
-	if left < arrive and vel.length() < 50.0:
-		vel = vel.move_toward(Vector2.ZERO, acc * dt)
+	var want := dir * speed + tv + _avoid() * vmax * 0.5
+	if left < arrive and (vel - tv).length() < 50.0:
+		vel = vel.move_toward(tv, acc * dt)
+		pos += vel * dt
 		return true
 	vel += (want - vel).limit_length(acc * dt)
 	pos += vel * dt
@@ -345,7 +357,7 @@ func halt() -> void:
 			body.collision_layer = 1
 			body.collision_mask = FreeBody.MASK
 			body.set_deferred("freeze", false)
-			body.linear_velocity = vel * 0.4
+			body.linear_velocity = vel
 		_unclaim(body)
 	_done()
 
@@ -395,7 +407,7 @@ func _draw() -> void:
 	var xf := Transform2D(0.0, Vector2(sc, sc), 0.0, pos)
 	draw_set_transform_matrix(xf)
 	var busy := state != "idle"
-	var push := _move.normalized() * clampf(_move.length() / 120.0, 0.0, 1.0) if Txt.anim_level() > 0 else Vector2.ZERO
+	var push := (_acc / ACCEL).limit_length(1.0) if Txt.anim_level() > 0 else Vector2.ZERO
 	Art.tint = Color(Pal.AIR.r * 1.05, Pal.AIR.g * 1.05, Pal.AIR.b * 1.05)
 	Art.draw(self, "tripod" if who == "hauler2" else "coreclaw", {"heading": heading, "tool": 3 if busy else 0, "open": 1.0 if state in ["carry", "release"] else (0.4 if busy else 0.0),
 		"t": t, "thrust": push, "dash": false, "design": "", "base_xf": xf})

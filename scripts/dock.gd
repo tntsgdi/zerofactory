@@ -847,6 +847,22 @@ func _draw_clamps() -> void:
 		clamp_node.draw_string(font, Vector2(x + 12, top + 34), "CL-0%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.4))
 
 
+# the tug's acceleration along x (px/s², + to the right), from how it moves
+func tug_accel() -> float:
+	if game == null or game.state != "intro":
+		return 0.0
+	var h := 1.0 / 60.0
+	var tt: float = game.state_t
+	return (_tug_x(tt + h) - 2.0 * _tug_x(tt) + _tug_x(tt - h)) / (h * h)
+
+
+func _tug_x(tt: float) -> float:
+	var x: float = game.ship_offset * (1.0 - Pal.ease_io(clampf(tt / 3.4, 0.0, 1.0))) + stern.x * Geom.M
+	if tt > 3.4:
+		x += pow(tt - 3.4, 2.0) * 900.0
+	return x
+
+
 func tug_pos() -> Vector2:
 	if game == null or game.state != "intro":
 		return Vector2.INF
@@ -1268,11 +1284,25 @@ func _draw_add() -> void:
 			var br := 0.08 + 0.05 * sin(t * 2.1)
 			add_node.draw_texture_rect(tex, Rect2(throat - Vector2(90, 40), Vector2(180, 80)), false, Pal.heat(br, 1.4))
 	var tug := tug_pos()
-	if tug != Vector2.INF and game.state_t < 3.4:
+	if tug != Vector2.INF:
+		# its burn follows its real acceleration (player 2026-10-18: speeding up
+		# blows backwards, slowing down is a reverse burn): the main engine at the
+		# back pushes the ship in, the forward-facing retros either side of the
+		# bow stop it, and then pull the tug away
+		var ax := tug_accel()
 		var fl := 0.8 + 0.2 * sin(t * 50.0)
-		var base := tug + Vector2(6.0 * Geom.M, 0)
-		add_node.draw_colored_polygon(PackedVector2Array([base + Vector2(0, -16), base + Vector2(90 * fl, 0), base + Vector2(0, 16)]), Pal.heat(0.6, 1.8))
-		add_node.draw_texture_rect(tex, Rect2(base - Vector2(40, 40), Vector2(80, 80)), false, Pal.heat(0.5, 1.6))
+		var main := clampf(-ax / 2400.0, 0.0, 1.0)
+		var retro := clampf(ax / 2400.0, 0.0, 1.0)
+		if main > 0.03:
+			var base := tug + Vector2(6.0 * Geom.M, 0)
+			add_node.draw_colored_polygon(PackedVector2Array([base + Vector2(0, -16), base + Vector2(90 * fl * (0.4 + 0.6 * main), 0), base + Vector2(0, 16)]), Pal.heat(0.6 * main, 1.8))
+			add_node.draw_texture_rect(tex, Rect2(base - Vector2(40, 40), Vector2(80, 80)), false, Pal.heat(0.5 * main, 1.6))
+		if retro > 0.03:
+			for s: float in [-1.0, 1.0]:
+				var rb := tug + Vector2(1.2 * Geom.M, 1.0 * Geom.M * s)
+				var ln := 60.0 * fl * (0.4 + 0.6 * retro)
+				add_node.draw_colored_polygon(PackedVector2Array([rb + Vector2(0, -7), rb + Vector2(-ln, 3.0 * s), rb + Vector2(0, 7)]), Pal.heat(0.6 * retro, 1.8))
+				add_node.draw_texture_rect(tex, Rect2(rb - Vector2(24, 24), Vector2(48, 48)), false, Pal.heat(0.45 * retro, 1.6))
 	for d in debris:
 		var tr: Array = d[7]
 		if tr.size() >= 2:
