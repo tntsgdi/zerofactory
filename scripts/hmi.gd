@@ -103,7 +103,8 @@ static func gauge(ci: CanvasItem, r: Rect2, frac: float, col: Color, a: float = 
 
 # the industrial push button: a lamp-ringed button at the left, the label
 # stamped beside it, sunk while pressed, shaken (sideways) when it can't act
-static func push(ci: CanvasItem, font: Font, r: Rect2, label: String, ok: bool, hover: float, a: float, t: float, shake: float = 0.0, note: String = "", key: String = "ENTER", down: float = 0.0) -> void:
+# old / swap: the label it showed before, crossfading out as swap goes 0 → 1
+static func push(ci: CanvasItem, font: Font, r: Rect2, label: String, ok: bool, hover: float, a: float, t: float, shake: float = 0.0, note: String = "", key: String = "ENTER", down: float = 0.0, old: String = "", swap: float = 1.0) -> void:
 	r.position.x += sin(t * 70.0) * 9.0 * shake * shake
 	r.position.y += 3.0 * down
 	if down > 0.5:
@@ -120,7 +121,10 @@ static func push(ci: CanvasItem, font: Font, r: Rect2, label: String, ok: bool, 
 	ci.draw_arc(cc, br + 5.0, 0.0, TAU, 28, Color(1, 1, 1, 0.3 * a), 2.0, true)
 	var lx := cc.x + br + 22.0
 	var lh := 30 if r.size.y >= 64.0 else 22
-	ci.draw_string(font, Vector2(lx, r.position.y + r.size.y * 0.5 + lh * 0.36 - (8.0 if note != "" else 0.0)), label, HORIZONTAL_ALIGNMENT_LEFT, r.end.x - lx - 90.0, lh, Pal.ink((0.98 if ok else 0.5) * a))
+	var ly := r.position.y + r.size.y * 0.5 + lh * 0.36 - (8.0 if note != "" else 0.0)
+	if old != "" and swap < 1.0:
+		ci.draw_string(font, Vector2(lx, ly - 8.0 * swap), old, HORIZONTAL_ALIGNMENT_LEFT, r.end.x - lx - 90.0, lh, Pal.ink(0.9 * a * (1.0 - swap)))
+	ci.draw_string(font, Vector2(lx, ly + 8.0 * (1.0 - swap)), label, HORIZONTAL_ALIGNMENT_LEFT, r.end.x - lx - 90.0, lh, Pal.ink((0.98 if ok else 0.5) * a * swap))
 	if note != "":
 		ci.draw_string(font, Vector2(lx, r.position.y + r.size.y * 0.5 + 22.0), note, HORIZONTAL_ALIGNMENT_LEFT, r.end.x - lx - 20.0, 14, Pal.heat(0.9 * a, 1.2))
 	if key != "" and ok:

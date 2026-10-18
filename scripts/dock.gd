@@ -1092,31 +1092,44 @@ func _trough_live() -> void:
 		PackedColorArray([Pal.heat(0.0), Pal.heat(0.0), Pal.heat(band, 1.2), Pal.heat(band, 1.2)]))
 	if suck_glow > 0.0:
 		draw_texture_rect(game.fx.glow_tex, Rect2(Vector2(suck_x - 1.6 * M, y0 - sh * 0.8), Vector2(3.2 * M, sh)), false, Pal.heat(0.22 * suck_glow, 1.5))
+	# chevrons, belt slats and rail arrows: one batched call each (they were
+	# ~200 calls a frame)
 	var fall := fposmod(t * 0.9, 1.0)
+	var chev := PackedVector2Array()
+	var chev_c := PackedColorArray()
 	var cx := x0 + 2.25 * M
 	while cx < x1 - 1.0 * M:
 		if absf(cx - mx) > 2.6 * M:
 			for j in 2:
 				var u := fposmod(fall + j * 0.5, 1.0)
 				var cy := y0 - sh * (1.0 - u) + 4.0
-				var ca := (0.10 + (0.30 if want else 0.0)) * sin(u * PI)
-				draw_polyline(PackedVector2Array([Vector2(cx - 6, cy - 4), Vector2(cx, cy + 2), Vector2(cx + 6, cy - 4)]), Pal.heat(ca, 1.3), 1.4, true)
+				var cc := Pal.heat((0.10 + (0.30 if want else 0.0)) * sin(u * PI), 1.3)
+				chev.append_array([Vector2(cx - 6, cy - 4), Vector2(cx, cy + 2), Vector2(cx, cy + 2), Vector2(cx + 6, cy - 4)])
+				chev_c.append_array([cc, cc])
 		cx += 3.0 * M
+	if not chev.is_empty():
+		draw_multiline_colors(chev, chev_c, 1.4, true)
 	var ph := fposmod(t * CONVEY * M, 24.0)
+	var slats := PackedVector2Array()
 	var x := x0 + 6.0
 	while x < x1 - 6.0:
 		var px := x + (ph if x < mx else -ph)
 		if px > x0 + 2.0 and px < x1 - 2.0 and absf(px - mx) > 1.4 * M:
-			draw_line(Vector2(px, y0 + 8), Vector2(px, y1 - 6), Pal.ink(0.16), 2.0)
+			slats.append_array([Vector2(px, y0 + 8), Vector2(px, y1 - 6)])
 		x += 24.0
+	if not slats.is_empty():
+		draw_multiline(slats, Pal.ink(0.16), 2.0)
 	# arrows on the rail, every few metres, pointing to the furnace
+	var arrows := PackedVector2Array()
 	var ax := x0 + 1.5 * M
 	while ax < x1 - 1.0 * M:
 		if absf(ax - mx) > 2.6 * M:
 			var d := 1.0 if ax < mx else -1.0
 			var ay := y0 + 4.0
-			draw_polyline(PackedVector2Array([Vector2(ax - 5.0 * d, ay - 5), Vector2(ax + 3.0 * d, ay), Vector2(ax - 5.0 * d, ay + 5)]), Pal.heat(0.55 if want else 0.3, 1.2), 1.6, true)
+			arrows.append_array([Vector2(ax - 5.0 * d, ay - 5), Vector2(ax + 3.0 * d, ay), Vector2(ax + 3.0 * d, ay), Vector2(ax - 5.0 * d, ay + 5)])
 		ax += 3.0 * M
+	if not arrows.is_empty():
+		draw_multiline(arrows, Pal.heat(0.55 if want else 0.3, 1.2), 1.6, true)
 
 
 # a plated girder: a lit top edge, a shadowed bottom, posts and diagonals, rivets at the nodes

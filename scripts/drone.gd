@@ -234,7 +234,9 @@ func _draw() -> void:
 			draw_set_transform(p, heading, Vector2.ONE * (0.8 + 0.2 * k))
 			draw_colored_polygon(PackedVector2Array(Art.ARROW), Pal.ink(0.035 * k))
 		draw_set_transform(Vector2.ZERO)
+	Art.set_scale(game.cam_zoom() if game != null else 2.0)
 	Art.draw(self, DESIGN, art_state())
+	Art.lite = false
 	# hit: the hull flashes in heat
 	if hurt_t > 0.0:
 		var flash := hurt_t / 0.35

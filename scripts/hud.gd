@@ -58,6 +58,9 @@ var bursts: Array = []      # [screen pos, age]
 var cur := Motion.Spring2.new(Vector2.ZERO, 900.0, 0.9)
 var cur_key := ""
 var cur_t := 0.0
+# the label as it was last shown: it fades out when the pointer leaves, it doesn't blink off
+var cur_last := []
+var cur_out := 9.0
 var minimap: Control        # the berth map, bottom right (P.6)
 var stock_last := {}
 var stock_pop := 9.0
@@ -332,6 +335,7 @@ func _process(dt: float) -> void:
 	if game.menu_open:
 		_menu_hover()
 	cur_t += dt
+	cur_out += dt
 	cur.target = mp
 	cur.step(dt)
 	c.queue_redraw()
@@ -1092,7 +1096,15 @@ func _cursor_label() -> void:
 	var h: Dictionary = g.tools.hover
 	var mp := c.get_local_mouse_position()
 	if g.tools.tool == 2 or h.is_empty():
+		if cur_key != "":
+			cur_out = 0.0
 		cur_key = ""
+		if not cur_last.is_empty() and cur_out < 0.12 and Txt.anim_level() > 0:
+			var oa := 1.0 - cur_out / 0.12
+			var op: Vector2 = cur_last[0]
+			c.draw_rect(Rect2(op - Vector2(8, 16), Vector2(cur_last[3], 42)), Color(0.02, 0.022, 0.026, 0.82 * oa))
+			_text(cur_last[1], op + Vector2(0, -4.0 * (1.0 - oa)), 14, Pal.ink(0.95 * oa), font_b)
+			_text(cur_last[2], op + Vector2(0, 19 - 4.0 * (1.0 - oa)), 13, Pal.ink(0.55 * oa), font)
 		return
 	var name := ""
 	var act := ""
@@ -1125,6 +1137,7 @@ func _cursor_label() -> void:
 	var la := clampf(cur_t / 0.12, 0.0, 1.0)
 	var pos := cur.x + Vector2(22, 30 + (1.0 - Pal.ease_out(la)) * 6.0)
 	var w := maxf(_tw(name, 14), _tw(act, 13)) + 20.0
+	cur_last = [pos, name, act, w]
 	c.draw_rect(Rect2(pos - Vector2(8, 16), Vector2(w, 42)), Color(0.02, 0.022, 0.026, 0.82 * la))
 	c.draw_rect(Rect2(pos - Vector2(8, 16), Vector2(2, 42 * Pal.ease_out(la))), Pal.ink(0.4 * la))
 	_text(name, pos, 14, Pal.ink(0.95 * la), font_b)

@@ -15,6 +15,17 @@ const HULL_HI := Color(0.11, 0.115, 0.13)
 static var tint := Color(1, 1, 1)
 
 
+# small on screen (under about 1.4 px per art unit): the sub-pixel details —
+# lit dots, joint rings, iris blades, finger lines — are left out (2026-10-18,
+# the haulers' art was a twelfth of the frame at the default zoom)
+static var lite := false
+
+
+# set before drawing: art units to screen pixels
+static func set_scale(px_per_unit: float) -> void:
+	lite = px_per_unit < 1.4
+
+
 static func ink(a: float, k: float = 1.0) -> Color:
 	return Color(INK.r * k * tint.r, INK.g * k * tint.g, INK.b * k * tint.b, a)
 
@@ -89,7 +100,7 @@ static func draw(ci: CanvasItem, design: String, st: Dictionary) -> void:
 static func iris(ci: CanvasItem, c: Vector2, r: float, open: float, n: int, spin: float, col: Color) -> void:
 	ci.draw_circle(c, r, Color(0.025, 0.026, 0.03))
 	var hole := r * (0.2 + 0.32 * open)
-	for i in n:
+	for i in (0 if lite else n):
 		var a0 := spin + TAU * i / n
 		var a1 := a0 + TAU / n
 		var p0 := c + Vector2.from_angle(a0) * r
@@ -270,12 +281,13 @@ static func _tripod(ci: CanvasItem, st: Dictionary) -> void:
 		var tip := el + Vector2.from_angle(a - 0.35 - flex) * 8.0
 		ci.draw_line(sh, el, ink(0.8), 2.6, true)
 		ci.draw_line(el, tip, ink(0.8), 1.8, true)
-		for s: float in [-1.0, 1.0]:
-			ci.draw_line(tip, tip + Vector2.from_angle(a + s * (0.5 + 0.4 * flex)) * 3.5, ink(0.9), 1.2, true)
-		ci.draw_circle(sh, 2.2, HULL_HI)
-		ci.draw_arc(sh, 2.2, 0.0, TAU, 10, ink(0.8), 0.9, true)
-		ci.draw_circle(el, 1.8, HULL_HI)
-		ci.draw_arc(el, 1.8, 0.0, TAU, 10, ink(0.8), 0.9, true)
+		if not lite:
+			for s: float in [-1.0, 1.0]:
+				ci.draw_line(tip, tip + Vector2.from_angle(a + s * (0.5 + 0.4 * flex)) * 3.5, ink(0.9), 1.2, true)
+			ci.draw_circle(sh, 2.2, HULL_HI)
+			ci.draw_arc(sh, 2.2, 0.0, TAU, 10, ink(0.8), 0.9, true)
+			ci.draw_circle(el, 1.8, HULL_HI)
+			ci.draw_arc(el, 1.8, 0.0, TAU, 10, ink(0.8), 0.9, true)
 		# the elbow jet pushes opposite the way it points, when that helps
 		var jd := Vector2.from_angle(a + 0.45)
 		var f := clampf(push * maxf(0.0, -jd.dot(th.normalized() if push > 0.05 else Vector2.ZERO)) * 1.3, 0.0, 1.0)
@@ -286,7 +298,7 @@ static func _tripod(ci: CanvasItem, st: Dictionary) -> void:
 		hexp.append(Vector2.from_angle(h + TAU * i / 6.0 + PI / 6.0) * 12.0)
 	ci.draw_colored_polygon(hexp, HULL)
 	outline(ci, hexp, ink(0.95), 1.6)
-	for i in 6:
+	for i in (0 if lite else 6):
 		var lit := 0.5 + 0.5 * sin(t * 3.0 - i * 1.05)
 		ci.draw_circle(hexp[i] * 0.78, 0.9, tool_col(st.tool, 0.25 + 0.6 * lit, 1.0 + lit))
 	var fw := Vector2.from_angle(h)
@@ -303,6 +315,8 @@ static func ring_core(ci: CanvasItem, c: Vector2, st: Dictionary, r_core: float,
 	for k in 4:
 		var a0 := spin + k * PI / 2.0 + 0.2
 		ci.draw_arc(c, r_ring, a0, a0 + PI / 2.0 - 0.4, 12, ink(0.8), 1.8, true)
+		if lite:
+			continue
 		var lit := 0.5 + 0.5 * sin(t * 3.0 - k * 1.57)
 		ci.draw_circle(c + Vector2.from_angle(a0 - 0.2) * r_ring, 1.0, tool_col(st.tool, 0.3 + 0.6 * lit, 1.0 + lit * 0.8))
 	ci.draw_circle(c, r_core, HULL_HI)
@@ -318,6 +332,8 @@ static func claw(ci: CanvasItem, sh: Vector2, a: float, flex: float, reach: floa
 	var tip := el + Vector2.from_angle(a - side * (0.5 - 0.4 * reach) - flex) * l2
 	ci.draw_line(sh, el, ink(0.8), 2.2, true)
 	ci.draw_line(el, tip, ink(0.8), 1.6, true)
+	if lite:
+		return el
 	var spread := 0.35 + 0.35 * reach
 	for s: float in [-1.0, 1.0]:
 		ci.draw_line(tip, tip + Vector2.from_angle(a + s * spread) * 3.2, ink(0.9), 1.1, true)
@@ -351,6 +367,8 @@ static func mandible(ci: CanvasItem, h: float, sh: Vector2, side: float, reach: 
 	ci.draw_line(el.rotated(h), tip.rotated(h), ink(0.85), 1.8, true)
 	ci.draw_line(tip.rotated(h), p1.rotated(h), ink(0.95), 1.3, true)
 	ci.draw_line(tip.rotated(h), p2.rotated(h), ink(0.95), 1.3, true)
+	if lite:
+		return
 	for j in [sh, el]:
 		ci.draw_circle((j as Vector2).rotated(h), 1.7, HULL_HI)
 		ci.draw_arc((j as Vector2).rotated(h), 1.7, 0.0, TAU, 10, ink(0.85), 0.9, true)
@@ -403,7 +421,8 @@ static func _arrowring(ci: CanvasItem, st: Dictionary) -> void:
 	ci.draw_colored_polygon(hull, HULL)
 	outline(ci, hull, ink(0.95), 1.6)
 	ci.draw_colored_polygon(rot([Vector2(22, 0), Vector2(10, -5), Vector2(-2, -12), Vector2(-2, 12), Vector2(10, 5)], h), HULL_HI)
-	ci.draw_polyline(rot([Vector2(12, -7), Vector2(20, 0), Vector2(12, 7)], h), ink(0.3), 1.0, true)
+	if not lite:
+		ci.draw_polyline(rot([Vector2(12, -7), Vector2(20, 0), Vector2(12, 7)], h), ink(0.3), 1.0, true)
 	# twin mains at the wing tips
 	for s: float in [-1.0, 1.0]:
 		var m := Vector2(-12, 14 * s)
@@ -457,7 +476,8 @@ static func _coreclaw(ci: CanvasItem, st: Dictionary) -> void:
 	var hood := rot([Vector2(27, 0), Vector2(8, -12), Vector2(-6, -13), Vector2(-2, 0), Vector2(-6, 13), Vector2(8, 12)], h)
 	ci.draw_colored_polygon(hood, HULL)
 	outline(ci, hood, ink(0.95), 1.5)
-	ci.draw_polyline(rot([Vector2(12, -8), Vector2(21, 0), Vector2(12, 8)], h), ink(0.3), 1.0, true)
+	if not lite:
+		ci.draw_polyline(rot([Vector2(12, -8), Vector2(21, 0), Vector2(12, 8)], h), ink(0.3), 1.0, true)
 	ring_core(ci, Vector2(1, 0).rotated(h), st, 6.5, 9.5)
 	for s: float in [-1.0, 1.0]:
 		mandible(ci, h, Vector2(13, 7.5 * s), s, rc, 0.06 * sin(t * 2.0 + s) * s)

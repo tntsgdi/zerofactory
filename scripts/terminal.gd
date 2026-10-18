@@ -114,6 +114,25 @@ var book: SkillBook
 var next_job := {}         # an opening contract still to play: the market shows it, alone
 var game_ref = null        # the contract in play, when opened over the berth
 var hover_home := false
+# page switches slide on a shared axis (player 2026-10-18: "the UI still isn't
+# smooth"): the old page out one way, the new one in from the other
+const SWITCH_OUT := 0.12
+const SWITCH_IN := 0.22
+const SWITCH_DELAY := 0.04
+const SWITCH_SLIDE := 40.0
+var prev_tab := -1
+var prev_sel := 0
+var switch_t := 9.0
+var switch_dir := 1.0
+# the selection frame glides from the chosen item to the next
+var focus: Array = []
+# gauges ease to their values; the push button's label crossfades
+var _sm := {}
+var _dt := 0.016
+var _push_label := ""
+var _push_old := ""
+var _push_t := 9.0
+var _focus_tab := -99
 var hover_goal := -1       # one of the header's two goals under the pointer
 var _route_frame := -1
 var _route_cache: Array = []
@@ -159,6 +178,8 @@ func _ready() -> void:
 		Career.save()
 	for i in 90:
 		dust.append([Vector2(randf(), randf()), randf_range(0.002, 0.012), randf() * TAU, randf_range(0.6, 1.6)])
+	for i in 4:
+		focus.append(Motion.Spring.new(0.0, 560.0, 0.92))
 	for i in 32:
 		hover_k.append(Motion.Spring.new(0.0, 380.0, 0.7))
 		sel_k.append(Motion.Spring.new(0.0, 300.0, 0.8))
@@ -312,6 +333,29 @@ func _lock_reason(page: int) -> String:
 	return Txt.t("tm_lock_between")
 
 
+# where a page sits in the slide order: home first, then the tiles
+func _order(page: int) -> int:
+	return -1 if page == HOME else _app_of(page)
+
+
+# 0..1: how far the page switch has brought the new page in
+func _page_in() -> float:
+	if Txt.anim_level() == 0 or prev_tab == tab:
+		return 1.0
+	return Pal.ease_out(clampf((switch_t - SWITCH_DELAY) / SWITCH_IN, 0.0, 1.0))
+
+
+# 0..1: how far the old page has gone
+func _page_out() -> float:
+	if Txt.anim_level() == 0 or prev_tab == tab:
+		return 1.0
+	return Pal.ease_in(clampf(switch_t / SWITCH_OUT, 0.0, 1.0))
+
+
+func _slide() -> float:
+	return SWITCH_SLIDE if Txt.anim_level() >= 2 else 0.0
+
+
 func _open_app(i: int) -> void:
 	if i < 0 or i >= APPS.size():
 		return
@@ -322,8 +366,13 @@ func _open_app(i: int) -> void:
 
 func _process(dt: float) -> void:
 	t += dt
+	_dt = dt
+	_push_t += dt
 	msg_t += dt
 	deal_t += dt
+	switch_t += dt
+	_step_book()
+	_step_focus(dt)
 	press_t = maxf(0.0, press_t - dt)
 	if press_t <= 0.0:
 		tab_press = -2
@@ -507,6 +556,15 @@ func set_tab(i: int) -> void:
 	if i != tab:
 		sfx.play("switch", Vector2.INF, 0.8)
 		deal_t = 0.0
+		prev_tab = tab
+		prev_sel = sel
+		switch_t = 0.0
+		# the page's own gauges fill in again; the header's stay as they are
+		for k in _sm.keys():
+			if not (str(k) == "rep" or str(k).begins_with("goal:")):
+				_sm.erase(k)
+		var d := _order(i) - _order(tab)
+		switch_dir = 1.0 if d >= 0 else -1.0
 	var was := tab
 	tab = i
 	if book != null:
@@ -1089,23 +1147,24 @@ func _draw() -> void:
 	var ua := 1.0 - Pal.ease_in(lv)
 	_top(s, ua)
 	_crumb(ua)
-	match tab:
-		HOME:
-			_home(s, ua)
-		0:
-			_market(s, ua)
-		1:
-			_shop(s, ua)
-		2:
-			_berth(s, ua)
-		4:
-			_supplies(s, ua)
-		5:
-			_route_page(s, ua)
-		6:
-			_radio_page(s, ua)
-		7:
-			_training_page(s, ua)
+	var pin := _page_in()
+	if pin < 1.0:
+		var po := _page_out()
+		if po < 1.0 and prev_tab != 3:
+			var keep := [tab, sel, deal_t]
+			tab = prev_tab
+			sel = prev_sel
+			deal_t = 10.0
+			draw_set_transform(Vector2(-switch_dir * _slide() * po, 0.0))
+			_page(s, ua * (1.0 - po), false)
+			tab = keep[0]
+			sel = keep[1]
+			deal_t = keep[2]
+		draw_set_transform(Vector2(switch_dir * _slide() * (1.0 - pin), 0.0))
+		_page(s, ua * pin, true)
+		draw_set_transform(Vector2.ZERO)
+	else:
+		_page(s, ua, true)
 	_bottom(s, ua * _bk(1.45, 1.8))
 	_sparks()
 	_radio(s, ua)
@@ -1115,6 +1174,119 @@ func _draw() -> void:
 		_milestone(s)
 	_self_test(s)
 	Hmi.lamp_test = false
+
+
+func _page(s: Vector2, a: float, with_focus: bool) -> void:
+	match tab:
+		HOME:
+			_home(s, a)
+		0:
+			_market(s, a)
+		1:
+			_shop(s, a)
+		2:
+			_berth(s, a)
+		4:
+			_supplies(s, a)
+		5:
+			_route_page(s, a)
+		6:
+			_radio_page(s, a)
+		7:
+			_training_page(s, a)
+	if with_focus:
+		_focus_frame(a)
+
+
+# the pages whose items take the gliding frame
+func _has_focus() -> bool:
+	if leaving >= 0.0:
+		return false
+	match tab:
+		HOME, 1, 4, 5:
+			return not items().is_empty()
+		0:
+			return next_job.is_empty() and not offers().is_empty()
+	return false
+
+
+func _focus_target() -> Rect2:
+	var n := items().size()
+	var i := clampi(sel, 0, maxi(0, n - 1))
+	var r := _item_rect(i)
+	var hk: float = hover_k[i].x if i < hover_k.size() else 0.0
+	var lift := 0.0
+	match tab:
+		HOME:
+			lift = 0.0 if _locked(APPS[i][0]) else 5.0
+		0:
+			lift = 6.0
+		4:
+			lift = 4.0
+		5:
+			lift = 4.0 if _route_nodes()[i].kind == "ship" else 3.0
+	r.position.y -= hk * lift
+	return r.grow(4.0 if tab in [HOME, 0] else 3.0)
+
+
+# a gauge's shown value easing to v (from empty the first time a page shows it)
+func _smooth(key: String, v: float) -> float:
+	var lvl := Txt.anim_level()
+	if lvl == 0:
+		return v
+	var cur: float = _sm.get(key, 0.0)
+	cur = lerpf(cur, v, 1.0 - exp(-_dt / (0.09 if lvl >= 2 else 0.05)))
+	if absf(cur - v) < 0.002:
+		cur = v
+	_sm[key] = cur
+	return cur
+
+
+func _step_focus(dt: float) -> void:
+	if not _has_focus():
+		_focus_tab = -99
+		return
+	var r := _focus_target()
+	var v := [r.position.x, r.position.y, r.size.x, r.size.y]
+	# a new page: the frame starts on its item, it doesn't fly across from the last page
+	var snap := _focus_tab != tab or Txt.anim_level() == 0
+	_focus_tab = tab
+	for k in 4:
+		focus[k].target = v[k]
+		if snap:
+			focus[k].snap(v[k])
+		else:
+			focus[k].step(dt)
+
+
+func _focus_frame(a: float) -> void:
+	if not _has_focus() or _focus_tab != tab:
+		return
+	var r := Rect2(focus[0].x, focus[1].x, focus[2].x, focus[3].x)
+	var k := Pal.ease_out(clampf((deal_t - 0.08) / 0.3, 0.0, 1.0)) * a
+	var dim := tab == HOME and _locked(APPS[clampi(sel, 0, APPS.size() - 1)][0])
+	draw_rect(r, Pal.heat(k, 1.4) if not dim else Pal.heat(0.5 * k, 1.0), false, 4.0 if tab in [HOME, 0] else 3.0)
+
+
+# the skill book is a control of its own: it slides with the pages
+func _step_book() -> void:
+	if book == null:
+		return
+	var off := 0.0
+	if tab == 3:
+		var e := _page_in()
+		book.visible = true
+		book.modulate.a = e
+		off = switch_dir * _slide() * (1.0 - e)
+	elif prev_tab == 3 and _page_out() < 1.0:
+		var e2 := _page_out()
+		book.visible = true
+		book.modulate.a = 1.0 - e2
+		off = -switch_dir * _slide() * e2
+	else:
+		book.visible = false
+	book.offset_left = off
+	book.offset_right = off
 
 
 # how far one part of the self-test has come (0 dark, 1 up), between two moments of it
@@ -1157,21 +1329,33 @@ func _crumb(a: float) -> void:
 	if ka <= 0.0:
 		return
 	var pr := Rect2(40, 134, 540, 46)
-	var where: String = Txt.t("tm_home") if tab == HOME else Txt.t("tm_home") + "   ›   " + Txt.t(APPS[_app_of(tab)][1])
-	Hmi.plate(self, font_s, pr, where, 20, ka)
+	var pin := _page_in()
+	Hmi.plate(self, font_s, pr, "", 20, ka)
+	var tp := pr.position + Vector2(12, pr.size.y * 0.5 + 20 * 0.36)
+	if pin < 1.0:
+		draw_string(font_s, tp + Vector2(-switch_dir * 16.0 * _page_out(), 0), _where(prev_tab), HORIZONTAL_ALIGNMENT_LEFT, pr.size.x - 24, 20, Color(0.95, 0.96, 1.0, ka * (1.0 - _page_out())))
+	draw_string(font_s, tp + Vector2(switch_dir * 16.0 * (1.0 - pin), 0), _where(tab), HORIZONTAL_ALIGNMENT_LEFT, pr.size.x - 24, 20, Color(0.95, 0.96, 1.0, ka * pin))
 	Hmi.lamp(self, Vector2(pr.end.x - 22, pr.get_center().y), Pal.heat(1.0, 1.6), true, ka, 6.0)
-	if tab != HOME:
+	# the way home fades in and out with the pages that have it
+	var hka := ka
+	if pin < 1.0 and (tab == HOME) != (prev_tab == HOME):
+		hka = ka * (pin if tab != HOME else 1.0 - _page_out())
+	if tab != HOME or (pin < 1.0 and prev_tab != HOME and hka > 0.01):
 		var hr := _home_rect()
 		if tab_press == HOME and press_t > 0.0:
-			Hmi.sunk(self, hr, ka, Hmi.PANEL_HI)
+			Hmi.sunk(self, hr, hka, Hmi.PANEL_HI)
 		else:
-			Hmi.raised(self, hr, ka, Hmi.PANEL_HI if hover_home else Hmi.PANEL)
-		_text(Txt.t("tm_home_btn"), hr.position + Vector2(18, 30), 18, Pal.ink(0.95 * ka), font_s)
-		_text("ESC", Vector2(hr.end.x - 14, hr.position.y + 30), 14, Pal.ink(0.5 * ka), font_b, 1)
+			Hmi.raised(self, hr, hka, Hmi.PANEL_HI if hover_home else Hmi.PANEL)
+		_text(Txt.t("tm_home_btn"), hr.position + Vector2(18, 30), 18, Pal.ink(0.95 * hka), font_s)
+		_text("ESC", Vector2(hr.end.x - 14, hr.position.y + 30), 14, Pal.ink(0.5 * hka), font_b, 1)
 	_goal_strip(ka)
 
 
 # the right of the breadcrumb row: the one or two goals, on every page
+func _where(page: int) -> String:
+	return Txt.t("tm_home") if page == HOME else Txt.t("tm_home") + "   ›   " + Txt.t(APPS[_app_of(page)][1])
+
+
 func _goal_box() -> Rect2:
 	return Rect2(840, 134, size.x - 880, 46)
 
@@ -1210,7 +1394,7 @@ func _goal_strip(ka: float) -> void:
 			mw = font_b.get_string_size(miss, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
 		draw_string(font_s, Vector2(g.position.x + 22, g.position.y + 22), name, HORIZONTAL_ALIGNMENT_LEFT, maxf(40.0, g.size.x - mw - 54), 15, Pal.ink((0.95 if pin else 0.7) * ka))
 		_text(miss, Vector2(g.end.x - 18, g.position.y + 22), 13, col if pin or ready else Pal.ink(0.55 * ka), font_b, 1)
-		Hmi.gauge(self, Rect2(g.position.x + 22, g.position.y + 31, g.size.x - 40, 7), Route.progress(n), col if pin else Pal.ink(0.5 * ka), ka, 20)
+		Hmi.gauge(self, Rect2(g.position.x + 22, g.position.y + 31, g.size.x - 40, 7), _smooth("goal:" + str(n.key), Route.progress(n)), col if pin else Pal.ink(0.5 * ka), ka, 20)
 
 
 # a goal in the header clicked: its node on the route page (a skill: the skill book)
@@ -1266,7 +1450,7 @@ func _top(s: Vector2, a: float) -> void:
 				hi = int(l[1])
 		var pk := clampf(float(int(d.rep) - lo) / maxf(1.0, hi - lo), 0.0, 1.0)
 		var gk := a * _bk(0.7, 1.0)
-		Hmi.gauge(self, Rect2(s.x - 40 - 296 + 16, 101, 280, 10), pk, Pal.heat(1.0, 1.3), gk, 12)
+		Hmi.gauge(self, Rect2(s.x - 40 - 296 + 16, 101, 280, 10), _smooth("rep", pk), Pal.heat(1.0, 1.3), gk, 12)
 		_text(Txt.t("tm_rep_next") % nx, Vector2(s.x - 40, 126), 12, Pal.ink(0.5 * gk), font, 1)
 
 
@@ -1320,8 +1504,6 @@ func _market(s: Vector2, a: float) -> void:
 		# dealt from below, lifted on hover; the chosen one framed in heat
 		r.position.y += (1.0 - k) * 36.0 - hk * 6.0
 		Hmi.raised(self, r, k, Hmi.PANEL.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
-		if sk > 0.02:
-			draw_rect(r.grow(4.0), Pal.heat(sk * k, 1.4), false, 4.0)
 		var x := r.position.x + 28
 		var w := r.size.x - 56
 		var y := r.position.y
@@ -1643,8 +1825,6 @@ func _callout_box(i: int, a: float) -> void:
 	draw_line(edge, p, Pal.tint(Pal.AIR, (0.35 + 0.45 * maxf(hk, sk)) * k), 1.2, true)
 	draw_circle(p, 4.0, Pal.heat(k, 1.3) if sk > 0.5 else Pal.tint(Pal.AIR, 0.9 * k, 1.3))
 	Hmi.raised(self, r, k, Hmi.PANEL_LO.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
-	if sk > 0.02:
-		draw_rect(r.grow(3.0), Pal.heat(sk * k, 1.4), false, 3.0)
 	Hmi.lamp(self, r.position + Vector2(22, r.size.y * 0.5), Hmi.ok_col() if have else (Hmi.warn_col() if short else Hmi.can_col()), true, k)
 	_text(Txt.t(it[3]), r.position + Vector2(42, 28), 17, Pal.ink(0.96 * k), font_s)
 	if have:
@@ -1667,8 +1847,6 @@ func _fac_cell(i: int, it: Array, a: float) -> void:
 	var locked: bool = not have and REQUIRES.has(it[0]) and not d.upgrades.has(REQUIRES[it[0]])
 	var short: bool = not have and float(d.money) < float(it[2])
 	Hmi.raised(self, r, k, Hmi.PANEL_LO.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
-	if sk > 0.02:
-		draw_rect(r.grow(3.0), Pal.heat(sk * k, 1.4), false, 3.0)
 	Hmi.lamp(self, r.position + Vector2(16, 20), Hmi.ok_col() if have else (Hmi.warn_col() if locked or short else Hmi.can_col()), true, k, 5.0)
 	_text(Txt.t(it[3]), r.position + Vector2(30, 26), 14, Pal.ink(0.95 * k), font_s)
 	_text(Txt.t("tm_installed") if have else Pal.money(it[2]), r.position + Vector2(30, r.size.y - 12), 13, Pal.tint(Pal.FLUID, 0.95 * k, 1.1) if have else Pal.ink((0.85 if not short and not locked else 0.45) * k), font_b)
@@ -1683,8 +1861,6 @@ func _cell(i: int, a: float) -> void:
 	var k := Pal.ease_out(clampf((deal_t - 0.1 - i * 0.05) / 0.3, 0.0, 1.0)) * a
 	r.position.y += (1.0 - k) * 24.0 - hk * 4.0
 	Hmi.raised(self, r, k, Hmi.PANEL.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
-	if sk > 0.02:
-		draw_rect(r.grow(3.0), Pal.heat(sk * k, 1.4), false, 3.0)
 	var n := int(Career.data.items.get(it[0], 0))
 	var sc := Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, r.size.y * 0.5)
 	Hmi.screen(self, sc, k)
@@ -1972,7 +2148,14 @@ func _bottom(s: Vector2, a: float) -> void:
 				ok = false
 				note = Txt.t("tm_onsite_no")
 	if label != "":
-		Hmi.push(self, font_s, r, label.replace("   Enter", ""), ok, 1.0 if hover_go else 0.0, a, t, shake, note, "ENTER" if label.ends_with("Enter") else "", 1.0 if press_t > 0.0 and tab_press == -2 else 0.0)
+		var shown := label.replace("   Enter", "")
+		if shown != _push_label:
+			# a new page brings its own button in; on the same page the label crossfades
+			_push_old = _push_label if _page_in() >= 1.0 else ""
+			_push_label = shown
+			_push_t = 0.0
+		var swap := 1.0 if Txt.anim_level() == 0 else Pal.ease_out(clampf(_push_t / 0.16, 0.0, 1.0))
+		Hmi.push(self, font_s, r, shown, ok, 1.0 if hover_go else 0.0, a * _page_in(), t, shake, note, "ENTER" if label.ends_with("Enter") else "", 1.0 if press_t > 0.0 and tab_press == -2 else 0.0, _push_old, swap)
 	_text(Txt.t("tm_keys_onsite") if overlay else Txt.t("tm_keys"), Vector2(60, s.y - 34), 13, Pal.ink(0.45 * a), font)
 	if msg != "" and msg_t < 3.0:
 		var mk := clampf((3.0 - msg_t) / 0.4, 0.0, 1.0) * Pal.ease_out(clampf(msg_t / 0.2, 0.0, 1.0))
@@ -2015,8 +2198,6 @@ func _leave(s: Vector2, lv: float) -> void:
 func _story_card(o: Dictionary, r: Rect2, k: float, hk: float, sk: float) -> void:
 	r.position.y += (1.0 - k) * 36.0 - hk * 6.0
 	Hmi.raised(self, r, k, Hmi.PANEL.lerp(Hmi.PANEL_HI, maxf(hk * 0.6, sk)))
-	if sk > 0.02:
-		draw_rect(r.grow(4.0), Pal.heat(sk * k, 1.4), false, 4.0)
 	var x := r.position.x + 28
 	var y := r.position.y
 	var ty: Dictionary = Market.type_of(str(o.get("ship", "gr7")))
@@ -2181,8 +2362,6 @@ func _home(s: Vector2, a: float) -> void:
 		r.position.y += (1.0 - k) * 30.0 - (hk * 5.0 if not locked else 0.0)
 		var ka := k * (0.62 if locked else 1.0)
 		Hmi.raised(self, r, ka, Hmi.PANEL_HI if on and not locked else Hmi.PANEL.lerp(Hmi.PANEL_HI, hk * 0.5))
-		if on:
-			draw_rect(r.grow(4.0), Pal.heat(k, 1.4) if not locked else Pal.heat(0.5 * k, 1.0), false, 4.0)
 		var sc := Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, r.size.y * 0.5)
 		Hmi.screen(self, sc, ka)
 		_app_icon(page, sc.get_center(), (1.0 if not locked else 0.35) * k)
@@ -2346,9 +2525,7 @@ func _route_ship(n: Dictionary, p: Vector2, next: bool, on: bool, hk: float, k: 
 	draw_arc(p, 26.0, 0.0, TAU, 36, rc, 3.0 if next else 2.0, true)
 	if next:
 		draw_arc(p, 34.0 + 3.0 * sin(t * 3.0), 0.0, TAU, 40, Pal.heat(0.5 * k, 1.3), 2.0, true)
-	if on:
-		draw_rect(Rect2(p - Vector2(72, 92), Vector2(144, 196)), Pal.heat(k, 1.4), false, 3.0)
-	elif hk > 0.0:
+	if hk > 0.0 and not on:
 		draw_rect(Rect2(p - Vector2(72, 92), Vector2(144, 196)), Pal.ink(0.3 * hk * k), false, 1.5)
 	var lit := open or next or pin
 	_text(("★ " if pin else "") + str(n.cls), p + Vector2(0, -60), 22, Pal.heat(k, 1.3) if pin else Pal.ink((0.95 if lit else 0.55) * k), font_s, 0)
@@ -2374,9 +2551,7 @@ func _route_box(n: Dictionary, r: Rect2, on: bool, hk: float, k: float) -> void:
 	r.position.y -= hk * 3.0
 	var ka := k * (0.6 if done else 1.0)
 	Hmi.raised(self, r, ka, Hmi.PANEL_HI if on else Hmi.PANEL.lerp(Hmi.PANEL_HI, hk * 0.5))
-	if on:
-		draw_rect(r.grow(4.0), Pal.heat(k, 1.4), false, 3.0)
-	elif pin:
+	if pin and not on:
 		draw_rect(r.grow(2.0), Pal.heat(0.9 * k, 1.3), false, 2.0)
 	var right := Pal.money(float(n.price)) if n.kind == "buy" else ""
 	var rw := font_b.get_string_size(right, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
@@ -2384,7 +2559,7 @@ func _route_box(n: Dictionary, r: Rect2, on: bool, hk: float, k: float) -> void:
 	if right != "":
 		_text(right, Vector2(r.end.x - 12, r.position.y + 21), 13, Pal.ink((0.85 if not done else 0.5) * k), font_b, 1)
 	var col := green if done or n.ready else Pal.heat(k, 1.2)
-	Hmi.gauge(self, Rect2(r.position.x + 12, r.position.y + 29, r.size.x - 24, 6), Route.progress(n), col, ka, 14)
+	Hmi.gauge(self, Rect2(r.position.x + 12, r.position.y + 29, r.size.x - 24, 6), _smooth("rb:" + str(n.key), Route.progress(n)), col, ka, 14)
 	var note := (Txt.t("rt_owned") if n.kind == "buy" else Txt.t("rt_open")) if done else Route.missing(n)
 	draw_string(font_b, r.position + Vector2(12, 52), note, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24, 12, green if done or n.ready else Pal.ink(0.6 * k))
 
@@ -2411,7 +2586,7 @@ func _route_detail(s: Vector2, a: float) -> void:
 		var cc := green if c.ok else Pal.heat(k, 1.3)
 		_text(str(c.label), Vector2(cx, dr.position.y + 94), 15, Pal.ink(0.6 * k), font_b)
 		_text(("✓ " if c.ok else "") + str(c.now), Vector2(cx + cw, dr.position.y + 94), 18, cc, font_s, 1)
-		Hmi.gauge(self, Rect2(cx, dr.position.y + 106, cw, 10), float(c.frac), cc, k, 16)
+		Hmi.gauge(self, Rect2(cx, dr.position.y + 106, cw, 10), _smooth("rd:%s:%d" % [n.key, i], float(c.frac)), cc, k, 16)
 	var hint := ""
 	match str(n.kind):
 		"ship":

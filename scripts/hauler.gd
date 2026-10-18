@@ -385,6 +385,13 @@ func _draw() -> void:
 	if body != null and is_instance_valid(body) and state in ["carry", "release"]:
 		draw_line(pos, body.global_transform * body.center_of_mass, Pal.tint(Pal.AIR, 0.5, 1.2), 1.2, true)
 	var sc := R / 20.0
+	# off the screen it isn't drawn at all
+	if game != null and game.cam != null:
+		var z: float = game.cam_zoom()
+		var view := get_viewport_rect().size / z
+		if not Rect2(game.cam.position - view * 0.5, view).grow(80.0).has_point(pos):
+			return
+		Art.set_scale(sc * z)
 	var xf := Transform2D(0.0, Vector2(sc, sc), 0.0, pos)
 	draw_set_transform_matrix(xf)
 	var busy := state != "idle"
@@ -393,4 +400,5 @@ func _draw() -> void:
 	Art.draw(self, "tripod" if who == "hauler2" else "coreclaw", {"heading": heading, "tool": 3 if busy else 0, "open": 1.0 if state in ["carry", "release"] else (0.4 if busy else 0.0),
 		"t": t, "thrust": push, "dash": false, "design": "", "base_xf": xf})
 	Art.tint = Color(1, 1, 1)
+	Art.lite = false
 	draw_set_transform_matrix(Transform2D.IDENTITY)
