@@ -1,5 +1,5 @@
 extends SceneTree
-# Builds GR-7 alone and photographs it: tools/run_test.sh tests/ship_shot.gd -- [reveal] [zoom] [cx] [cy] [name]
+# Builds a ship alone (GR-7 unless named) and photographs it: tools/run_test.sh tests/ship_shot.gd -- [reveal] [zoom] [cx] [cy] [name] [ship]
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -11,7 +11,7 @@ func _initialize() -> void:
 	root.add_child(preload("res://tests/test_window.gd").new())
 	var w := World.new()
 	root.add_child(w)
-	Ship.build(w, Ship.load_data("gr7"))
+	Ship.build(w, Ship.load_data(args[5] if args.size() > 5 else "gr7"))
 	w.finalize()
 	if reveal:
 		for n in w.rooms:

@@ -10,7 +10,7 @@ const BASE_ZONES := {
 	"metal": {"pos": Vector2(21.0, 7.7), "face": Vector2(0, -1), "w": 4.6},
 	"hazard": {"pos": Vector2(43.6, 6.9), "face": Vector2(0, -1), "w": 3.2},
 }
-const NET := Vector2(2.8, 8.3)
+static var NET := Vector2(2.8, 8.3)
 const BAY := Vector2(-5.0, -6.0)
 # The berth's length (roadmap 4.1): the standard berth's floor ends at 50 m;
 # the extension (a career purchase) takes it to EXTENDED. Everything along
@@ -55,7 +55,7 @@ static var MASTS: Array = [Vector2(5.0, -10.0), Vector2(23.0, -10.0), Vector2(38
 # semi-open berth: a floor platform, a tower on the left with an arm reaching
 # over the ship; the top and the right are open to space, held only by a
 # tractor field that eases strays back in
-const FLOOR_Y := 9.0
+static var FLOOR_Y := 9.0
 static var FLOOR_X1 := 50.0
 const TOWER_X := -7.4
 static var ARM_X1 := 27.5
@@ -67,7 +67,7 @@ const CATCH := 1.3
 # small field. Along the bottom of the berth runs a scrap trough: scrap that
 # drops into it rides a conveyor to the furnace (design/体验打磨定案.md §6)
 const SCRAP_FIELD := 7.0
-const TROUGH_Y := 8.2               # m: the trough's lip; below it a body is in the trough
+static var TROUGH_Y := 8.2          # m: the trough's lip; below it a body is in the trough
 const TROUGH_X0 := 5.5
 static var TROUGH_X1 := 40.5        # stops short of the hazard mouth
 const CONVEY := 7.0                 # m/s along the trough
@@ -83,7 +83,7 @@ var mouth_target := 21.0
 const EQUIP_RAIL_X0 := 0.5          # m: the rail's near end (clear of the drone bay)
 const EQUIP_GAP := 7.0              # m: two bays on the rail keep this far apart
 const EQUIP_SPEED := 9.0            # m/s along the rail
-const RAIL_Y := -10.0               # m: the rail, under the boom
+static var RAIL_Y := -10.0          # m: the rail, under the boom
 static var equip_x := {}            # bay id -> where it sits on the rail (m); a bay not in it is at home
 var equip_goal := {}
 
@@ -92,30 +92,50 @@ static func equip_rail_x1() -> float:
 	return FLOOR_X1 - 3.5
 
 
-# lay the berth out for a floor ending at x (m): STANDARD or EXTENDED
-static func configure(x: float) -> void:
+# How tall the berth is (fleet expansion 2026-10-19): it was laid out for ships within
+# about -8.6 / +7.0 m of the keel line; a taller one (PT-34's bridge and radar, its
+# belly gun) lifts the boom, the rail and the equipment bays above it and drops the
+# floor, the trough, the furnace and the hazard bay below it, by what it needs
+# beyond that and a margin. The ships that always fitted see no change.
+const FIT_TOP := -8.6
+const FIT_BOTTOM := 7.0
+const FIT_MARGIN := 0.8
+static var LIFT := 0.0              # m the top of the berth was lifted
+static var DROP := 0.0              # m the bottom was dropped
+
+
+# lay the berth out for a floor ending at x (m), for a ship reaching from top to
+# bottom (m, y down; 0 / 0 for one that fits the berth as it always was)
+static func configure(x: float, top: float = 0.0, bottom: float = 0.0) -> void:
 	floor_end = x
 	var d := x - STANDARD
 	FLOOR_X1 = x
-	BOUNDS = Rect2(-6.8, -15.0, 63.0 + d, 24.0)
+	LIFT = maxf(0.0, FIT_TOP - top + FIT_MARGIN) if top < FIT_TOP else 0.0
+	DROP = maxf(0.0, bottom - FIT_BOTTOM + FIT_MARGIN) if bottom > FIT_BOTTOM else 0.0
+	FLOOR_Y = 9.0 + DROP
+	TROUGH_Y = 8.2 + DROP
+	NET = Vector2(2.8, 8.3 + DROP)
+	RAIL_Y = -10.0 - LIFT
+	BUFFER = Rect2(-6.0, -14.2 - LIFT, 8.0, 3.8)
+	BOUNDS = Rect2(-6.8, -15.0 - LIFT, 63.0 + d, 24.0 + LIFT + DROP)
 	TROUGH_X1 = 40.5 + d
 	ARM_X1 = 27.5 + d * 0.6
 	ZONES = BASE_ZONES.duplicate(true)
-	ZONES.hazard.pos.x += d
-	ZONES.equip.pos.x += d * 0.45
+	ZONES.hazard.pos += Vector2(d, DROP)
+	ZONES.equip.pos += Vector2(d * 0.45, -LIFT)
 	equip_x.clear()
-	ZONES.metal.pos.x += d * 0.45
+	ZONES.metal.pos += Vector2(d * 0.45, DROP)
 	metal_home = ZONES.metal.pos.x
-	MASTS = [Vector2(5.0, -10.0), Vector2(23.0 + d * 0.45, -10.0), Vector2(38.0 + d, 6.6)]
+	MASTS = [Vector2(5.0, RAIL_Y), Vector2(23.0 + d * 0.45, RAIL_Y), Vector2(38.0 + d, 6.6 + DROP)]
 	if d > 0.0:
-		MASTS.append(Vector2(23.0 + d * 1.1, -10.0))
+		MASTS.append(Vector2(23.0 + d * 1.1, RAIL_Y))
 
 
 # the second equipment bay (roadmap 4.4, "more ports"): over the berth's far
 # end, so a long ship's stern half has an equipment mouth near it too. It takes
 # what the first takes; "kind" says which mouth it stands for.
 static func add_port2() -> void:
-	ZONES["equip2"] = {"pos": Vector2(FLOOR_X1 - 10.0, -8.4), "face": Vector2(0, 1), "w": 4.2, "kind": "equip"}
+	ZONES["equip2"] = {"pos": Vector2(FLOOR_X1 - 10.0, -8.4 - LIFT), "face": Vector2(0, 1), "w": 4.2, "kind": "equip"}
 	equip_x.erase("equip2")
 
 
@@ -141,7 +161,7 @@ static func nearest(k: String, from: Vector2) -> String:
 # the buffer platform (roadmap 4.4): a parking deck over the berth's near end,
 # on top of the boom, where the tractor field holds whatever is let go on it
 # until it is fetched (clear of the boom: what rests on it never touches it)
-const BUFFER := Rect2(-6.0, -14.2, 8.0, 3.8)
+static var BUFFER := Rect2(-6.0, -14.2, 8.0, 3.8)
 
 
 func in_buffer(b) -> bool:
@@ -229,7 +249,7 @@ func _bounds() -> void:
 	for ch in bounds_body.get_children():
 		ch.queue_free()
 	var M := Geom.M
-	var segs := [[Vector2(TOWER_X, FLOOR_Y) * M, Vector2(FLOOR_X1, FLOOR_Y) * M], [Vector2(TOWER_X + 0.6, -12.6) * M, Vector2(TOWER_X + 0.6, FLOOR_Y) * M], [Vector2(TOWER_X, -10.0) * M, Vector2(ARM_X1, -10.0) * M]]
+	var segs := [[Vector2(TOWER_X, FLOOR_Y) * M, Vector2(FLOOR_X1, FLOOR_Y) * M], [Vector2(TOWER_X + 0.6, RAIL_Y - 2.6) * M, Vector2(TOWER_X + 0.6, FLOOR_Y) * M], [Vector2(TOWER_X, RAIL_Y) * M, Vector2(ARM_X1, RAIL_Y) * M]]
 	for s in segs:
 		var cs := CollisionShape2D.new()
 		var sh := SegmentShape2D.new()
@@ -722,12 +742,13 @@ func _draw_static() -> void:
 	var ci := static_node
 	var M := Geom.M
 	# the berth's back wall: a dark bay behind the ship, ribbed, its number painted big
-	var wall := PackedVector2Array([Vector2(TOWER_X + 0.6, -10.0) * M, Vector2(ARM_X1, -10.0) * M, Vector2(ARM_X1 + 4.0, -5.0) * M,
-		Vector2(FLOOR_X1 - 6.0, -5.0) * M, Vector2(FLOOR_X1 - 2.0, FLOOR_Y) * M, Vector2(TOWER_X + 0.6, FLOOR_Y) * M])
+	var low := -5.0 - LIFT
+	var wall := PackedVector2Array([Vector2(TOWER_X + 0.6, RAIL_Y) * M, Vector2(ARM_X1, RAIL_Y) * M, Vector2(ARM_X1 + 4.0, low) * M,
+		Vector2(FLOOR_X1 - 6.0, low) * M, Vector2(FLOOR_X1 - 2.0, FLOOR_Y) * M, Vector2(TOWER_X + 0.6, FLOOR_Y) * M])
 	ci.draw_colored_polygon(wall, Color(0.015, 0.017, 0.021, 0.92))
 	var wx := TOWER_X + 6.0
 	while wx < FLOOR_X1 - 6.0:
-		var top := -10.0 if wx <= ARM_X1 else (-5.0 if wx >= ARM_X1 + 4.0 else lerpf(-10.0, -5.0, (wx - ARM_X1) / 4.0))
+		var top := RAIL_Y if wx <= ARM_X1 else (low if wx >= ARM_X1 + 4.0 else lerpf(RAIL_Y, low, (wx - ARM_X1) / 4.0))
 		ci.draw_rect(Rect2(Vector2(wx - 0.18, top) * M, Vector2(0.36 * M, (FLOOR_Y - top) * M)), Color(0.017, 0.019, 0.024))
 		ci.draw_line(Vector2(wx - 0.18, top) * M, Vector2(wx - 0.18, FLOOR_Y) * M, Pal.ink(0.07), 1.0)
 		wx += 6.0
@@ -736,7 +757,7 @@ func _draw_static() -> void:
 	# a strip of small lit ports high on the wall
 	var px := TOWER_X + 2.0
 	while px < ARM_X1 - 1.0:
-		ci.draw_rect(Rect2(Vector2(px, -9.3) * M, Vector2(0.2 * M, 0.2 * M)), Pal.ink(0.07))
+		ci.draw_rect(Rect2(Vector2(px, RAIL_Y + 0.7) * M, Vector2(0.2 * M, 0.2 * M)), Pal.ink(0.07))
 		px += 1.2
 	var wcl := wall.duplicate()
 	wcl.append(wall[0])
@@ -748,11 +769,11 @@ func _draw_static() -> void:
 		var l0 := Vector2(lx * M, (FLOOR_Y + 0.6) * M)
 		ci.draw_line(l0, l0 + Vector2(-0.8 * M, 5.0 * M), Pal.ink(0.18), 1.4)
 		ci.draw_line(l0 + Vector2(0.6 * M, 0), l0 + Vector2(1.4 * M, 5.0 * M), Pal.ink(0.18), 1.4)
-	_truss_v(Rect2(TOWER_X * M, -12.6 * M, 0.6 * M, (FLOOR_Y + 12.6) * M))
-	_truss(Rect2(TOWER_X * M, -10.6 * M, (ARM_X1 - TOWER_X) * M, 0.6 * M))
-	ci.draw_line(Vector2(TOWER_X + 0.6, -6.0) * M, Vector2(TOWER_X + 6.0, -10.0) * M, Pal.ink(0.22), 2.0)
-	ci.draw_rect(Rect2((ARM_X1 - 0.3) * M, -10.8 * M, 0.5 * M, 1.0 * M), Color(0.07, 0.073, 0.082))
-	ci.draw_rect(Rect2((ARM_X1 - 0.3) * M, -10.8 * M, 0.5 * M, 1.0 * M), Pal.ink(0.5), false, 1.2)
+	_truss_v(Rect2(TOWER_X * M, (RAIL_Y - 2.6) * M, 0.6 * M, (FLOOR_Y - RAIL_Y + 2.6) * M))
+	_truss(Rect2(TOWER_X * M, (RAIL_Y - 0.6) * M, (ARM_X1 - TOWER_X) * M, 0.6 * M))
+	ci.draw_line(Vector2(TOWER_X + 0.6, RAIL_Y + 4.0) * M, Vector2(TOWER_X + 6.0, RAIL_Y) * M, Pal.ink(0.22), 2.0)
+	ci.draw_rect(Rect2((ARM_X1 - 0.3) * M, (RAIL_Y - 0.8) * M, 0.5 * M, 1.0 * M), Color(0.07, 0.073, 0.082))
+	ci.draw_rect(Rect2((ARM_X1 - 0.3) * M, (RAIL_Y - 0.8) * M, 0.5 * M, 1.0 * M), Pal.ink(0.5), false, 1.2)
 	ci.draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Color(0.07, 0.073, 0.082))
 	ci.draw_rect(Rect2((FLOOR_X1 - 0.2) * M, (FLOOR_Y - 0.3) * M, 0.5 * M, 1.2 * M), Pal.ink(0.5), false, 1.2)
 
@@ -773,7 +794,7 @@ func _draw_static() -> void:
 	ci.draw_string(font_b, sr.position + Vector2(14, 21), game.txt("trough"), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Pal.ink(0.9))
 	# the open ends: striped, so the edge of the berth reads at a glance
 	_stripes(Rect2((FLOOR_X1 - 2.2) * M, FLOOR_Y * M + 3, 2.0 * M, 0.6 * M - 6))
-	_stripes(Rect2((ARM_X1 - 2.0) * M, -10.6 * M + 3, 1.6 * M, 0.6 * M - 6))
+	_stripes(Rect2((ARM_X1 - 2.0) * M, (RAIL_Y - 0.6) * M + 3, 1.6 * M, 0.6 * M - 6))
 	# the equipment bays' rail: under the boom, and on past it on a slim girder
 	var rx0 := (EQUIP_RAIL_X0 - 2.6) * M
 	var rx1 := (equip_rail_x1() + 2.6) * M
@@ -868,9 +889,9 @@ func _draw_clamps() -> void:
 		var x: float = clamps[i].x * M
 		var k: float = Pal.ease_io(clamp_t[i])
 		var top := lerpf(clamps[i].y * M, 7.6 * M, k)
-		clamp_node.draw_rect(Rect2(x - 7, top + 10, 14, 9.0 * M - top - 10), Color(0.07, 0.073, 0.082))
-		clamp_node.draw_rect(Rect2(x - 7, top + 10, 14, 9.0 * M - top - 10), ink, false, 1.2)
-		for yy in range(int(top + 22), int(9.0 * M), 18):
+		clamp_node.draw_rect(Rect2(x - 7, top + 10, 14, FLOOR_Y * M - top - 10), Color(0.07, 0.073, 0.082))
+		clamp_node.draw_rect(Rect2(x - 7, top + 10, 14, FLOOR_Y * M - top - 10), ink, false, 1.2)
+		for yy in range(int(top + 22), int(FLOOR_Y * M), 18):
 			clamp_node.draw_line(Vector2(x - 7, yy), Vector2(x + 7, yy + 9), Pal.ink(0.12), 1.0)
 		var open := k * 9.0
 		clamp_node.draw_polyline(PackedVector2Array([Vector2(x - 16 - open, top + 2), Vector2(x - 16 - open, top + 12), Vector2(x + 16 + open, top + 12), Vector2(x + 16 + open, top + 2)]), Pal.ink(0.75), 2.0, true)
@@ -1298,7 +1319,7 @@ func _draw_lights() -> void:
 	var tex: Texture2D = game.fx.glow_tex
 	# floodlights: a soft cone down onto the ship, a bright head on the boom
 	for fx_ in FLOODS:
-		var hp := Vector2(fx_, -9.9) * M
+		var hp := Vector2(fx_, RAIL_Y + 0.1) * M
 		# the cone fades out downwards (bright at the lamp, nothing by the hull's far side)
 		var cone := PackedVector2Array([hp + Vector2(-10, 0), hp + Vector2(10, 0), hp + Vector2(3.2 * M, 8.0 * M), hp + Vector2(-3.2 * M, 8.0 * M)])
 		var cc := PackedColorArray([Pal.ink(0.045, 1.2), Pal.ink(0.045, 1.2), Pal.ink(0.0), Pal.ink(0.0)])
@@ -1316,7 +1337,7 @@ func _draw_lights() -> void:
 	x = TOWER_X + 1.0
 	while x < ARM_X1 - 0.5:
 		var a2 := 0.12 + 0.12 * sin(t * 1.5 + x)
-		add_node.draw_circle(Vector2(x, -10.0) * M + Vector2(0, 2), 1.8, Pal.ink(a2, 1.6))
+		add_node.draw_circle(Vector2(x, RAIL_Y) * M + Vector2(0, 2), 1.8, Pal.ink(a2, 1.6))
 		x += 3.0
 
 
@@ -1326,7 +1347,7 @@ func _draw_add() -> void:
 	var M := Geom.M
 	# beacons on the open ends of the arm and the platform, and the field corners
 	var blink := 0.5 + 0.5 * sin(t * 2.4)
-	for bp in [Vector2(ARM_X1, -10.3), Vector2(FLOOR_X1, FLOOR_Y + 0.3)]:
+	for bp in [Vector2(ARM_X1, RAIL_Y - 0.3), Vector2(FLOOR_X1, FLOOR_Y + 0.3)]:
 		add_node.draw_texture_rect(tex, Rect2(bp * M - Vector2(18, 18), Vector2(36, 36)), false, Pal.heat(0.25 + 0.6 * blink, 1.8))
 		add_node.draw_circle(bp * M, 2.5, Pal.heat(0.6 + 0.4 * blink, 2.0))
 	var fr := Rect2((BOUNDS.position + Vector2(0.0, 2.0)) * M, (BOUNDS.size - Vector2(2.5, 2.0)) * M)

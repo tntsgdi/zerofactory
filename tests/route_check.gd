@@ -57,7 +57,9 @@ func _run() -> void:
 	# ---------------------------------------------------------------- the model
 	var ns := Route.nodes()
 	var ships := ns.filter(func(n): return n.kind == "ship").map(func(n): return n.id)
-	check(ships == ["tug", "s09", "gr7", "pod", "h22", "m14", "med47", "fr26"], "ships in the order a career meets them: %s" % [ships])
+	# the first eight as the career has always met them; the fleet expansion's after them, by reputation
+	var later: Array = Market.POOL.filter(func(e): return int(e[2]) > 12).map(func(e): return e[0])
+	check(ships.slice(0, 8) == ["tug", "s09", "gr7", "pod", "h22", "m14", "med47", "fr26"] and ships.slice(8) == later, "ships in the order a career meets them: %s" % [ships])
 	var m14 := Route.find("ship:m14")
 	check(not m14.done and Route.missing(m14) == "还差 1 点声望 · 要扩建船坞", "M-14 one reputation point short: %s" % Route.missing(m14))
 	var med := Route.find("ship:med47")

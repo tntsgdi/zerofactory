@@ -64,6 +64,80 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 		"cover":
 			L(ci, Vector2(w * 0.2, h * 0.5), Vector2(w * 0.8, h * 0.5), 0.3)
 			ci.draw_string(font, Vector2(w * 0.12, h * 0.3), "SERVICE", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.35))
+		"armor":
+			# a ring quad (outer a b, inner c d): a seam line inset from the outside, rivets down the middle
+			if p != null and p.poly.size() == 4:
+				var o: Vector2 = Geom.bbox(p.poly).position
+				var q: PackedVector2Array = p.poly
+				L(ci, q[0].lerp(q[3], 0.3) - o, q[1].lerp(q[2], 0.3) - o, 0.3)
+				var m0: Vector2 = (q[0] + q[3]) * 0.5 - o
+				var m1: Vector2 = (q[1] + q[2]) * 0.5 - o
+				var n := clampi(int(m0.distance_to(m1) / 34.0), 1, 24)
+				for i in n:
+					ci.draw_circle(m0.lerp(m1, (i + 0.5) / n), 1.4, Pal.ink(0.45))
+			else:
+				var hz := w >= h
+				for i in 6:
+					var t := (i + 0.5) / 6.0
+					ci.draw_circle(Vector2(w * t, h * 0.5) if hz else Vector2(w * 0.5, h * t), 1.4, Pal.ink(0.45))
+		"barrel":
+			L(ci, Vector2(2, h * 0.5), Vector2(w - 2, h * 0.5), 0.3)
+			for x in [0.04, 0.07, 0.6, 0.94]:
+				L(ci, Vector2(w * x, 1), Vector2(w * x, h - 1), 0.45)
+		"turret":
+			L(ci, Vector2(w * 0.3, h * 0.35), Vector2(w * 0.8, h * 0.35), 0.35)
+			box(ci, Rect2(w * 0.55, h * 0.12, w * 0.14, h * 0.16), 0.45)
+			for i in 3:
+				L(ci, Vector2(w * (0.2 + i * 0.05), h * 0.6), Vector2(w * (0.2 + i * 0.05), h * 0.9), 0.3)
+			ci.draw_string(font, Vector2(w * 0.4, h * 0.82), "76", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.4))
+		"gun_mount":
+			ci.draw_arc(Vector2(w * 0.5, 0), w * 0.4, 0.0, PI, 20, Pal.ink(0.5), 1.0, true)
+			for i in 5:
+				L(ci, Vector2(w * (0.18 + i * 0.16), h * 0.5), Vector2(w * (0.18 + i * 0.16), h * 0.95), 0.25)
+		"missile", "shell":
+			# along its long side: the nose, the body's bands, the fins (a round: its driving band)
+			var hz := w > h
+			var ln := w if hz else h
+			var br := h if hz else w
+			var at := func(u: float, v: float) -> Vector2: return Vector2(u, v) if hz else Vector2(v, u)
+			ci.draw_polyline(PackedVector2Array([at.call(ln * 0.12, 1.0), at.call(1.0, br * 0.5), at.call(ln * 0.12, br - 1.0)]), Pal.ink(0.5), 1.0, true)
+			if art == "missile":
+				for u in [0.3, 0.62]:
+					L(ci, at.call(ln * u, 1.0), at.call(ln * u, br - 1.0), 0.35)
+				L(ci, at.call(ln * 0.84, 0.0), at.call(ln, 0.0), 0.5)
+				L(ci, at.call(ln * 0.84, br), at.call(ln, br), 0.5)
+			else:
+				L(ci, at.call(ln * 0.7, 1.0), at.call(ln * 0.7, br - 1.0), 0.5)
+				L(ci, at.call(ln * 0.76, 1.0), at.call(ln * 0.76, br - 1.0), 0.5)
+			if p != null and p.has_meta("wet"):
+				ci.draw_string(font, at.call(ln * 0.36, br * 0.5) + Vector2(-8, 3), "WET", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.55))
+		"drum":
+			ring(ci, Vector2(w * 0.5, h * 0.5), minf(w, h) * 0.4, 0.5)
+			for i in 6:
+				var a := TAU * i / 6.0
+				L(ci, Vector2(w * 0.5, h * 0.5), Vector2(w * 0.5, h * 0.5) + Vector2(cos(a), sin(a)) * minf(w, h) * 0.38, 0.3)
+		"decoy":
+			for i in 3:
+				var x := w * (0.2 + i * 0.3)
+				L(ci, Vector2(x, h * 0.95), Vector2(x + w * 0.12, h * 0.1), 0.5, 2.0)
+		"launcher":
+			L(ci, Vector2(2, h * 0.5), Vector2(w - 2, h * 0.5), 0.35)
+			ci.draw_string(font, Vector2(w * 0.4, h * 0.9), "BOX L", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.4))
+		"ciws":
+			ci.draw_arc(Vector2(w * 0.5, h * 0.62), w * 0.3, PI, TAU, 18, Pal.ink(0.5), 1.0, true)
+			for i in 3:
+				L(ci, Vector2(w * 0.06, h * (0.52 + i * 0.1)), Vector2(w * 0.3, h * (0.52 + i * 0.1)), 0.4)
+		"radar":
+			for i in 7:
+				L(ci, Vector2(w * (0.1 + i * 0.13), h * 0.15), Vector2(w * (0.12 + i * 0.12), h * 0.85), 0.3)
+			L(ci, Vector2(w * 0.05, h * 0.5), Vector2(w * 0.95, h * 0.5), 0.3)
+		"reactor":
+			var c := Vector2(w * 0.5, h * 0.5)
+			for k in 3:
+				ring(ci, c, minf(w, h) * (0.18 + k * 0.1), 0.45 - k * 0.1)
+			for i in 5:
+				L(ci, Vector2(w * (0.3 + i * 0.1), h * 0.04), Vector2(w * (0.3 + i * 0.1), c.y - minf(w, h) * 0.2), 0.3)
+			ci.draw_string(font, Vector2(w * 0.32, h * 0.92), (p.tag + "  " + p.label).strip_edges() if p != null else "", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.5))
 		"gastank":
 			var r := w * 0.42
 			ci.draw_arc(Vector2(w * 0.5, r + 2), r, PI, TAU, 18, Pal.ink(0.55), 1.0, true)

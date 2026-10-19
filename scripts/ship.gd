@@ -43,6 +43,18 @@ static func _poly(a: Array) -> PackedVector2Array:
 	return out
 
 
+# how far a ship reaches above and below its keel line: Vector2(top, bottom) in m, y down
+# (the berth lifts its top and drops its floor for a tall one: Dock.configure)
+static func extent(d: Dictionary) -> Vector2:
+	var top := 0.0
+	var bottom := 0.0
+	for pd in d.get("pieces", []):
+		for q in pd.get("poly", []):
+			top = minf(top, float(q[1]))
+			bottom = maxf(bottom, float(q[1]))
+	return Vector2(top, bottom)
+
+
 # Everything: pieces, joints, lines, controls and rooms. Returns key -> piece.
 static func build(w, d: Dictionary) -> Dictionary:
 	var by_key := {}

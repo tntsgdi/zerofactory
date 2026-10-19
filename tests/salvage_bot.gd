@@ -265,6 +265,14 @@ func _prep() -> void:
 			_note("own supply %s off" % sw)
 			_work(2.5)
 			return
+	# a capacitor on its own network (a warship's weapons) bleeds only at its own discharge point
+	for tg in s.iso:
+		var ic: Dictionary = s.iso[tg]
+		if ic.get("kind", "") == "cap" and ic.get("discharge", "") != "" and ic.charge > 0.02 and not s.on(ic.discharge) and not _hidden(ic.discharge) and _once("iso dis " + ic.discharge):
+			_w(ic.discharge)
+			_note("discharge %s" % ic.discharge)
+			_work(2.5)
+			return
 	var fed := false
 	for tg in s.src_order:
 		if s.src[tg].kind != "cap" and s._feeding(s.src[tg]):
@@ -298,7 +306,7 @@ func _prep() -> void:
 	# a room with things inside that need a hose or a switch opens once it is empty
 	for id in w.ctrls:
 		var c = w.ctrls[id]
-		if c.kind in ["port", "switch", "seal"] and c.hidden_room != "" and w.room_hidden(c.hidden_room) and not s.hoses.has(id):
+		if c.kind in ["port", "switch", "seal", "discharge"] and c.hidden_room != "" and w.room_hidden(c.hidden_room) and not s.hoses.has(id):
 			if s.P(c.hidden_room) < 5.0 and _once("open " + c.hidden_room):
 				_open_room(c.hidden_room, "")
 				return
@@ -389,6 +397,17 @@ func _open_room(room: String, for_ctrl: String) -> void:
 	_note("opened %s" % room)
 
 
+# the parts a marked-line cut made come off next, each on its own (left for later, they
+# would go out with whatever they are still bolted to, as one lump of scrap)
+func _requeue_parts(p) -> void:
+	var origin: String = p.get_meta("origin", p.tag)
+	order.push_front(p.id)
+	for id in g.world.order:
+		var q = g.world.pieces[id]
+		if q != p and not q.gone and q.body == null and q.get_meta("origin", "") == origin and not order.has(q.id):
+			order.push_front(q.id)
+
+
 # cut a heavy piece along its marked lines (each line on whichever part now holds it)
 func _cut_segments(p) -> bool:
 	if p.get_meta("segments", []).is_empty() or not p.intact or _once_done("seg " + str(p.id)):
@@ -436,6 +455,8 @@ func _unsafe() -> Array:
 	for tg in s.iso:
 		if s.iso[tg].get("switch", "") != "" and s.on(s.iso[tg].switch) and s.iso[tg].charge > 0.0:
 			out.append("own supply %s" % tg)
+		if s.iso[tg].get("kind", "") == "cap" and s.iso[tg].charge > 0.05:
+			out.append("cap %s" % tg)
 	for k in s.fvol:
 		if s.fvol[k].amount > 0.02:
 			out.append("fluid %s %.3f" % [k, s.fvol[k].amount])
@@ -528,6 +549,7 @@ func _strip() -> void:
 			continue
 		# with the heavy crane a piece it can lift goes out whole; without, along its marked lines
 		if not (g.crane != null and p.mass <= g.crane.MAX_T) and _cut_segments(p):
+			_requeue_parts(p)
 			return
 		for j in w.joints_of(p):
 			w.kill_joint(j)
@@ -643,6 +665,7 @@ func _strip_paced() -> void:
 			continue
 		# with the heavy crane a piece it can lift goes out whole; without, along its marked lines
 		if not (g.crane != null and p.mass <= g.crane.MAX_T) and _cut_segments(p):
+			_requeue_parts(p)
 			return
 		var sec := 1.0
 		var cut := false

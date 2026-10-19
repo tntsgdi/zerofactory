@@ -12,7 +12,8 @@ extends Node2D
 const MAX_T := 1.0               # t it can lift
 const SPEED := 4.0 * 48.0        # px/s with a load
 const EMPTY := 9.0 * 48.0        # px/s back to the next one
-const RAIL_Y := -10.0 * 48.0     # the boom it runs on
+var RAIL_Y: float:              # the boom it runs on (a tall ship's berth lifts it)
+	get: return Dock.RAIL_Y * 48.0
 const CLEAR := 2.5 * 48.0        # px it keeps from the operator's drone
 
 var game: Game
@@ -29,7 +30,7 @@ var wait_t := 0.0               # s spent holding back for the drone
 
 # where it waits: over the berth, a little short of the furnace
 func home() -> Vector2:
-	return Vector2((Dock.metal_home - 3.0) * 48.0, -10.0 * 48.0 + 40.0)
+	return Vector2((Dock.metal_home - 3.0) * 48.0, Dock.RAIL_Y * 48.0 + 40.0)
 
 
 func _init() -> void:

@@ -97,33 +97,51 @@ func room_temp(room: String) -> float:
 func _physics_process(dt: float) -> void:
 	if not active() or game == null or game.paused_sim or game.state != "play":
 		return
-	var r: float = float(cfg.get("cook", {}).get("r", COOK_R)) * Geom.M
-	var rate: float = float(cfg.get("cook", {}).get("rate", COOK_RATE))
-	var at: float = float(cfg.get("cook", {}).get("at", COOK_AT))
 	var tl = game.tools
-	var burning: bool = tl != null and tl.cutting and tl.in_material
-	var bp: Vector2 = tl.front if tl != null else Vector2.INF
+	var heated := {}
+	if tl != null and tl.cutting and tl.in_material:
+		heated = heat(tl.front, dt)
 	var knock: float = float(cfg.get("knock", KNOCK))
 	for id in world.order:
 		var p = world.pieces[id]
 		if not live(p):
 			continue
-		var c: Vector2 = world.frame(p) * Geom.centroid(p.poly)
-		if burning and c.distance_to(bp) < r:
-			# the nearer the beam, the faster it heats
-			p.temp += rate * dt * (1.0 - c.distance_to(bp) / r * 0.6)
-			if p.temp >= at and not _pending(p.id):
-				pending.append([p.id, 0.0])
-		elif p.temp > 20.0:
+		if not heated.has(p.id) and p.temp > 20.0:
 			p.temp = maxf(20.0, p.temp - COOL_RATE * dt)
-		# a loose round knocked hard
-		if p.body != null and is_instance_valid(p.body):
+		# a loose round knocked hard (not one a recovery mouth is swallowing: its catch brakes it on purpose)
+		if p.body != null and is_instance_valid(p.body) and p.body.capture == null:
 			var k: int = p.body.get_instance_id()
 			var v: float = p.body.linear_velocity.length()
 			var was: float = float(_vel.get(k, v))
 			if was - v > knock and not _pending(p.id):
 				pending.append([p.id, 0.0])
 			_vel[k] = v
+		elif p.body != null and is_instance_valid(p.body):
+			_vel.erase(p.body.get_instance_id())
+	_tick(dt)
+
+
+# the beam working at bp for dt: the live rounds within reach heat, the nearer the
+# faster, and one hot enough is about to go off. Returns the rounds it heated.
+func heat(bp: Vector2, dt: float) -> Dictionary:
+	var r: float = float(cfg.get("cook", {}).get("r", COOK_R)) * Geom.M
+	var rate: float = float(cfg.get("cook", {}).get("rate", COOK_RATE))
+	var at: float = float(cfg.get("cook", {}).get("at", COOK_AT))
+	var out := {}
+	for id in world.order:
+		var p = world.pieces[id]
+		if not live(p):
+			continue
+		var d: float = (world.frame(p) * Geom.centroid(p.poly)).distance_to(bp)
+		if d < r:
+			p.temp += rate * dt * (1.0 - d / r * 0.6)
+			out[p.id] = true
+			if p.temp >= at and not _pending(p.id):
+				pending.append([p.id, 0.0])
+	return out
+
+
+func _tick(dt: float) -> void:
 	# rounds going off, one after another
 	var left: Array = []
 	for e in pending:

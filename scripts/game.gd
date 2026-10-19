@@ -206,7 +206,8 @@ func _ready() -> void:
 	for l in base.get("lines", []):
 		_factory["l:" + l.id] = true
 	# the berth: extended once the career has paid for it, or for a ship too long for the standard one
-	Dock.configure(Dock.length_for(float(ship.get("length", 0.0)), _upgrades_for_berth()))
+	var ext := Ship.extent(ship)
+	Dock.configure(Dock.length_for(float(ship.get("length", 0.0)), _upgrades_for_berth()), ext.x, ext.y)
 	if has_upgrade("port2"):
 		Dock.add_port2()
 	dock.set_ship(ship)
