@@ -16,6 +16,7 @@ var mech: Mech                # magnets and preloaded arms some ship types carry
 var munitions: Munitions      # rounds that cook off, knock off and set each other off (PT-34)
 var rails: Rails              # cargo held on lock rails (JD-38, RO-128)
 var atmos                     # air that isn't plain air: oxygen-rich halls (HB-86), scripts/atmos.gd
+var coldchain                 # cold holds that have to stay cold (CL-104), scripts/coldchain.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -233,6 +234,10 @@ func _ready() -> void:
 	atmos = preload("res://scripts/atmos.gd").new()
 	add_child(atmos)
 	atmos.setup(self, ship)
+	coldchain = preload("res://scripts/coldchain.gd").new()
+	coldchain.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(coldchain)
+	coldchain.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -375,6 +380,8 @@ func _ready() -> void:
 			rails.load_state(data.rails)
 		if data.has("atmos") and not (data.atmos as Dictionary).is_empty():
 			atmos.load_state(data.atmos)
+		if data.has("cold"):
+			coldchain.load_state(data.cold)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -2120,6 +2127,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "bio", c.id, "inst_bio", {"ctrl": c, "room": c.target})
 					"o2":
 						sys.measure(c.id, "o2", c.id, "inst_o2", {"ctrl": c, "room": c.target})
+					"cold":
+						sys.measure(c.id, "temp", c.id, "inst_hold_temp", {"ctrl": c, "temp_fn": func(): return coldchain.room_temp(c.target)})
 					"mag":
 						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
 					"heat":
@@ -2204,6 +2213,10 @@ func restore_reading(rd: Dictionary) -> void:
 			"temp":
 				if c.medium == "cryo":
 					extra.temp_fn = func(): return cryo.temp(c.target)
+				elif c.medium == "heat":
+					extra.temp_fn = func(): return munitions.room_temp(c.target)
+				elif c.medium == "cold":
+					extra.temp_fn = func(): return coldchain.room_temp(c.target)
 				else:
 					extra.temp_fn = func(): return sys.loop_T
 			"field":
@@ -2586,6 +2599,13 @@ func _operate(c, at: Vector2) -> void:
 				sfx.play("gen_down")
 				shake(0.15)
 		"socket":
+			# the berth's temporary cooling (CL-104's cold holds), not its power
+			if c.target == "cold":
+				c.state = not c.state
+				sys.set_switch(c.id, c.state)
+				say("cold_on" if c.state else "cold_off", at)
+				sfx.play("plug")
+				return
 			sys.aux = not sys.aux
 			c.state = sys.aux
 			sys.set_switch(c.id, sys.aux)

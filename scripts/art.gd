@@ -80,6 +80,19 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				for i in 6:
 					var t := (i + 0.5) / 6.0
 					ci.draw_circle(Vector2(w * t, h * 0.5) if hz else Vector2(w * 0.5, h * t), 1.4, Pal.ink(0.45))
+		"insul":
+			# an insulated wall: its foam core between two skins, quilted
+			var hz := w >= h
+			if hz:
+				L(ci, Vector2(1, h * 0.25), Vector2(w - 1, h * 0.25), 0.2)
+				L(ci, Vector2(1, h * 0.75), Vector2(w - 1, h * 0.75), 0.2)
+				for i in int(w / 14.0):
+					L(ci, Vector2(7 + i * 14, h * 0.25), Vector2(14 + i * 14, h * 0.75), 0.15)
+			else:
+				L(ci, Vector2(w * 0.25, 1), Vector2(w * 0.25, h - 1), 0.2)
+				L(ci, Vector2(w * 0.75, 1), Vector2(w * 0.75, h - 1), 0.2)
+				for i in int(h / 14.0):
+					L(ci, Vector2(w * 0.25, 7 + i * 14), Vector2(w * 0.75, 14 + i * 14), 0.15)
 		"glass":
 			# a pane of precision glazing: two glints across it, its frame
 			L(ci, Vector2(w * 0.12, h * 0.85), Vector2(w * 0.3, h * 0.15), 0.35)

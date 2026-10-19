@@ -166,6 +166,14 @@ func _prep() -> void:
 	var w = g.world
 	if phase_t % 5 != 0:
 		return
+	# a cold chain: the berth's temporary cooling on before anything else is touched
+	if g.coldchain != null and g.coldchain.active():
+		var cs: String = g.coldchain.cfg.get("supply", "")
+		if cs != "" and w.ctrls.has(cs) and not w.ctrls[cs].state and not _hidden(cs) and _once("cold " + cs):
+			_w(cs)
+			_note("temporary cooling on %s" % cs)
+			_work(2.5)
+			return
 	# a guard over a port comes off first (it is a fixture: its fixings undone)
 	for id in g.ship.get("ctrls_cfg", {}):
 		var gd: String = g.ship.ctrls_cfg[id].get("blocked_by", "")
@@ -318,7 +326,7 @@ func _prep() -> void:
 				if not (s.bus_live or s.aux):
 					for sid in w.ctrls:
 						var sc = w.ctrls[sid]
-						if sc.kind == "socket" and not sc.state and not _hidden(sid) and _once("aux " + sid):
+						if sc.kind == "socket" and sc.target == "aux" and not sc.state and not _hidden(sid) and _once("aux " + sid):
 							_w(sid)
 							_note("berth supply on %s for the doors" % sid)
 							_work(2.5)
