@@ -11,6 +11,12 @@ extends Node
 #            is the pivot of an arm held under load. Take it out while a locking pin is
 #            still in, or while the hydraulics still hold pressure, and the arm springs:
 #            the pins shear, the arm is thrown, it and what it hits are damaged.
+#   actuator  a line with an actuator entry {"lock": control id, "piece": the
+#            actuator's tag, "hits": what it slams into, "push": [x, y]} is the control
+#            line of a powered actuator (PT-34's thrust-vector rams, reached through
+#            the upper maintenance tunnel). Cut it while it is live and the lock is
+#            off, and the actuator jerks: it and what it hits are damaged. Lock it
+#            first, or kill its supply, and the cut is harmless.
 # State that has to survive a save: which magnets are degaussed, which preloads went off.
 
 var game
@@ -19,6 +25,7 @@ var mags := {}                # piece tag -> {r, mT, k (1 = full field, 0 = dega
 var loads := []               # [{tag, cfg, alive, fired}]
 var pending := []             # [{tag, push, t}] impulses waiting for the part to come loose
 var hit_cd := 0.0
+var acts := {}                # line id -> {cfg, live (as last seen), fired}
 
 
 func setup(g, ship: Dictionary) -> void:
@@ -30,6 +37,9 @@ func setup(g, ship: Dictionary) -> void:
 	var pl: Dictionary = ship.get("preloads", {})
 	for t in pl:
 		loads.append({"tag": t, "cfg": pl[t], "alive": _joint(t) != null, "fired": false})
+	var ac: Dictionary = ship.get("actuators", {})
+	for lid in ac:
+		acts[lid] = {"cfg": ac[lid], "live": false, "fired": false}
 
 
 func save_state() -> Dictionary:
@@ -40,7 +50,11 @@ func save_state() -> Dictionary:
 	for l in loads:
 		if l.fired:
 			f.append(l.tag)
-	return {"mags": k, "fired": f}
+	var af: Array = []
+	for lid in acts:
+		if acts[lid].fired:
+			af.append(lid)
+	return {"mags": k, "fired": f, "acts": af}
 
 
 func load_state(d: Dictionary) -> void:
@@ -50,6 +64,9 @@ func load_state(d: Dictionary) -> void:
 	for l in loads:
 		l.fired = l.tag in d.get("fired", [])
 		l.alive = _joint(l.tag) != null
+	for lid in d.get("acts", []):
+		if acts.has(lid):
+			acts[lid].fired = true
 
 
 func _joint(tag: String):
@@ -101,7 +118,42 @@ func _physics_process(dt: float) -> void:
 	hit_cd = maxf(0.0, hit_cd - dt)
 	_magnets(dt)
 	_preloads()
+	_actuators()
 	_impulses(dt)
+
+
+# a powered actuator's control line, cut while live and unlocked: the ram jerks
+func _actuators() -> void:
+	for lid in acts:
+		var a: Dictionary = acts[lid]
+		if a.fired:
+			continue
+		var l = world.lines.get(lid)
+		if l != null and l.alive:
+			a.live = game.sys.line_live(l)
+			continue
+		var cfg: Dictionary = a.cfg
+		var locked: bool = game.sys.on(str(cfg.get("lock", "")))
+		var was_live: bool = a.live
+		a.fired = true
+		if not was_live or locked:
+			continue
+		var p = world.tag(cfg.get("piece", ""))
+		var at: Vector2 = world.frame(p) * Geom.centroid(p.poly) if p != null else game.drone.global_position
+		game.incident("actuator", lid)
+		game.say("actuator_jerk", at, cfg.get("piece", ""))
+		game.fx.sparks(at, Vector2.UP, 20, Pal.heat(1.0, 2.0), 300.0, 0.4, PI)
+		game.shake(0.5)
+		game.sfx.play("snap")
+		if p != null:
+			game._dent(p, minf(p.cond, 0.5), "dv_actuator")
+			var push: Array = cfg.get("push", [0.0, 0.0])
+			if push[0] != 0.0 or push[1] != 0.0:
+				pending.append({"tag": cfg.get("piece", ""), "push": Vector2(push[0], push[1]), "t": 0.0})
+		var hit = world.tag(cfg.get("hits", ""))
+		if hit != null and not hit.gone:
+			game._dent(hit, minf(hit.cond, 0.35), "dv_actuator")
+		game.lose("loss_actuator", 4000.0, at + Vector2(0, -40))
 
 
 func _magnets(_dt: float) -> void:

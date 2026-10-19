@@ -13,6 +13,7 @@ const SHIP_CENTER := Vector2(21.0 * 48.0, 0.0)
 var world: World
 var sys: Systems
 var mech: Mech                # magnets and preloaded arms some ship types carry
+var munitions: Munitions      # rounds that cook off, knock off and set each other off (PT-34)
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -218,6 +219,10 @@ func _ready() -> void:
 	add_child(sys)
 	world.finalize(float(ship.get("value", {}).get("metal", 12000.0)))
 	sys.setup(self, world, ship)
+	munitions = Munitions.new()
+	munitions.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(munitions)
+	munitions.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -354,6 +359,8 @@ func _ready() -> void:
 	state_t = 0.0
 	if not data.is_empty():
 		SaveGame.apply_late(self, data)
+		if data.has("munitions"):
+			munitions.load_state(data.munitions)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1706,7 +1713,7 @@ func on_cut_into(p, pos: Vector2) -> void:
 	var was_value: float = p.value * p.cond
 	var volts: float = sys.piece_volts(p)
 	var fv: String = sys.fluid_in_piece(p)
-	if p.hazard == "explosive" and p.intact:
+	if p.hazard == "explosive" and p.intact and (munitions == null or munitions.live(p)):
 		_blast(p, pos)
 	elif sys.bursts(p):
 		_burst(p, pos)
@@ -1799,6 +1806,9 @@ func _blast(p, pos: Vector2) -> void:
 	hitstop(0.08)
 	sfx.play("boom")
 	lose("loss_blast", 2500.0, c + Vector2(0, -60))
+	p.intact = false
+	if munitions != null:
+		munitions.on_blast(p, c)
 
 
 # a cracked piece of structure gives way under the grapple
@@ -2092,6 +2102,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "bio", c.id, "inst_bio", {"ctrl": c, "room": c.target})
 					"mag":
 						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
+					"heat":
+						sys.measure(c.id, "temp", c.id, "inst_temp", {"ctrl": c, "temp_fn": func(): return munitions.room_temp(c.target)})
 					"cryo":
 						sys.measure(c.id, "temp", c.id, "inst_cryo", {"ctrl": c, "temp_fn": func(): return cryo.temp(c.target)})
 					"tension":
@@ -2192,6 +2204,10 @@ func restore_reading(rd: Dictionary) -> void:
 func _ctrl_volts_fn(c) -> Callable:
 	if c.kind == "discharge":
 		var cap_tag: String = sys.discharge_source(c.id)
+		# an isolated capacitor: its own reading
+		if cap_tag != "" and sys.iso.has(cap_tag):
+			var cp = world.tag(cap_tag)
+			return func(): return sys.piece_volts(cp) if cp != null and not cp.gone else 0.0
 		var l3 = world.lines.get(sys.src[cap_tag].cable) if cap_tag != "" else null
 		return func(): return sys.line_volts(l3) if l3 != null and l3.alive else 0.0
 	# a test point on a piece with its own supply (a pod's battery) reads that piece
@@ -2219,7 +2235,11 @@ func _inspect_text(p) -> String:
 	if behind > 0:
 		parts.append("%d %s" % [behind, txt("j_behind")])
 	if p.hazard == "explosive" and p.intact:
-		parts.append(txt("j_explosive"))
+		parts.append(txt("j_wet") if munitions != null and munitions.wet.has(p.id) else txt("j_explosive"))
+	# an armour plate: with the precision kit you can tell what is fixed behind it
+	if p.art == "armor":
+		var fb: int = world.fixings_behind(p) if has_upgrade("scan_kit") else 0
+		parts.append(txt("j_armor") if fb == 0 else txt("j_armor_fix") % fb)
 	# a bent gate or door shows it to anyone who looks
 	if p.door and p.tag != "" and Ship.ctrl_cfg(ship, p.tag).get("stuck", false):
 		parts.append(txt("insp_stuck"))
@@ -2512,6 +2532,10 @@ func _operate(c, at: Vector2) -> void:
 			sys.set_switch(c.id, c.state)
 			say("valve_open" if c.state else "valve_closed", at, c.id)
 			sfx.play("valve")
+			# a magazine's flood valve: every round in it wet, safe and worthless
+			if c.state and munitions != null and munitions.flood(c.id):
+				say("mag_flooded", at, c.id)
+				log_op("flood")
 		"switch":
 			c.state = not c.state
 			sys.set_switch(c.id, c.state)

@@ -143,7 +143,10 @@ func setup(g, w, ship: Dictionary) -> void:
 		src[s.piece] = e
 		src_order.append(s.piece)
 	for s in pw.get("isolated", []):
-		iso[s.piece] = {"volts": float(s.volts), "charge": float(s.get("charge", 1.0)), "switch": s.get("switch", "")}
+		# kind "cap" (PT-34's weapon capacitors): reads down as it bleeds, and only its own
+		# discharge point (inside, by the weapons' distribution) bleeds it
+		iso[s.piece] = {"volts": float(s.volts), "charge": float(s.get("charge", 1.0)), "switch": s.get("switch", ""),
+			"kind": s.get("kind", "battery"), "discharge": s.get("discharge", "")}
 	var fl: Dictionary = cfg.get("fluids", {})
 	for k in fl.get("volumes", {}):
 		var e: Dictionary = fl.volumes[k].duplicate()
@@ -546,6 +549,11 @@ func _step_elec(dt: float) -> void:
 	if bus_live:
 		var bus = world.tag(bus_tag)
 		_flood(bus.id, powered, {})
+	# an isolated capacitor bleeds through its own discharge point
+	for t in iso:
+		var ic: Dictionary = iso[t]
+		if ic.kind == "cap" and ic.discharge != "" and on(ic.discharge) and ic.charge > 0.0:
+			ic.charge = maxf(0.0, ic.charge - ic.charge * dt / 0.9 - dt * 0.02)
 	iso_powered = {}
 	for t in iso:
 		var p = world.tag(t)
@@ -554,7 +562,7 @@ func _step_elec(dt: float) -> void:
 		var seen := {}
 		_flood(p.id, seen, {})
 		for id in seen:
-			iso_powered[id] = iso[t].volts
+			iso_powered[id] = maxf(float(iso_powered.get(id, 0.0)), iso_volts(t))
 	# rooms whose lamp is on
 	var redraw := false
 	var lamps: Dictionary = cfg.get("power", {}).get("lamps", {})
@@ -580,7 +588,7 @@ func _step_elec(dt: float) -> void:
 	for t in src_order:
 		sig += "%s%s" % [_alive(src[t].cable), on(src[t].get("switch", ""))]
 	for t in iso:
-		sig += "i%s" % iso_live(t)
+		sig += "i%s%d" % [iso_live(t), int(iso[t].charge * 20)]
 	if sig != _elec_sig:
 		_elec_sig = sig
 		elec_ver += 1
@@ -677,7 +685,7 @@ func piece_volts(p) -> float:
 	if src.has(p.tag):
 		return _local_volts(src[p.tag])
 	if iso.has(p.tag):
-		return iso[p.tag].volts if iso_live(p.tag) else 0.0
+		return iso_volts(p.tag) if iso_live(p.tag) else 0.0
 	if iso_powered.has(p.id):
 		return iso_powered[p.id]
 	if p.tag == bus_tag or powered.has(p.id):
@@ -700,7 +708,15 @@ func electric_piece(p) -> bool:
 # an isolated supply holds charge and its own switch (if it has one) is closed
 func iso_live(tag: String) -> bool:
 	var s: Dictionary = iso.get(tag, {})
-	return not s.is_empty() and s.charge > 0.0 and (s.get("switch", "") == "" or on(s.switch))
+	return not s.is_empty() and s.charge > (0.02 if s.get("kind", "") == "cap" else 0.0) and (s.get("switch", "") == "" or on(s.switch))
+
+
+# what an isolated supply puts out: a capacitor's volts fall with its charge
+func iso_volts(tag: String) -> float:
+	var s: Dictionary = iso.get(tag, {})
+	if s.is_empty():
+		return 0.0
+	return float(s.volts) * (float(s.charge) if s.get("kind", "") == "cap" else 1.0)
 
 
 func running(tag: String) -> bool:
@@ -731,10 +747,13 @@ func charge(tag: String) -> float:
 	return src[tag].charge if src.has(tag) else 0.0
 
 
-# the capacitor a discharge control bleeds
+# the capacitor a discharge control bleeds (on the bus, or an isolated one)
 func discharge_source(ctrl_id: String) -> String:
 	for t in src_order:
 		if src[t].get("discharge", "") == ctrl_id:
+			return t
+	for t in iso:
+		if iso[t].get("discharge", "") == ctrl_id:
 			return t
 	return ""
 

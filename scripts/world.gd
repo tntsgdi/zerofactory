@@ -273,15 +273,45 @@ func lines_of(p) -> Array:
 
 
 # a fixing behind a cover plate that is still on: not drawn, not reachable
+# a fixing under a cover plate or an armour plate isn't seen (or reached) until it comes off
 func joint_covered(j) -> bool:
 	var pos := joint_world(j)
-	for id in order:
-		var c = pieces[id]
-		if c.art != "cover" or c.gone or c.body != null or c.id == j.a or c.id == j.b:
+	for c in _cover_list():
+		if c.gone or c.body != null or c.id == j.a or c.id == j.b:
 			continue
 		if Geometry2D.is_point_in_polygon(pos, c.poly):
 			return true
 	return false
+
+
+# what can hide a fixing: kept for the frame (a big armoured hull asks for every bolt)
+var _covers: Array = []
+var _covers_frame := -1
+
+
+func _cover_list() -> Array:
+	var f := Engine.get_process_frames()
+	if f != _covers_frame:
+		_covers_frame = f
+		_covers = []
+		for id in order:
+			var c = pieces[id]
+			if (c.art == "cover" or c.art == "armor") and not c.gone and c.body == null:
+				_covers.append(c)
+	return _covers
+
+
+# the fixings a cover or armour plate hides (what the precision kit can tell is there)
+func fixings_behind(c) -> int:
+	if not (c.art == "cover" or c.art == "armor"):
+		return 0
+	var n := 0
+	for j in joints:
+		if not j.alive or j.a == c.id or j.b == c.id or not j.type in ["bolt", "lock"]:
+			continue
+		if Geometry2D.is_point_in_polygon(joint_world(j), c.poly):
+			n += 1
+	return n
 
 
 func joint_world(j) -> Vector2:
