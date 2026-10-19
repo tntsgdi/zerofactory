@@ -14,7 +14,7 @@ const MAX_PINS := 2
 const ROW_BUY := 0       # and 1: what money buys, cheapest first, two rows
 const ROW_SHIP := 2
 const ROW_TIER := 3
-const PER_ROW := 7
+const PER_ROW := 8
 # what each upgrade and facility does, point by point (player 2026-10-18:
 # "at least give every upgrade point, the details"); %s is the mark key
 const POINTS := {
@@ -30,6 +30,8 @@ const POINTS := {
 	"hauler2": [["第二台搬运无人机", "A second hauling drone"], ["和第一台分着搬同一张标记清单", "Works the same marks as the first"], ["要先有初级搬运无人机", "Needs the basic hauler first"]],
 	"arm": [["悬臂上装一只回收机械臂", "A recovery arm on the boom"], ["自动把废金属送进熔炉", "Feeds scrap to the furnace by itself"], ["初级：慢，1 t 以内", "Basic: slow, up to 1 t"]],
 	"crane": [["船坞顶上的门式吊", "An overhead gantry crane"], ["12 t 以内整件吊走", "Lifts whole pieces up to 12 t"], ["用 %s 标记超过 1.5 t 的件给它", "Mark anything over 1.5 t for it with %s"]],
+	"berth120": [["船坞延长到约 120 m", "The berth extended to about 120 m"], ["能接 83–114 m 的船", "Takes ships of 83-114 m"], ["要先扩到 88 m", "Needs the 88 m extension first"]],
+	"berth200": [["船坞延长到约 200 m", "The berth extended to about 200 m"], ["能接 115–194 m 的船：PT-34 隼鹰等", "Takes ships of 115-194 m: PT-34 Falcon and more"], ["要先扩到 120 m", "Needs the 120 m extension first"]],
 	"berth88": [["船坞延长到约 88 m", "The berth extended to about 88 m"], ["能接 58–82 m 的船：M-14、MED-47、FR-26", "Takes ships of 58–82 m: M-14, MED-47, FR-26"], ["回收口挪到中段", "The mouths move mid-berth"]],
 }
 
@@ -74,9 +76,10 @@ static func ship_node(e: Array) -> Dictionary:
 	var conds: Array = []
 	if int(e[2]) > 0:
 		conds.append(_cond(Txt.t("rt_rep"), "%d / %d" % [rep, int(e[2])], float(rep) / float(e[2]), rep >= int(e[2])))
-	if float(ty.get("length", 0.0)) > Dock.STANDARD - 6.0:
-		var has: bool = d.get("upgrades", {}).has("berth88")
-		conds.append(_cond(Txt.t("rt_berth"), Txt.t("rt_have") if has else Txt.t("rt_need_berth"), 1.0 if has else 0.0, has))
+	var need := Dock.needs(float(ty.get("length", 0.0)))
+	if need != "":
+		var has: bool = d.get("upgrades", {}).has(need)
+		conds.append(_cond(Txt.t("rt_berth"), Txt.t("rt_have") if has else Txt.t("rt_need_" + need), 1.0 if has else 0.0, has))
 	var opening := false
 	for o in Career.OPENING:
 		if o.ship == id:

@@ -67,7 +67,7 @@ func _run() -> void:
 	check(Route.find("buy:hauler").done and not Route.find("buy:hauler2").ready and Route.missing(Route.find("buy:hauler2")) == "还差 $18,750", "second hauler: first one owned, money short")
 	check(Route.find("tier:2").done and not Route.find("tier:3").done, "volume II reached, volume III not")
 	var buys := ns.filter(func(n): return n.kind == "buy")
-	check(buys.size() == 13 and buys.all(func(n): return int(n.row) <= 1), "all 13 upgrades and facilities on the two money rows")
+	check(buys.size() == Route.buys().size() and buys.size() <= Route.PER_ROW * 2 and buys.all(func(n): return int(n.row) <= 1), "all %d upgrades and facilities on the two money rows" % buys.size())
 	# ---------------------------------------------------------------- pins
 	check(Route.pins().is_empty(), "nothing pinned on a fresh career")
 	var auto := Route.goals()

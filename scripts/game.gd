@@ -205,7 +205,7 @@ func _ready() -> void:
 	for l in base.get("lines", []):
 		_factory["l:" + l.id] = true
 	# the berth: extended once the career has paid for it, or for a ship too long for the standard one
-	Dock.configure(Dock.EXTENDED if has_upgrade("berth88") or float(ship.get("length", 0.0)) > Dock.STANDARD - 6.0 else Dock.STANDARD)
+	Dock.configure(Dock.length_for(float(ship.get("length", 0.0)), _upgrades_for_berth()))
 	if has_upgrade("port2"):
 		Dock.add_port2()
 	dock.set_ship(ship)
@@ -938,6 +938,15 @@ func _enter_berth() -> void:
 		zoom_now = CAM_ZOOM
 	if hud != null:
 		hud.show_hint(txt("berth_hint") % Keys.label("terminal"))
+
+
+# what the berth's length goes by: the career's purchases (and the developer's kit)
+func _upgrades_for_berth() -> Dictionary:
+	var u: Dictionary = {}
+	for k in ["berth88", "berth120", "berth200"]:
+		if has_upgrade(k):
+			u[k] = true
+	return u
 
 
 # no ship in: the berth between contracts
@@ -2430,6 +2439,9 @@ func fit_skills() -> void:
 
 
 func has_upgrade(id: String) -> bool:
+	# between contracts there's no contract's kit: the berth has what the career bought
+	if ship.get("berth", false) and Career.data.get("upgrades", {}).has(id):
+		return true
 	return job.get("kit", {}).has(id) or (bot != null and bot.get("kit", {}).has(id))
 
 

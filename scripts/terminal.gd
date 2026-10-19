@@ -39,6 +39,8 @@ const BERTH := [
 	["net05", "facility", 18000.0, "fa_net", "fa_net_d", true],
 	["hauler", "facility", 45000.0, "fa_hauler", "fa_hauler_d", true],
 	["berth88", "facility", 240000.0, "fa_berth", "fa_berth_d", true],
+	["berth120", "facility", 520000.0, "fa_berth120", "fa_berth120_d", true],
+	["berth200", "facility", 1200000.0, "fa_berth200", "fa_berth200_d", true],
 	["hauler2", "facility", 60000.0, "fa_hauler2", "fa_hauler2_d", true],
 	["crane", "facility", 150000.0, "fa_crane", "fa_crane_d", true],
 	["port2", "facility", 50000.0, "fa_port2", "fa_port2_d", true],
@@ -46,7 +48,7 @@ const BERTH := [
 	["zones", "facility", 20000.0, "fa_zones", "fa_zones_d", true],
 ]
 # a facility that only makes sense with another one bought first
-const REQUIRES := {"hauler2": "hauler"}
+const REQUIRES := {"hauler2": "hauler", "berth120": "berth88", "berth200": "berth120"}
 # The terminal is one device (P.7 structure A, player 2026-10-18): a home screen
 # of apps; on site the same device, opened by its key or at the berth's
 # computer, with what can't be used there locked and the reason written on it.
@@ -1028,9 +1030,11 @@ func _home_rect() -> Rect2:
 func _facility_rect(j: int) -> Rect2:
 	var g := _grid_rect()
 	var gap := 12.0
-	var w := (g.size.x - gap * 4.0) / 5.0
+	# two rows, as many to a row as the facilities need
+	var cols := maxi(5, ceili((BERTH.size() - 2) / 2.0))
+	var w := (g.size.x - gap * (cols - 1)) / cols
 	var h := (g.size.y - 40.0 - gap) / 2.0
-	return Rect2(g.position.x + (j % 5) * (w + gap), g.position.y + 40.0 + (j / 5) * (h + gap), w, h)
+	return Rect2(g.position.x + (j % cols) * (w + gap), g.position.y + 40.0 + (j / cols) * (h + gap), w, h)
 
 
 func _facility_name(id: String) -> String:
@@ -2484,12 +2488,14 @@ func _route_page(s: Vector2, a: float) -> void:
 	for i in ns.size():
 		byk[ns[i].key] = i
 	# the berth extension hangs over the ships that need it; a facility over the one it needs first
-	if byk.has("buy:berth88"):
-		var br := _route_rect(byk["buy:berth88"])
-		for i in ns.size():
-			if ns[i].kind == "ship" and float(ns[i].length) > Dock.STANDARD - 6.0:
-				var p := _ship_pos(int(ns[i].col))
-				draw_line(Vector2(br.get_center().x, br.end.y), p + Vector2(0, -84), green if ns[i].done else Pal.ink(0.35 * k), 2.0, true)
+	for i in ns.size():
+		if ns[i].kind != "ship":
+			continue
+		var need := Dock.needs(float(ns[i].length))
+		if need != "" and byk.has("buy:" + need):
+			var br := _route_rect(byk["buy:" + need])
+			var p := _ship_pos(int(ns[i].col))
+			draw_line(Vector2(br.get_center().x, br.end.y), p + Vector2(0, -84), green if ns[i].done else Pal.ink(0.35 * k), 2.0, true)
 	for need in REQUIRES:
 		if byk.has("buy:" + need) and byk.has("buy:" + REQUIRES[need]):
 			var a0 := _route_rect(byk["buy:" + REQUIRES[need]])

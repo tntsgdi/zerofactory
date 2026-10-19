@@ -64,9 +64,7 @@ static func pick_ship(rng: RandomNumberGenerator, career: Dictionary) -> String:
 
 # a ship the berth can take: anything up to the standard berth, longer ones once it is extended
 static func fits(ship: String, career: Dictionary) -> bool:
-	if float(type_of(ship).get("length", 0.0)) <= Dock.STANDARD - 6.0:
-		return true
-	return career.get("upgrades", {}).has("berth88")
+	return float(type_of(ship).get("length", 0.0)) <= Dock.owned(career.get("upgrades", {})) - 6.0
 
 
 # the highest risk the market will offer at this reputation

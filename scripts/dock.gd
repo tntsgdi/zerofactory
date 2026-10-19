@@ -19,6 +19,36 @@ const BAY := Vector2(-5.0, -6.0)
 # middle third, the boom reaches further. Set once per contract (configure).
 const STANDARD := 50.0
 const EXTENDED := 88.0
+# the berth's lengths a career can buy, each needing the one before
+# (fleet expansion 2026-10-19: PT-34 and the R2 fleet are 96-138 m)
+const TIERS := [[50.0, ""], [88.0, "berth88"], [120.0, "berth120"], [200.0, "berth200"]]
+
+
+# the longest berth a career has paid for (m)
+static func owned(upgrades: Dictionary) -> float:
+	var best := STANDARD
+	for t in TIERS:
+		if t[1] == "" or upgrades.has(t[1]):
+			best = maxf(best, float(t[0]))
+	return best
+
+
+# the berth a ship takes: what has been paid for, or longer if the ship needs it
+# (a developer's or a test's contract may bring a ship the career couldn't take)
+static func length_for(ship_len: float, upgrades: Dictionary) -> float:
+	var x := owned(upgrades)
+	for t in TIERS:
+		if ship_len <= float(t[0]) - 6.0:
+			return maxf(x, float(t[0]))
+	return maxf(x, float(TIERS[-1][0]))
+
+
+# the facility that makes a berth long enough for a ship ("" if the standard one is)
+static func needs(ship_len: float) -> String:
+	for t in TIERS:
+		if ship_len <= float(t[0]) - 6.0:
+			return str(t[1])
+	return str(TIERS[-1][1])
 static var floor_end := STANDARD
 static var ZONES := BASE_ZONES.duplicate(true)
 static var MASTS: Array = [Vector2(5.0, -10.0), Vector2(23.0, -10.0), Vector2(38.0, 6.6)]
