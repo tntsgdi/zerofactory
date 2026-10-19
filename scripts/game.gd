@@ -104,6 +104,10 @@ var zoom_override := -1.0
 
 # input edges
 var prev_lmb := false
+var ring_armed := false     # 7 readies the breaching ring: it snaps to the nearest member, a click fires it
+var ring_aim: Dictionary = {}   # where it would go this frame (ring_target)
+var ring_eat := false       # the press that fired (or cancelled) the ring never reaches the tools
+var ring_wait := false      # readied by a click: that click has to end first
 var prev_keys := {}
 var aim := Vector2.ZERO
 
@@ -550,10 +554,24 @@ func _read_input() -> void:
 	aim = b.get("aim", mpos)
 	var lmb: bool = b.get("lmb", Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
 	var blocked: bool = menu_open or contract_open or (bot == null and hud.pointer_over_ui())
+	# the press that readied the ring (on its slot) must let go before one can fire it
+	if ring_wait and not lmb:
+		ring_wait = false
 	if blocked:
 		lmb = false
-	tools.lmb_pressed = lmb and not prev_lmb
-	tools.lmb = lmb
+	# a readied ring takes the click from the tools (and the rest of that press)
+	if ring_armed:
+		if state != "play" or not drone.alive or menu_open or contract_open or stock("ring") <= 0:
+			ring_armed = false
+		else:
+			ring_aim = ring_target(aim)
+			ring_eat = true
+			if lmb and not prev_lmb and not ring_wait and breaching_ring():
+				ring_armed = false
+	if ring_eat and not ring_armed and not lmb:
+		ring_eat = false
+	tools.lmb_pressed = lmb and not prev_lmb and not ring_eat
+	tools.lmb = lmb and not ring_eat
 	prev_lmb = lmb
 	var mv := Vector2.ZERO
 	if b.has("move"):
@@ -599,7 +617,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 				hud.ending_key(k)
 			return
 		if k == KEY_ESCAPE:
-			if contract_open:
+			if ring_armed:
+				arm_ring(false)
+			elif contract_open:
 				close_contract()
 			else:
 				toggle_menu()
@@ -633,7 +653,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			"tool5": tools.set_tool(5, false, true)
 			"blueprint": blueprint.toggle()
 			"repair": repair_kit()
-			"ring": breaching_ring()
+			"ring": arm_ring(not ring_armed)
 			"assist":
 				drone.assist = not drone.assist
 				Txt.assist = drone.assist
@@ -686,7 +706,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 			rmb_down = true
 			rmb_moved = 0.0
 	elif ev is InputEventMouseButton and not ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT:
-		if rmb_down and rmb_moved < 10.0 and state == "play" and not menu_open and not contract_open:
+		if rmb_down and rmb_moved < 10.0 and ring_armed:
+			arm_ring(false)
+		elif rmb_down and rmb_moved < 10.0 and state == "play" and not menu_open and not contract_open:
 			if tools.held_piece != null:
 				tools.release_grab(true)
 			tools.job = {}
@@ -2292,34 +2314,93 @@ func repair_kit() -> void:
 	sfx.play("ok")
 
 
-# clamped on a thick member at the cursor, it cuts clean through in one flash
-func breaching_ring() -> void:
+const RING_REACH := 6.0 * Geom.M   # the ring is placed by the drone: as far as the measuring reach
+const RING_SNAP := 1.6 * Geom.M    # the pointer this close to a member finds it
+
+
+# 7 (or its slot) readies the ring; again, Esc or a right click puts it away
+func arm_ring(on: bool) -> void:
+	if on == ring_armed:
+		return
+	if on:
+		if state != "play" or not drone.alive:
+			return
+		if stock("ring") <= 0:
+			say("item_none", drone.global_position + Vector2(0, -44), txt("it_ring"))
+			sfx.play("deny")
+			return
+		ring_aim = ring_target(aim)
+		ring_wait = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	ring_armed = on
+	sfx.play("switch")
+
+
+# the keel, beam or rail nearest the pointer, the point on it the ring would
+# clamp to and the cut it would make: {piece, at, line, ok, why}
+func ring_target(at: Vector2) -> Dictionary:
+	var best = null
+	var best_d := RING_SNAP
+	var best_at := at
+	for id in world.order:
+		var p = world.pieces[id]
+		if p.gone or p.body != null or not p.kind in ["keel", "beam", "rail"]:
+			continue
+		var bb := Geom.bbox(p.poly)
+		if not bb.grow(best_d).has_point(at):
+			continue
+		var q := at
+		var d := 0.0
+		if not world.piece_contains(p, at):
+			d = INF
+			var poly: PackedVector2Array = p.poly
+			for i in poly.size():
+				var e := Geometry2D.get_closest_point_to_segment(at, poly[i], poly[(i + 1) % poly.size()])
+				if at.distance_to(e) < d:
+					d = at.distance_to(e)
+					q = e
+			# a little way into the member, not on its edge
+			var mid := Vector2(q.x, bb.get_center().y) if bb.size.x >= bb.size.y else Vector2(bb.get_center().x, q.y)
+			q += (mid - q).limit_length(4.0)
+		if d < best_d and not world.hidden(q):
+			best = p
+			best_d = d
+			best_at = q
+	if best == null:
+		return {"ok": false, "why": "ring_no_target"}
+	var bb := Geom.bbox(best.poly)
+	var pl: PackedVector2Array
+	if bb.size.x >= bb.size.y:
+		pl = PackedVector2Array([Vector2(best_at.x, bb.position.y - 6.0), Vector2(best_at.x, bb.end.y + 6.0)])
+	else:
+		pl = PackedVector2Array([Vector2(bb.position.x - 6.0, best_at.y), Vector2(bb.end.x + 6.0, best_at.y)])
+	var near: bool = drone.alive and drone.global_position.distance_to(best_at) <= RING_REACH
+	return {"piece": best, "at": best_at, "line": pl, "ok": near, "why": "" if near else "ring_far"}
+
+
+# clamped on a thick member at (or next to) the cursor, it cuts clean through in one flash
+func breaching_ring() -> bool:
 	if state != "play" or not drone.alive:
-		return
-	var p = world.piece_at(aim, ["keel", "beam", "rail"], false)
-	if p == null or world.hidden(aim) or not tools.in_range(aim):
-		say("ring_no_target", aim)
+		return false
+	var tg := ring_target(aim)
+	if not tg.ok:
+		say(tg.why, aim)
 		sfx.play("deny")
-		return
+		return false
 	if not use_item("ring"):
 		say("item_none", aim, txt("it_ring"))
 		sfx.play("deny")
-		return
-	var bb := Geom.bbox(p.poly)
-	var pl: PackedVector2Array
-	if bb.size.x >= bb.size.y:
-		pl = PackedVector2Array([Vector2(aim.x, bb.position.y - 6.0), Vector2(aim.x, bb.end.y + 6.0)])
-	else:
-		pl = PackedVector2Array([Vector2(bb.position.x - 6.0, aim.y), Vector2(bb.end.x + 6.0, aim.y)])
-	cut_kerf(p, pl)
+		return false
+	var at: Vector2 = tg.at
+	cut_kerf(tg.piece, tg.line)
 	log_op("ring")
-	fx.flash(aim, 260.0, 0.5, Pal.heat(1.0, 3.0))
-	fx.ring(aim, 10.0, 160.0, 0.45, Pal.heat(0.9, 2.2), 3.0)
-	fx.sparks(aim, Vector2.UP, 40, Pal.heat(1.0, 2.6), 480.0, 0.5, PI)
+	fx.flash(at, 260.0, 0.5, Pal.heat(1.0, 3.0))
+	fx.ring(at, 10.0, 160.0, 0.45, Pal.heat(0.9, 2.2), 3.0)
+	fx.sparks(at, Vector2.UP, 40, Pal.heat(1.0, 2.6), 480.0, 0.5, PI)
 	hud.white_flash(0.2)
 	shake(0.4)
 	sfx.play("boom")
-	say("ring_fired", aim)
+	say("ring_fired", at)
+	return true
 
 
 # what the grapple can haul (the 5 t tractor grapple lifts the limit)

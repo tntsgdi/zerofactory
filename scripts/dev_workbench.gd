@@ -195,6 +195,7 @@ func operations() -> void:
 		"dev_xray": words("查看舱压、带电线路、流体和危险目标。", "Reveal pressures, live circuits, fluids and hazard targets."),
 		"dev_safe": words("清空气液与储能、停机，便于验证拆解流程。", "Drain fluids and gas, discharge and stop sources."),
 		"dev_free": words("移除固定件与管线；会改变本单结构。", "Remove fixings and lines; changes this contract's structure."),
+		"dev_sort": words("漂浮零件自己飞进该去的回收口：设备进设备口，危险品进危险品口，龙骨、甲板和废料进熔炉。", "Loose pieces fly to their own mouth: equipment, hazards, and keels, decks and scrap to the furnace."),
 		"dev_god": words("保护无人机，保留原有事故与回收判定。", "Protect the drone while keeping accidents and salvage rules."),
 		"dev_time": words("依次切换 1× / 2× / 4× / 8× / ¼× 模拟。", "Cycle simulation speed: 1× / 2× / 4× / 8× / ¼×."),
 		"dev_rooms": words("展开所有舱室，检查内部设备与结构。", "Reveal every room to inspect equipment and structure."),

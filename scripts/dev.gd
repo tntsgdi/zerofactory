@@ -7,6 +7,9 @@ extends CanvasLayer
 #              F4 drone can't be hurt   F5 time ×1 / ×2 / ×4 / ×8 / ×¼   F6 open every room
 #              F7 +3 of each consumable   F8 end the contract now   F9 inspect what the pointer is on
 #              F10 this contract again, from the start
+#              auto sort (no key): every loose piece flies to its own mouth by
+#              itself, through the wreck: whole equipment to the equipment
+#              bay, hazards to the hazard bay, keels, decks and scrap to the furnace
 #   Terminal:  F1 +$100,000   F2 clear the debt   F3 +5 reputation   F4 every upgrade and facility
 #              F5 +3 of each consumable   F6 new offers   F7 a contract with one chosen trap
 #              F8 skip the opening contracts (the market opens)   F9 forget the work plans
@@ -31,6 +34,7 @@ static var god := false          # the drone takes no damage
 static var time_k := 1.0         # time on site (1 = as it runs)
 static var xray := false
 static var inspect := false
+static var sort_on := false      # loose pieces fly to their mouths by themselves
 # the contract builder's settings, kept while the game runs
 static var b_ship := "gr7"
 static var b_traps: Array = []
@@ -95,7 +99,7 @@ func rows() -> Array:
 		"game":
 			return [["F1", "dev_xray", xray], ["F2", "dev_safe", null], ["F3", "dev_free", null], ["F4", "dev_god", god],
 				["F5", "dev_time", time_k != 1.0], ["F6", "dev_rooms", null], ["F7", "dev_items", null], ["F8", "dev_end", null],
-				["F9", "dev_inspect", inspect], ["F10", "dev_again", null], ["", "dev_builder", builder]]
+				["F9", "dev_inspect", inspect], ["F10", "dev_again", null], ["", "dev_builder", builder], ["", "dev_sort", sort_on]]
 		"terminal":
 			return [["F1", "dev_money", null], ["F2", "dev_loan", null], ["F3", "dev_rep", null], ["F4", "dev_upgrades", null],
 				["F5", "dev_items", null], ["F6", "dev_offers", null], ["F7", "dev_trap", null], ["F8", "dev_opening", null],
@@ -275,6 +279,10 @@ func _game_key(n: int) -> void:
 				g.finish_contract(true)
 		9:
 			inspect = not inspect
+		12:
+			sort_on = not sort_on
+			if not sort_on:
+				_sort_release_all()
 		10:
 			# the same contract again from its start (its ship, its accidents, its upgrades)
 			if not g.dev_job():
@@ -517,6 +525,76 @@ func restore_drone(home: bool = false) -> void:
 	game.drone_respawn = -1.0
 	game.drone.queue_redraw()
 	say(Growth.text(["无人机已恢复", "Drone restored"]))
+
+
+# ---------------------------------------------------------------- auto sort
+
+const SORT_SPEED := 9.0 * Geom.M      # px/s cruising
+const SORT_ACC := 14.0 * Geom.M       # px/s² it speeds up and slows down by
+const SORT_AT_ONCE := 8               # this many on their way at a time (the mouths swallow one by one)
+
+
+# the mouth a loose body belongs in (as the hauler sorts): hazards, scrap, whole equipment
+func _sort_zone(b) -> String:
+	for p in b.pieces:
+		if game.sys.dest_of(p) == "hazard":
+			return "hazard"
+	if game.dock.is_scrap(b):
+		return "metal"
+	return "equip"
+
+
+func _sort_ghost(b, on: bool) -> void:
+	if on and not b.has_meta("sort_layer"):
+		b.set_meta("sort_layer", b.collision_layer)
+		b.set_meta("sort_mask", b.collision_mask)
+		b.collision_layer = 0
+		b.collision_mask = 0
+	elif not on and b.has_meta("sort_layer"):
+		if b.capture == null:
+			b.collision_layer = b.get_meta("sort_layer")
+			b.collision_mask = b.get_meta("sort_mask")
+		b.remove_meta("sort_layer")
+		b.remove_meta("sort_mask")
+
+
+func _sort_release_all() -> void:
+	if game == null:
+		return
+	for b in game.world.bodies:
+		if is_instance_valid(b):
+			_sort_ghost(b, false)
+
+
+func _physics_process(dt: float) -> void:
+	if not sort_on or not Txt.dev or game == null or game.state != "play" or game.paused_sim or get_tree().paused:
+		return
+	var free: Array = []
+	for b in game.world.bodies:
+		if not is_instance_valid(b) or b.capture != null or b.pieces.is_empty():
+			continue
+		if b.has_meta("sort_layer") and b.rejected_t > 0.0:
+			# the mouth turned it away: it goes back to being an ordinary piece
+			_sort_ghost(b, false)
+			b.set_meta("sort_skip", true)
+		if b.get_meta("sort_skip", false) or game.tools.held_body == b or b.get_meta("arm", false):
+			continue
+		var z := Dock.nearest(_sort_zone(b), b.global_transform * b.center_of_mass)
+		var to: Vector2 = Dock.zpos(z) - Dock.ZONES[z].face * 0.5 * Geom.M
+		var com: Vector2 = b.global_transform * b.center_of_mass
+		free.append([b, to, com.distance_to(to) - (1e6 if b.has_meta("sort_layer") else 0.0)])
+	# the ones already on their way first, then the nearest
+	free.sort_custom(func(x, y): return x[2] < y[2])
+	for i in mini(SORT_AT_ONCE, free.size()):
+		var b = free[i][0]
+		var to: Vector2 = free[i][1]
+		_sort_ghost(b, true)
+		var com: Vector2 = b.global_transform * b.center_of_mass
+		var d := to - com
+		# cruise, then brake into the mouth so it arrives slowly enough to be caught
+		var want := d.normalized() * minf(SORT_SPEED, sqrt(2.0 * SORT_ACC * d.length()) * 0.9)
+		b.linear_velocity = b.linear_velocity.move_toward(want, SORT_ACC * dt)
+		b.angular_velocity *= exp(-3.0 * dt)
 
 
 # A compact status badge stays on site; the old shortcut list is gone.

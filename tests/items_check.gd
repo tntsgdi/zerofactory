@@ -109,8 +109,19 @@ func _run() -> void:
 	check(absf(g.drone.integrity - 80.0) < 0.1 and g.stock("repair") == 0, "repair kit: integrity 30 → %d, none left" % int(g.drone.integrity))
 	var keel = g.world.tag("K2")
 	var parts_before: int = g.world.order.size()
-	g.aim = Vector2(14.0, 3.25) * M
+	# the ring finds the keel from a pointer next to it, and says when the drone is too far
+	g.drone.global_position = Vector2(14.0, 30.0) * M
+	var far: Dictionary = g.ring_target(Vector2(14.0, 3.25) * M)
+	check(not far.ok and far.why == "ring_far", "breaching ring: too far from the drone is refused (%s)" % far.get("why", ""))
 	g.drone.global_position = Vector2(14.0, 5.5) * M
+	var near: Dictionary = g.ring_target(Vector2(14.0, 3.25) * M + Vector2(0.0, 1.0) * M)
+	var near2: Dictionary = g.ring_target(Vector2(14.0, 3.25) * M - Vector2(0.0, 1.0) * M)
+	check((near.get("piece") == keel or near2.get("piece") == keel), "breaching ring: a pointer 1 m off the keel snaps to it (%s / %s)" % [near.piece.tag if near.has("piece") else "-", near2.piece.tag if near2.has("piece") else "-"])
+	g.arm_ring(true)
+	check(g.ring_armed, "7 readies the ring")
+	g.arm_ring(false)
+	check(not g.ring_armed, "and puts it away again")
+	g.aim = Vector2(14.0, 3.25) * M
 	g.breaching_ring()
 	await _frames(3)
 	check(g.world.order.size() > parts_before and g.stock("ring") == 0 and g.incidents.is_empty(), "breaching ring: K2 cut through in one go (%d → %d pieces), no accident (rings left %d, incidents %s)" % [parts_before, g.world.order.size(), g.stock("ring"), g.incidents])

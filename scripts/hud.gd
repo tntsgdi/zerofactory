@@ -64,6 +64,7 @@ var cur_out := 9.0
 var minimap: Control        # the berth map, bottom right (P.6)
 var stock_last := {}
 var stock_pop := 9.0
+var stock_hit := ""
 
 
 func _ready() -> void:
@@ -103,7 +104,28 @@ func to_screen(w: Vector2) -> Vector2:
 
 func pointer_over_ui() -> bool:
 	var m := c.get_local_mouse_position()
-	return _toolbar_rect().has_point(m)
+	return _toolbar_rect().has_point(m) or _item_at(m) != ""
+
+
+# the consumables this contract carries: one tile each, above the drone panel
+func _item_slots() -> Array:
+	var out: Array = []
+	if game == null or not game.career():
+		return out
+	var s := size()
+	var x := 22.0
+	for id in ["repair", "ring", "spare"]:
+		if game.stock(id) > 0 or int(game.used.get(id, 0)) > 0:
+			out.append([id, Rect2(x, s.y - 188.0, 132.0, 58.0)])
+			x += 140.0
+	return out
+
+
+func _item_at(m: Vector2) -> String:
+	for it in _item_slots():
+		if it[1].has_point(m):
+			return it[0]
+	return ""
 
 
 func _toolbar_rect() -> Rect2:
@@ -249,7 +271,13 @@ func _input(ev: InputEvent) -> void:
 				game.story.ending_key(KEY_SPACE)
 			get_viewport().set_input_as_handled()
 			return
-		if game.state == "play" and _toolbar_rect().has_point(c.get_local_mouse_position()):
+		var item := _item_at(c.get_local_mouse_position()) if game.state == "play" else ""
+		if item != "":
+			match item:
+				"repair": game.repair_kit()
+				"ring": game.arm_ring(not game.ring_armed)
+			get_viewport().set_input_as_handled()
+		elif game.state == "play" and _toolbar_rect().has_point(c.get_local_mouse_position()):
 			var i := int((c.get_local_mouse_position().x - _toolbar_rect().position.x) / 142.0)
 			game.tools.set_tool(clampi(i + 1, 1, 5))
 			get_viewport().set_input_as_handled()
@@ -378,6 +406,7 @@ func _motion_drone(dt: float) -> void:
 			var n: int = game.stock(id)
 			if stock_last.has(id) and stock_last[id] != n:
 				stock_pop = 0.0
+				stock_hit = id
 			stock_last[id] = n
 
 
@@ -524,7 +553,7 @@ func _draw_hud() -> void:
 # the scene opens out of the heat line the last one closed on: no hard cut
 func _open_wipe(s: Vector2) -> void:
 	# the shared transition opens this screen when it covered the change
-	if t > 0.6 or Wipe.busy() or Txt.anim_level() == 0:
+	if t > 0.6 or Wipe.busy() or Wipe.arrived() or Txt.anim_level() == 0:
 		return
 	var e := Pal.ease_out(clampf((t - 0.05) / 0.5, 0.0, 1.0))
 	var h := s.y * 0.5 * (1.0 - e)
@@ -929,16 +958,94 @@ func _drone_status(s: Vector2) -> void:
 	_text("%.1f m/s" % spd_roll.shown, Vector2(x + 60 + bw, y + 16), 13, Pal.ink(0.55), font, 1)
 	if not d.alive:
 		_text("R-02 …", Vector2(x, y - 30), 14, Pal.heat(0.9, 1.2), font)
-	# consumables in hand for this contract
-	if g.career():
-		var parts: Array = []
-		for it in [["repair", "6"], ["ring", "7"], ["spare", ""]]:
-			var n: int = g.stock(it[0])
-			if n > 0:
-				parts.append(("%s %s ×%d" % [it[1], g.txt("it_" + it[0]), n]).strip_edges())
-		if not parts.is_empty():
-			var sp := clampf(stock_pop / 0.6, 0.0, 1.0)
-			_text("   ·   ".join(parts), Vector2(x, y - 34 - 4.0 * sin(sp * PI)), 13, Pal.ink(0.5) if sp >= 1.0 else Pal.heat(0.6 + 0.4 * (1.0 - sp), 1.2), font)
+	_items()
+
+
+# consumables in hand for this contract: key, icon, name and how many are left;
+# a click uses the repair kit or readies the ring
+func _items() -> void:
+	var g = game
+	var mp := c.get_local_mouse_position()
+	for it in _item_slots():
+		var id: String = it[0]
+		var r: Rect2 = it[1]
+		var n: int = g.stock(id)
+		var armed: bool = id == "ring" and g.ring_armed
+		var over: bool = r.has_point(mp) and id != "spare"
+		var a := 1.0 if n > 0 else 0.4
+		var sp := clampf(stock_pop / 0.6, 0.0, 1.0) if stock_hit == id else 1.0
+		r.position.y -= 4.0 * sin(sp * PI) + (4.0 if over else 0.0)
+		c.draw_rect(r, Color(0.035, 0.037, 0.042, 0.88))
+		var edge := Pal.heat(0.9, 1.4) if armed else (Pal.heat(0.4 + 0.6 * (1.0 - sp), 1.2) if sp < 1.0 else Pal.ink(0.14 + (0.3 if over else 0.0)))
+		c.draw_rect(r, edge, false, 1.5 if armed else 1.0)
+		if armed:
+			c.draw_rect(r.grow(3.0 + 2.0 * sin(t * 6.0)), Pal.heat(0.35, 1.2), false, 1.0)
+		var key: String = {"repair": Keys.label("repair"), "ring": Keys.label("ring"), "spare": g.txt("it_auto")}[id]
+		_text(key, r.position + Vector2(10, 20), 13, Pal.ink(0.55 * a) if id == "spare" else Pal.ink(0.9 * a), font_b)
+		_item_icon(id, r.position + Vector2(r.size.x - 24, 18), a, armed)
+		_text(g.txt("it_" + id), r.position + Vector2(10, 46), 14, Pal.ink(0.75 * a), font)
+		_text("×%d" % n, r.position + Vector2(r.size.x - 10, 47), 17, Pal.heat(1.0, 1.3) if armed else Pal.ink(0.95 * a), font_b, 1)
+
+
+func _item_icon(id: String, p: Vector2, a: float, hot: bool) -> void:
+	var col := Pal.heat(a, 1.4) if hot else Pal.ink(0.8 * a)
+	match id:
+		"repair":
+			c.draw_rect(Rect2(p + Vector2(-10, -3), Vector2(20, 6)), col, false, 1.4)
+			c.draw_rect(Rect2(p + Vector2(-3, -10), Vector2(6, 20)), col, false, 1.4)
+		"ring":
+			var r := 8.0 + (1.5 * sin(t * 6.0) if hot else 0.0)
+			c.draw_arc(p, r, 0.0, TAU, 24, col, 1.6, true)
+			for k in 8:
+				var d := Vector2.from_angle(TAU * k / 8.0)
+				c.draw_line(p + d * r, p + d * (r + 4.0), Pal.heat(0.9 * a, 1.2), 1.6)
+		"spare":
+			c.draw_polyline(PackedVector2Array([p + Vector2(-10, 6), p + Vector2(0, -9), p + Vector2(10, 6), p + Vector2(-10, 6)]), col, 1.4, true)
+			c.draw_circle(p + Vector2(0, 1), 2.5, col)
+
+
+# the readied ring: the member it found, the cut it would make and what a click does
+func _ring_overlay() -> void:
+	var g = game
+	var tg: Dictionary = g.ring_aim
+	var mp := to_screen(g.aim)
+	var zoom: float = g.get_viewport().get_canvas_transform().get_scale().x
+	# how far the drone can place it
+	if g.drone.alive:
+		c.draw_arc(to_screen(g.drone.global_position), g.RING_REACH * zoom, 0.0, TAU, 96, Pal.heat(0.18, 1.0), 1.0, true)
+	var line := ""
+	var col := Pal.heat(1.0, 1.6)
+	if tg.has("piece"):
+		var ok: bool = tg.ok
+		col = Pal.heat(0.95, 1.6) if ok else Pal.ink(0.45)
+		var poly: PackedVector2Array = g.world.world_poly(tg.piece)
+		var sp := PackedVector2Array()
+		for q in poly:
+			sp.append(to_screen(q))
+		sp.append(sp[0])
+		c.draw_polyline(sp, Pal.heat(0.55, 1.2) if ok else Pal.ink(0.3), 1.5, true)
+		var a := to_screen(tg.line[0])
+		var b := to_screen(tg.line[1])
+		var pulse := 0.6 + 0.4 * sin(t * 8.0)
+		c.draw_line(a, b, Pal.heat(pulse if ok else 0.3, 2.0 if ok else 1.0), 3.0 if ok else 1.5)
+		var at := to_screen(tg.at)
+		c.draw_arc(at, 12.0, 0.0, TAU, 24, col, 2.0, true)
+		for k in 8:
+			var d := Vector2.from_angle(TAU * k / 8.0 + t * 0.8)
+			c.draw_line(at + d * 12.0, at + d * 17.0, col, 2.0)
+		if at.distance_to(mp) > 6.0:
+			c.draw_dashed_line(mp, at, Pal.ink(0.35), 1.0, 4.0)
+		line = g.txt("ring_ready") if ok else g.txt("ring_far")
+	else:
+		c.draw_arc(mp, g.RING_SNAP * zoom, 0.0, TAU, 48, Pal.ink(0.25), 1.0, true)
+		line = g.txt("ring_seek")
+	var name: String = g.txt("it_ring") + "  ×%d" % g.stock("ring")
+	var w := maxf(_tw(name, 14, font_b), _tw(line, 13)) + 16.0
+	var op := mp + Vector2(24, 20)
+	c.draw_rect(Rect2(op - Vector2(8, 16), Vector2(w, 42)), Color(0.02, 0.022, 0.026, 0.86))
+	c.draw_rect(Rect2(op - Vector2(8, 16), Vector2(3, 42)), Pal.heat(0.9, 1.3))
+	_text(name, op, 14, Pal.ink(0.95), font_b)
+	_text(line, op + Vector2(0, 19), 13, Pal.heat(0.9, 1.2) if tg.get("ok", false) else Pal.ink(0.6), font)
 
 
 func _hint(s: Vector2) -> void:
@@ -1100,6 +1207,9 @@ func _cursor_label() -> void:
 	var g = game
 	var h: Dictionary = g.tools.hover
 	var mp := c.get_local_mouse_position()
+	if g.ring_armed:
+		_ring_overlay()
+		return
 	if g.tools.tool == 2 or h.is_empty():
 		if cur_key != "":
 			cur_out = 0.0
