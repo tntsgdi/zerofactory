@@ -1153,24 +1153,36 @@ func _trough_live() -> void:
 
 
 # a plated girder: a lit top edge, a shadowed bottom, posts and diagonals, rivets at the nodes
+# The trusses are long: drawn piece by piece they made over a thousand draw
+# calls a frame (a line, a line, a dot, a dot... every change of kind a new
+# batch). Now each truss gathers its posts, braces and rivets and draws each
+# kind once (2026-10-18 performance work).
 func _truss(r: Rect2) -> void:
 	var ci := static_node
 	ci.draw_rect(r, Color(0.052, 0.055, 0.062))
 	ci.draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * 0.22)), Color(0.075, 0.079, 0.088))
 	ci.draw_rect(Rect2(Vector2(r.position.x, r.end.y - r.size.y * 0.18), Vector2(r.size.x, r.size.y * 0.18)), Color(0.04, 0.042, 0.048))
+	var posts := PackedVector2Array()
+	var braces := PackedVector2Array()
+	var rivets_top := PackedVector2Array()
+	var rivets_bot := PackedVector2Array()
 	var x := r.position.x
 	var k := 0
 	while x < r.end.x:
 		var nx := minf(x + r.size.y, r.end.x)
-		ci.draw_line(Vector2(x, r.position.y), Vector2(x, r.end.y), Pal.ink(0.12), 1.0)
+		posts.append_array([Vector2(x, r.position.y), Vector2(x, r.end.y)])
 		if k % 2 == 0:
-			ci.draw_line(Vector2(x, r.position.y), Vector2(nx, r.end.y), Pal.ink(0.16), 1.2)
+			braces.append_array([Vector2(x, r.position.y), Vector2(nx, r.end.y)])
 		else:
-			ci.draw_line(Vector2(x, r.end.y), Vector2(nx, r.position.y), Pal.ink(0.16), 1.2)
-		ci.draw_circle(Vector2(x, r.position.y + 3), 1.4, Pal.ink(0.35))
-		ci.draw_circle(Vector2(x, r.end.y - 3), 1.4, Pal.ink(0.25))
+			braces.append_array([Vector2(x, r.end.y), Vector2(nx, r.position.y)])
+		rivets_top.append(Vector2(x, r.position.y + 3))
+		rivets_bot.append(Vector2(x, r.end.y - 3))
 		x = nx
 		k += 1
+	ci.draw_multiline(posts, Pal.ink(0.12), 1.0)
+	ci.draw_multiline(braces, Pal.ink(0.16), 1.2)
+	_dots(ci, rivets_top, 1.4, Pal.ink(0.35))
+	_dots(ci, rivets_bot, 1.4, Pal.ink(0.25))
 	ci.draw_line(r.position, Vector2(r.end.x, r.position.y), Pal.ink(0.6), 1.6)
 	ci.draw_line(Vector2(r.position.x, r.end.y), r.end, Pal.ink(0.28), 1.2)
 
@@ -1179,20 +1191,42 @@ func _truss_v(r: Rect2) -> void:
 	var ci := static_node
 	ci.draw_rect(r, Color(0.052, 0.055, 0.062))
 	ci.draw_rect(Rect2(r.position, Vector2(r.size.x * 0.22, r.size.y)), Color(0.075, 0.079, 0.088))
+	var posts := PackedVector2Array()
+	var braces := PackedVector2Array()
+	var rivets := PackedVector2Array()
 	var y := r.position.y
 	var k := 0
 	while y < r.end.y:
 		var ny := minf(y + r.size.x, r.end.y)
-		ci.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, y), Pal.ink(0.12), 1.0)
+		posts.append_array([Vector2(r.position.x, y), Vector2(r.end.x, y)])
 		if k % 2 == 0:
-			ci.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, ny), Pal.ink(0.16), 1.2)
+			braces.append_array([Vector2(r.position.x, y), Vector2(r.end.x, ny)])
 		else:
-			ci.draw_line(Vector2(r.end.x, y), Vector2(r.position.x, ny), Pal.ink(0.16), 1.2)
-		ci.draw_circle(Vector2(r.position.x + 3, y), 1.4, Pal.ink(0.35))
+			braces.append_array([Vector2(r.end.x, y), Vector2(r.position.x, ny)])
+		rivets.append(Vector2(r.position.x + 3, y))
 		y = ny
 		k += 1
+	ci.draw_multiline(posts, Pal.ink(0.12), 1.0)
+	ci.draw_multiline(braces, Pal.ink(0.16), 1.2)
+	_dots(ci, rivets, 1.4, Pal.ink(0.35))
 	ci.draw_line(r.position, Vector2(r.position.x, r.end.y), Pal.ink(0.6), 1.6)
 	ci.draw_line(Vector2(r.end.x, r.position.y), r.end, Pal.ink(0.28), 1.2)
+
+
+# many small round dots of one colour in one call (hexagons, as small as these are)
+static func _dots(ci: CanvasItem, at: PackedVector2Array, rad: float, col: Color) -> void:
+	if at.is_empty():
+		return
+	var pts := PackedVector2Array()
+	var idx := PackedInt32Array()
+	for c in at:
+		var b := pts.size()
+		pts.append(c)
+		for j in 6:
+			pts.append(c + Vector2.from_angle(TAU * j / 6.0) * rad)
+		for j in 6:
+			idx.append_array([b, b + 1 + j, b + 1 + (j + 1) % 6])
+	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, pts, PackedColorArray([col]))
 
 
 # diagonal warning stripes over a band (heat on dark)

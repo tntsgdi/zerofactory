@@ -28,6 +28,19 @@ var bodies_node: Node2D
 var back_layer: Node2D
 var line_layer: Node2D
 var piece_layer: Node2D
+# The attached pieces are drawn in strips along the ship, one canvas item each,
+# so the renderer leaves out the ones off the screen (2026-10-18: a big hull
+# sent all its ~9,000 drawing commands every frame however little was in view)
+const CHUNK := 6.0 * 48.0
+var _chunks := {}               # [part, strip index] -> Node2D
+# four passes keep the old order across the strips: every fill, then every
+# outline, the equipment art, the fixings on top. Zoomed far out (the whole
+# ship on the screen) the art fades away: at that size its lines and lettering
+# are below a pixel, and it was half of what such a view drew.
+const PASSES := ["fill", "line", "art", "joint"]
+const ART_FADE := Vector2(0.6, 0.75)    # zoom: gone below .x, whole above .y
+var _pass_roots := {}
+var _chunk_lists := {}          # strip index -> its pieces
 var cover_layer: Node2D
 var heat_layer: Node2D
 var light_layer: Node2D
@@ -663,6 +676,11 @@ func _physics_process(_dt: float) -> void:
 
 
 func _process(dt: float) -> void:
+	if _pass_roots.has("art") and game != null:
+		var art: Node2D = _pass_roots["art"]
+		var k := clampf((game.cam_zoom() - ART_FADE.x) / (ART_FADE.y - ART_FADE.x), 0.0, 1.0)
+		art.modulate.a = k
+		art.visible = k > 0.01
 	var moving := false
 	for id in order:
 		var p = pieces[id]
@@ -678,7 +696,7 @@ func _process(dt: float) -> void:
 				if game != null and game.sys != null:
 					game.sys.topology_dirty = true
 	if moving:
-		piece_layer.queue_redraw()
+		_sync_chunks()
 		for b in bodies:
 			b.view.queue_redraw()
 	var animating := false
@@ -708,7 +726,7 @@ func _process(dt: float) -> void:
 		back_layer.queue_redraw()
 	if dirty_draw:
 		dirty_draw = false
-		piece_layer.queue_redraw()
+		_sync_chunks()
 		line_layer.queue_redraw()
 		light_layer.queue_redraw()
 		for b in bodies:
@@ -734,6 +752,8 @@ func reveal(room: String, from: Vector2) -> void:
 	r.from = from
 	cover_layer.queue_redraw()
 	back_layer.queue_redraw()
+	# what's inside is drawn from now on
+	dirty_draw = true
 	if game != null:
 		game.on_reveal(room, from)
 
@@ -1039,7 +1059,8 @@ func draw_piece(ci: CanvasItem, p) -> void:
 
 # Every piece of a group in a handful of draw calls: one triangle array for
 # all the fills, one line batch for all the outlines, then the equipment art.
-func draw_pieces(ci: CanvasItem, list: Array) -> void:
+# part: "all", or one pass of it ("fill", "line", "art") for the strips
+func draw_pieces(ci: CanvasItem, list: Array, part: String = "all") -> void:
 	var fp := PackedVector2Array()
 	var fc := PackedColorArray()
 	var fi := PackedInt32Array()
@@ -1071,10 +1092,12 @@ func draw_pieces(ci: CanvasItem, list: Array) -> void:
 			sc.append(st[1])
 		if p.art != "" or (p.cls == "equip" and not p.intact):
 			arts.append([p, poly, off])
-	if not fi.is_empty():
+	if not fi.is_empty() and part in ["all", "fill"]:
 		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), fi, fp, fc)
-	if not segs.is_empty():
+	if not segs.is_empty() and part in ["all", "line"]:
 		ci.draw_multiline_colors(segs, sc, 1.3)
+	if not part in ["all", "art"]:
+		return
 	for a in arts:
 		var p = a[0]
 		if p.art != "":
@@ -1159,12 +1182,16 @@ func draw_joints_of(ci: CanvasItem, list: Array) -> void:
 			continue
 		if p.room != "" and rooms.has(p.room) and not rooms[p.room].revealed and p.body == null:
 			continue
+		var dashes := PackedVector2Array()
 		for sg in p.get_meta("segments"):
 			var a := Vector2(sg[0], sg[1]) * Geom.M
 			var b := Vector2(sg[2], sg[3]) * Geom.M
 			var n := maxi(2, int(a.distance_to(b) / 9.0))
 			for k in range(0, n, 2):
-				ci.draw_line(a.lerp(b, float(k) / n), a.lerp(b, float(k + 1) / n), Pal.heat(0.55, 1.1), 1.4)
+				dashes.append(a.lerp(b, float(k) / n))
+				dashes.append(a.lerp(b, float(k + 1) / n))
+		if not dashes.is_empty():
+			ci.draw_multiline(dashes, Pal.heat(0.55, 1.1), 1.4)
 	if not seams.is_empty():
 		ci.draw_multiline(seams, Pal.ink(0.55), 1.4)
 	if not cracks.is_empty():
@@ -1201,14 +1228,51 @@ func _draw_pieces() -> void:
 
 
 func _draw_pieces_inner() -> void:
-	var list: Array = []
+	# the layer itself draws nothing: its strips do
+	_sync_chunks()
+
+
+# sort the attached pieces into their strips and have every strip redraw
+func _sync_chunks() -> void:
+	var lists := {}
 	for id in order:
 		var p = pieces[id]
 		if p.gone or p.body != null:
 			continue
-		list.append(p)
-	draw_pieces(piece_layer, list)
-	draw_joints_of(piece_layer, list)
+		# a closed room is under an opaque cover: what's in it isn't drawn until it opens
+		if p.room != "" and rooms.has(p.room) and not rooms[p.room].revealed:
+			continue
+		var i := int(floor(Geom.bbox(p.poly).get_center().x / CHUNK))
+		if not lists.has(i):
+			lists[i] = []
+		lists[i].append(p)
+	_chunk_lists = lists
+	if _pass_roots.is_empty():
+		for part in PASSES:
+			var root := Node2D.new()
+			piece_layer.add_child(root)
+			_pass_roots[part] = root
+	for i in lists:
+		for part in PASSES:
+			var key := [part, i]
+			if not _chunks.has(key):
+				var n := Node2D.new()
+				n.draw.connect(_draw_chunk.bind(part, i))
+				_pass_roots[part].add_child(n)
+				_chunks[key] = n
+	for key in _chunks:
+		_chunks[key].queue_redraw()
+
+
+func _draw_chunk(part: String, i: int) -> void:
+	var list: Array = _chunk_lists.get(i, [])
+	if list.is_empty():
+		return
+	var ci: CanvasItem = _chunks[[part, i]]
+	if part == "joint":
+		draw_joints_of(ci, list)
+	else:
+		draw_pieces(ci, list, part)
 
 
 func _draw_back() -> void:
@@ -1279,6 +1343,7 @@ func _draw_light() -> void:
 
 
 func _draw_cover() -> void:
+	var hatch := PackedVector2Array()
 	for n in rooms:
 		var r = rooms[n]
 		if r.revealed and r.reveal_t >= 1.0:
@@ -1287,7 +1352,7 @@ func _draw_cover() -> void:
 		var cover_c := Color(0.026, 0.027, 0.031)
 		if not r.revealed:
 			cover_layer.draw_colored_polygon(poly, cover_c)
-			_hatch(cover_layer, poly, r.bbox)
+			_hatch(hatch, poly, r.bbox)
 			continue
 		var k := Pal.ease_out(r.reveal_t)
 		var far := 0.0
@@ -1302,16 +1367,20 @@ func _draw_cover() -> void:
 		ring.append(hole[0])
 		for seg in Geometry2D.intersect_polyline_with_polygon(ring, poly):
 			cover_layer.draw_polyline(seg, Pal.ink(0.7 * (1.0 - k)), 2.0, true)
+	if not hatch.is_empty():
+		cover_layer.draw_multiline(hatch, Pal.ink(0.022), 1.0)
 
 
-func _hatch(ci: CanvasItem, poly: PackedVector2Array, bb: Rect2) -> void:
-	var pl := PackedVector2Array()
+# a closed room's hatching, gathered as line pairs (drawn in one batch with the rest)
+func _hatch(out: PackedVector2Array, poly: PackedVector2Array, bb: Rect2) -> void:
 	var s := 22.0
 	var x := bb.position.x - bb.size.y
 	while x < bb.end.x:
 		var seg := PackedVector2Array([Vector2(x, bb.end.y), Vector2(x + bb.size.y, bb.position.y)])
 		for q in Geometry2D.intersect_polyline_with_polygon(seg, poly):
-			ci.draw_polyline(q, Pal.ink(0.022), 1.0)
+			for k in q.size() - 1:
+				out.append(q[k])
+				out.append(q[k + 1])
 		x += s
 
 

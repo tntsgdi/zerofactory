@@ -87,10 +87,15 @@ func _run() -> void:
 	# a berth at work: GR-001, both haulers, the drone flying a loop
 	Career.data = {}
 	Career.start_new()
-	Career.data.upgrades = {"hauler": true, "hauler2": true}
+	Career.data.upgrades = {"hauler": true, "hauler2": true, "berth88": true}
 	Career.save()
 	Game.contract = Career.sign_active()
 	Game.start_ship = Game.contract.ship
+	# ship=<id>: that type on its own (no contract), for the heavier hulls
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("ship="):
+			Game.contract = {}
+			Game.start_ship = a.substr(5)
 	var g: Node = load("res://scenes/main.tscn").instantiate()
 	g.bot = {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "lmb": false, "move": Vector2.ZERO}
 	root.add_child(g)
