@@ -285,6 +285,14 @@ func _prep() -> void:
 			_note("discharge %s" % src.discharge)
 			_work(2.5)
 			return
+	# heavy parts that must come off together: the hull's support set first
+	if g.mech != null and not g.mech.balance.is_empty():
+		var sup: String = g.mech.balance.get("support", "")
+		if sup != "" and w.ctrls.has(sup) and not s.on(sup) and not _hidden(sup) and _once("support " + sup):
+			_w(sup)
+			_note("hull support %s set" % sup)
+			_work(2.5)
+			return
 	# cargo on lock rails: its doors open first, then the rail's lock off (the boxes slide out)
 	if g.rails != null and g.rails.active():
 		for rs in g.rails.cfg:

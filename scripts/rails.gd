@@ -85,7 +85,7 @@ func _release(s: String) -> void:
 			var o = world.pieces.get(j.b if j.a == bx.id else j.a)
 			if o != null and (e.get("rails", []) as Array).has(o.tag):
 				world.kill_joint(j)
-		_push.append([str(t), Vector2(float(out[0]), float(out[1])) * Geom.M, 6, false])
+		_push.append([str(t), Vector2(float(out[0]), float(out[1])) * Geom.M, 60 * 30, false])
 	game.say("rail_released", world.ctrl_world(world.ctrls[e.lock]), e.lock)
 	game.log_op("rail")
 
@@ -115,6 +115,18 @@ func on_cut(p) -> void:
 		game.say("rail_cut_cargo", world.frame(p) * Geom.centroid(p.poly), p.tag)
 
 
+# how far along "out" the set's rails reach (px): a box rides them until it is past that
+func _rail_end(st: String, dir: Vector2) -> float:
+	var far := -INF
+	for t in cfg[st].get("rails", []):
+		var r = world.tag(str(t))
+		if r == null or r.gone:
+			continue
+		for q in world.frame(r) * r.poly:
+			far = maxf(far, q.dot(dir))
+	return far
+
+
 func _physics_process(_dt: float) -> void:
 	if _push.is_empty():
 		return
@@ -127,7 +139,20 @@ func _physics_process(_dt: float) -> void:
 				bx.body.global_position += Vector2(0, -LIFT * Geom.M)
 				bx.body.reset_physics_interpolation()
 				e[3] = true
-			bx.body.linear_velocity = e[1]
+			# the rails guide it: along them, no turning, until it is past their end
+			var dir: Vector2 = (e[1] as Vector2).normalized()
+			var back := INF
+			for q in bx.body.global_transform * bx.poly:
+				back = minf(back, q.dot(dir))
+			# stopped by something (a shut door): it no longer slides
+			var blocked: bool = e.size() > 4 and bx.body.linear_velocity.dot(dir) < (e[1] as Vector2).length() * 0.4
+			if back < _rail_end(_set_of(e[0], "boxes"), dir) and int(e[2]) > 0 and not blocked:
+				if e.size() == 4:
+					e.append(true)
+				bx.body.linear_velocity = e[1]
+				bx.body.angular_velocity = 0.0
+				e[2] = int(e[2]) - 1
+				left.append(e)
 			continue
 		e[2] = int(e[2]) - 1
 		if int(e[2]) > 0:

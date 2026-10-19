@@ -17,6 +17,11 @@ extends Node
 #            the upper maintenance tunnel). Cut it while it is live and the lock is
 #            off, and the actuator jerks: it and what it hits are damaged. Lock it
 #            first, or kill its supply, and the cut is harmless.
+#   balance  "balance": {"pairs": [[tag, tag, [the pieces each one hangs from]...]],
+#            "support": control id} (TW-64's two outboard engine pods, the weight all
+#            aft): take one of a pair off while the other still hangs there and the
+#            hull's support isn't set, and the hull twists under the one left: its
+#            mounts and it are damaged. Set the support first, or take both together.
 # State that has to survive a save: which magnets are degaussed, which preloads went off.
 
 var game
@@ -26,6 +31,8 @@ var loads := []               # [{tag, cfg, alive, fired}]
 var pending := []             # [{tag, push, t}] impulses waiting for the part to come loose
 var hit_cd := 0.0
 var acts := {}                # line id -> {cfg, live (as last seen), fired}
+var balance := {}             # the ship file's "balance" section
+var twisted := {}             # pair index -> true once it went
 
 
 func setup(g, ship: Dictionary) -> void:
@@ -37,6 +44,7 @@ func setup(g, ship: Dictionary) -> void:
 	var pl: Dictionary = ship.get("preloads", {})
 	for t in pl:
 		loads.append({"tag": t, "cfg": pl[t], "alive": _joint(t) != null, "fired": false})
+	balance = ship.get("balance", {})
 	var ac: Dictionary = ship.get("actuators", {})
 	for lid in ac:
 		acts[lid] = {"cfg": ac[lid], "live": false, "fired": false}
@@ -54,7 +62,7 @@ func save_state() -> Dictionary:
 	for lid in acts:
 		if acts[lid].fired:
 			af.append(lid)
-	return {"mags": k, "fired": f, "acts": af}
+	return {"mags": k, "fired": f, "acts": af, "twisted": twisted.keys()}
 
 
 func load_state(d: Dictionary) -> void:
@@ -67,6 +75,8 @@ func load_state(d: Dictionary) -> void:
 	for lid in d.get("acts", []):
 		if acts.has(lid):
 			acts[lid].fired = true
+	for i in d.get("twisted", []):
+		twisted[int(i)] = true
 
 
 func _joint(tag: String):
@@ -119,6 +129,7 @@ func _physics_process(dt: float) -> void:
 	_magnets(dt)
 	_preloads()
 	_actuators()
+	_balance()
 	_impulses(dt)
 
 
@@ -226,6 +237,45 @@ func _preloads() -> void:
 		if hit != null and not hit.gone:
 			game._dent(hit, minf(hit.cond, 0.4), "dv_preload")
 		game.lose("loss_preload", 3000.0, at + Vector2(0, -40))
+
+
+# a pair of heavy parts that must come off together (or with the hull supported)
+func _off(tag: String) -> bool:
+	var p = world.tag(tag)
+	return p == null or p.gone or p.body != null
+
+
+func _balance() -> void:
+	if balance.is_empty():
+		return
+	var sup: String = balance.get("support", "")
+	if sup != "" and game.sys.on(sup):
+		return
+	var pairs: Array = balance.get("pairs", [])
+	for i in pairs.size():
+		if twisted.has(i):
+			continue
+		var pr: Array = pairs[i]
+		var a_off := _off(pr[0])
+		var b_off := _off(pr[1])
+		if a_off == b_off:
+			continue
+		twisted[i] = true
+		var left: String = pr[1] if a_off else pr[0]
+		var mounts: Array = (pr[3] if a_off else pr[2]) if pr.size() > 3 else []
+		var p = world.tag(left)
+		var at: Vector2 = world.frame(p) * Geom.centroid(p.poly) if p != null else game.drone.global_position
+		game.incident("imbalance", left)
+		game.say("hull_twist", at, left)
+		game.shake(0.7)
+		game.sfx.play("snap")
+		if p != null and not p.gone:
+			game._dent(p, minf(p.cond, 0.6), "dv_twist")
+		for t in mounts:
+			var m = world.tag(str(t))
+			if m != null and not m.gone:
+				game._dent(m, minf(m.cond, 0.5), "dv_twist")
+		game.lose("loss_twist", 3500.0, at + Vector2(0, -40))
 
 
 func _impulses(dt: float) -> void:
