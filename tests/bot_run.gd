@@ -51,8 +51,10 @@ var _frame := 0
 
 func _process(_dt: float) -> bool:
 	_frame += 1
-	if _frame % 3600 == 0:
-		print("PROGRESS frame %d sim %.0f s phase %s earned %.0f bodies %d" % [_frame, game.sys.time, bot.phase, game.earned(), game.world.bodies.size()])
+	if _frame % 600 == 0:
+		var hb = game.hauler.body if game.hauler != null else null
+		print("PROGRESS frame %d wall %.0f s sim %.0f s x%.0f phase %s earned %.0f bodies %d hauling %s" % [_frame, Time.get_ticks_msec() / 1000.0, game.sys.time, Engine.time_scale, bot.phase, game.earned(), game.world.bodies.size(),
+			"-" if hb == null or not is_instance_valid(hb) else str(hb.pieces.map(func(q): return q.tag))])
 	if bot.step():
 		for n in bot.notes:
 			print(n)

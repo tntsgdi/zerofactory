@@ -1,0 +1,135 @@
+class_name Rails
+extends Node
+# Cargo held on lock rails (R2 fleet, JD-38 "Turtledove": "the cargo rails run
+# through two door locks; release the rail locks before it can be drawn out
+# undamaged"; RO-128 "Long Bridge": four independent lock rails). A ship file's
+# "rails" section: {set id: {"lock": control id, "boxes": [tags], "rails": [tags],
+# "out": [x, y] m/s, "doors": [the door controls on the way out]}}.
+#   The fixings between a box and its rails are the rail's locks, not bolts: the
+#   wrench can't undo them. Turning the set's lock control off releases every box
+#   on it at once and sends them off along the rails ("out"): through the open
+#   doors, or into a shut one, which dents them as any knock does.
+#   Cutting a rail that still carries a box: the box is wrenched with it (dented).
+# Saved: which sets have been released.
+
+const CUT_DENT := 0.45
+const LIFT := 0.03            # m a released box rises off its rail
+
+var game
+var world
+var cfg := {}
+var released := {}            # set id -> true
+var _push: Array = []         # [box tag, velocity px/s, frames left, lifted]
+
+
+func setup(g, ship: Dictionary) -> void:
+	game = g
+	world = g.world
+	cfg = ship.get("rails", {})
+
+
+func active() -> bool:
+	return not cfg.is_empty()
+
+
+func save_state() -> Dictionary:
+	return {"released": released.keys()}
+
+
+func load_state(d: Dictionary) -> void:
+	for s in d.get("released", []):
+		released[str(s)] = true
+
+
+# the set a box or a rail belongs to ("" none)
+func _set_of(tag: String, key: String) -> String:
+	for s in cfg:
+		if (cfg[s].get(key, []) as Array).has(tag):
+			return s
+	return ""
+
+
+# a fixing between a box and its rail, while the rail is locked
+func holds(j) -> bool:
+	if not active():
+		return false
+	var a = world.pieces.get(j.a)
+	var b = world.pieces.get(j.b)
+	if a == null or b == null:
+		return false
+	for pr in [[a, b], [b, a]]:
+		var s := _set_of(pr[0].tag, "boxes")
+		if s != "" and not released.has(s) and (cfg[s].get("rails", []) as Array).has(pr[1].tag):
+			return true
+	return false
+
+
+# a lock control turned: off releases its set
+func on_switch(c) -> bool:
+	for s in cfg:
+		if cfg[s].get("lock", "") == c.id and not c.state and not released.has(s):
+			_release(s)
+			return true
+	return false
+
+
+func _release(s: String) -> void:
+	released[s] = true
+	var e: Dictionary = cfg[s]
+	var out: Array = e.get("out", [0.0, 0.0])
+	for t in e.get("boxes", []):
+		var bx = world.tag(str(t))
+		if bx == null or bx.gone:
+			continue
+		for j in world.joints_of(bx):
+			var o = world.pieces.get(j.b if j.a == bx.id else j.a)
+			if o != null and (e.get("rails", []) as Array).has(o.tag):
+				world.kill_joint(j)
+		_push.append([str(t), Vector2(float(out[0]), float(out[1])) * Geom.M, 6, false])
+	game.say("rail_released", world.ctrl_world(world.ctrls[e.lock]), e.lock)
+	game.log_op("rail")
+
+
+# the beam into a rail: whatever box still rides it is wrenched with it
+func on_cut(p) -> void:
+	if not active() or p.cls == "equip":
+		return
+	var s := _set_of(p.tag, "rails")
+	if s == "":
+		return
+	var hit := 0.0
+	for t in cfg[s].get("boxes", []):
+		var bx = world.tag(str(t))
+		if bx == null or bx.gone or bx.body != null or not bx.intact:
+			continue
+		var on := false
+		for j in world.joints_of(bx):
+			if j.a == p.id or j.b == p.id:
+				on = true
+		if on:
+			var before: float = bx.cond
+			game._dent(bx, maxf(0.0, bx.cond - CUT_DENT * maxf(0.4, bx.fragile * 2.0)), "dv_rail")
+			hit += (before - bx.cond) * bx.value
+	if hit > 0.0:
+		game.incident("rail_cut", p.tag)
+		game.say("rail_cut_cargo", world.frame(p) * Geom.centroid(p.poly), p.tag)
+
+
+func _physics_process(_dt: float) -> void:
+	if _push.is_empty():
+		return
+	var left: Array = []
+	for e in _push:
+		var bx = world.tag(e[0])
+		if bx != null and bx.body != null and is_instance_valid(bx.body):
+			# clear of the rail it rode on (it slides out, it doesn't grind along it)
+			if not e[3]:
+				bx.body.global_position += Vector2(0, -LIFT * Geom.M)
+				bx.body.reset_physics_interpolation()
+				e[3] = true
+			bx.body.linear_velocity = e[1]
+			continue
+		e[2] = int(e[2]) - 1
+		if int(e[2]) > 0:
+			left.append(e)
+	_push = left

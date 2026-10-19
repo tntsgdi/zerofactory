@@ -155,6 +155,7 @@ static func save(g) -> void:
 		"ship": g.ship_id,
 		"mech": g.mech.save_state() if g.mech != null else {},
 		"munitions": g.munitions.save_state() if g.munitions != null and g.munitions.active() else {},
+		"rails": g.rails.save_state() if g.rails != null and g.rails.active() else {},
 		"bio": g.bio.save_state() if g.bio != null else {},
 		"ore": g.ore.save_state() if g.ore != null else {},
 		"cryo": g.cryo.save_state() if g.cryo != null else {},

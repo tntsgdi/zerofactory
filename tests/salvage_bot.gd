@@ -27,6 +27,7 @@ var timeout := 30000
 var finished := false
 var fast := 8.0            # time warp while it waits
 var paced := false
+const LOOSE_MAX := 24           # paced: loose bodies before it stops freeing more
 var busy := 0.0            # s of sim time the current operation still takes
 var last_sim := 0.0
 var work := 0.0            # s of hands-on work so far
@@ -284,6 +285,48 @@ func _prep() -> void:
 			_note("discharge %s" % src.discharge)
 			_work(2.5)
 			return
+	# cargo on lock rails: its doors open first, then the rail's lock off (the boxes slide out)
+	if g.rails != null and g.rails.active():
+		for rs in g.rails.cfg:
+			var e: Dictionary = g.rails.cfg[rs]
+			if g.rails.released.has(rs) or _hidden(e.lock):
+				continue
+			var shut := ""
+			var swinging := false
+			for dr in e.get("doors", []):
+				if w.ctrls.has(dr) and not w.ctrls[dr].state:
+					shut = dr
+					break
+				var dp = w.tag(dr)
+				if dp != null and dp.open_t < 1.0:
+					swinging = true
+			# a door still swinging open would catch the box
+			if shut == "" and swinging:
+				continue
+			if shut != "":
+				if _hidden(shut):
+					continue
+				# the doors run on the bus: dead, the berth's supply on the outside socket runs them
+				if not (s.bus_live or s.aux):
+					for sid in w.ctrls:
+						var sc = w.ctrls[sid]
+						if sc.kind == "socket" and not sc.state and not _hidden(sid) and _once("aux " + sid):
+							_w(sid)
+							_note("berth supply on %s for the doors" % sid)
+							_work(2.5)
+							return
+					continue
+				if _once("rail door " + shut):
+					_w(shut)
+					_note("open %s for the rail" % shut)
+					_work(2.5)
+					return
+				continue
+			if _once("rail " + e.lock):
+				_w(e.lock)
+				_note("rail %s released" % rs)
+				_work(2.5)
+				return
 	# a generator that ignored its remote stop: open its room and use the local handle
 	for tg in s.src_order:
 		var src: Dictionary = s.src[tg]
@@ -477,6 +520,10 @@ func _unsafe() -> Array:
 			out.append("unsealed %s" % c.target)
 	if not s.heat.is_empty() and s.loop_T > 60.0:
 		out.append("loop %.0f C" % s.loop_T)
+	if g.rails != null and g.rails.active():
+		for rs in g.rails.cfg:
+			if not g.rails.released.has(rs):
+				out.append("rail %s locked" % rs)
 	if s.bus_live:
 		out.append("bus live")
 	return out
@@ -657,6 +704,10 @@ func _strip_paced() -> void:
 		b.linear_velocity = Vector2.ZERO
 		b.angular_velocity = 0.0
 		b.reset_physics_interpolation()
+		return
+	# a player doesn't knock a hundred pieces loose at once: with the berth's machines
+	# behind, wait for them to catch up (a big ship otherwise fills the berth with drift)
+	if w.bodies.size() >= LOOSE_MAX:
 		return
 	while not order.is_empty():
 		var id = order.pop_front()

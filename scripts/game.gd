@@ -14,6 +14,7 @@ var world: World
 var sys: Systems
 var mech: Mech                # magnets and preloaded arms some ship types carry
 var munitions: Munitions      # rounds that cook off, knock off and set each other off (PT-34)
+var rails: Rails              # cargo held on lock rails (JD-38, RO-128)
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -224,6 +225,10 @@ func _ready() -> void:
 	munitions.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(munitions)
 	munitions.setup(self, ship)
+	rails = Rails.new()
+	rails.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(rails)
+	rails.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -362,6 +367,8 @@ func _ready() -> void:
 		SaveGame.apply_late(self, data)
 		if data.has("munitions"):
 			munitions.load_state(data.munitions)
+		if data.has("rails"):
+			rails.load_state(data.rails)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1709,6 +1716,8 @@ func on_cut_into(p, pos: Vector2) -> void:
 	if bio != null:
 		bio.on_cut(p)
 	breach(p, true, pos)
+	if rails != null:
+		rails.on_cut(p)
 	if p.cls != "equip":
 		return
 	var was_value: float = p.value * p.cond
@@ -2483,6 +2492,11 @@ func do_wrench(tg: Dictionary) -> void:
 	match tg.kind:
 		"joint":
 			var j = tg.joint
+			# a box on a locked rail: the rail's lock holds it, not a bolt
+			if rails != null and rails.holds(j):
+				say("rail_locked", world.joint_world(j))
+				sfx.play("deny")
+				return
 			log_op("unfix")
 			verify("pieces", tag_of(j.a), {"held": j.type})
 			var p: Vector2 = world.joint_world(j)
@@ -2542,6 +2556,8 @@ func _operate(c, at: Vector2) -> void:
 			sys.set_switch(c.id, c.state)
 			say("sw_on" if c.state else "sw_off", at, c.id)
 			sfx.play("switch")
+			if rails != null:
+				rails.on_switch(c)
 		"remote":
 			# a remote stop may or may not reach the machine: the ship file says
 			sys.remote_sent = true
