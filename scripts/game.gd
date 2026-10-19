@@ -15,6 +15,7 @@ var sys: Systems
 var mech: Mech                # magnets and preloaded arms some ship types carry
 var munitions: Munitions      # rounds that cook off, knock off and set each other off (PT-34)
 var rails: Rails              # cargo held on lock rails (JD-38, RO-128)
+var atmos                     # air that isn't plain air: oxygen-rich halls (HB-86), scripts/atmos.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -229,6 +230,9 @@ func _ready() -> void:
 	rails.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(rails)
 	rails.setup(self, ship)
+	atmos = preload("res://scripts/atmos.gd").new()
+	add_child(atmos)
+	atmos.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -369,6 +373,8 @@ func _ready() -> void:
 			munitions.load_state(data.munitions)
 		if data.has("rails"):
 			rails.load_state(data.rails)
+		if data.has("atmos") and not (data.atmos as Dictionary).is_empty():
+			atmos.load_state(data.atmos)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1718,6 +1724,8 @@ func on_cut_into(p, pos: Vector2) -> void:
 	breach(p, true, pos)
 	if rails != null:
 		rails.on_cut(p)
+	if atmos != null:
+		atmos.on_cut(p, pos)
 	if p.cls != "equip":
 		return
 	var was_value: float = p.value * p.cond
@@ -2110,6 +2118,8 @@ func do_measure(tg: Dictionary) -> void:
 				match c.medium:
 					"bio":
 						sys.measure(c.id, "bio", c.id, "inst_bio", {"ctrl": c, "room": c.target})
+					"o2":
+						sys.measure(c.id, "o2", c.id, "inst_o2", {"ctrl": c, "room": c.target})
 					"mag":
 						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
 					"heat":
@@ -2202,7 +2212,7 @@ func restore_reading(rd: Dictionary) -> void:
 					extra.unit = "kN"
 				else:
 					extra.field_fn = func(): return mech.field(c.target)
-			"bio":
+			"bio", "o2":
 				extra.room = c.target
 	var r := {"key": key, "kind": rd.kind, "at": rd.at, "inst": rd.inst, "t": rd.t, "val": rd.val, "text": rd.text, "ver": int(rd.ver), "vk": ""}
 	r.merge(extra, true)

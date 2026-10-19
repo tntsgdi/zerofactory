@@ -80,6 +80,25 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				for i in 6:
 					var t := (i + 0.5) / 6.0
 					ci.draw_circle(Vector2(w * t, h * 0.5) if hz else Vector2(w * 0.5, h * t), 1.4, Pal.ink(0.45))
+		"glass":
+			# a pane of precision glazing: two glints across it, its frame
+			L(ci, Vector2(w * 0.12, h * 0.85), Vector2(w * 0.3, h * 0.15), 0.35)
+			L(ci, Vector2(w * 0.2, h * 0.85), Vector2(w * 0.38, h * 0.15), 0.2)
+			if p != null and p.cond < 0.5:
+				for i in 4:
+					L(ci, Vector2(w * (0.5 + i * 0.1), h * 0.1), Vector2(w * (0.45 + i * 0.12), h * 0.9), 0.5)
+		"plants":
+			# a culture rack: its trays, the shoots in them
+			for i in 3:
+				L(ci, Vector2(w * 0.02, h * (0.3 + i * 0.3)), Vector2(w * 0.98, h * (0.3 + i * 0.3)), 0.35)
+			for i in int(maxf(4.0, w / 9.0)):
+				var x := w * (0.04 + i * 9.0 / maxf(w, 1.0))
+				if x > w - 3.0:
+					break
+				for k in 3:
+					var y0 := h * (0.3 + k * 0.3)
+					L(ci, Vector2(x, y0), Vector2(x - 2.0, y0 - h * 0.18), 0.4)
+					L(ci, Vector2(x, y0), Vector2(x + 2.0, y0 - h * 0.15), 0.3)
 		"barrel":
 			L(ci, Vector2(2, h * 0.5), Vector2(w - 2, h * 0.5), 0.3)
 			for x in [0.04, 0.07, 0.6, 0.94]:

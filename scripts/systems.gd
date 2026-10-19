@@ -78,6 +78,11 @@ var clouds: Array = []            # {pos, r, amount, t}
 # space, and the recovery hose's filter takes it out
 var bio := {}
 var bio_vented := 0.0
+# oxygen in a room's air, where a ship file says its rooms' air isn't plain air
+# ("atmos": {"o2": {room: fraction}}, HB-86's culture halls): room -> amount (fraction
+# x the room's gas); it moves with the gas like the contamination does
+var o2 := {}
+var o2_on := false
 
 # hoses: port id -> {"mode": "recover"|"vent", "t": age}
 var hoses := {}
@@ -124,6 +129,13 @@ func setup(g, w, ship: Dictionary) -> void:
 	for k in vols:
 		gas0 += vols[k].n
 		vol_ver[k] = 0
+	o2 = {}
+	var a0: Dictionary = cfg.get("atmos", {}).get("o2", {})
+	o2_on = not cfg.get("atmos", {}).is_empty()
+	if o2_on:
+		for n in vols:
+			if world.rooms.has(n):
+				o2[n] = float(a0.get(n, 0.21)) * vols[n].n
 	bio = {}
 	var b0: Dictionary = cfg.get("bio", {}).get("rooms", {})
 	for n in b0:
@@ -376,11 +388,18 @@ func _step_gas(dt: float) -> void:
 			dn = _limit(dn, a, b)
 			if not bio.is_empty():
 				_carry_bio(a, b, dn)
+			if o2_on:
+				_carry_o2(a, b, dn)
 			vols[a].n -= dn
 			if b == "space":
 				gas_lost += maxf(dn, 0.0)
 			else:
 				vols[b].n += dn
+		# two rooms open to each other mix their air even at one pressure
+		if o2_on:
+			for l in links:
+				if l[1] != "space":
+					_mix_o2(l[0], l[1], l[2], h)
 		for gv in gas_valves:
 			if not on(gv.ctrl):
 				continue
@@ -403,6 +422,8 @@ func _step_gas(dt: float) -> void:
 				bio[v] -= out
 				if hose.mode == "vent":
 					bio_vented += out
+			if o2_on and o2.get(v, 0.0) > 0.0 and vols[v].n > 1e-9:
+				o2[v] -= o2[v] * take / vols[v].n
 			vols[v].n -= take
 			if hose.mode == "vent":
 				gas_lost += take
@@ -442,6 +463,43 @@ func _carry_bio(a: String, b: String, dn: float) -> void:
 		bio_vented += moved
 	else:
 		bio[dst] = bio.get(dst, 0.0) + moved
+
+
+# the oxygen a flow of dn carries with it (into space it is lost; space adds none)
+func _carry_o2(a: String, b: String, dn: float) -> void:
+	var src := a if dn > 0.0 else b
+	var dst := b if dn > 0.0 else a
+	if src == "space":
+		return
+	if vols[src].n <= 1e-9 or o2.get(src, 0.0) <= 0.0:
+		return
+	var moved: float = minf(o2[src], o2[src] * absf(dn) / vols[src].n)
+	o2[src] -= moved
+	if dst != "space":
+		o2[dst] = o2.get(dst, 0.0) + moved
+
+
+const O2_MIX := 0.025            # per open cell per second, of the difference
+
+func _mix_o2(a: String, b: String, g: float, h: float) -> void:
+	var na: float = vols[a].n
+	var nb: float = vols[b].n
+	if na <= 1e-9 or nb <= 1e-9:
+		return
+	var df: float = o2.get(a, 0.0) / na - o2.get(b, 0.0) / nb
+	if absf(df) < 1e-4:
+		return
+	var k: float = minf(0.45, g * O2_MIX * h)
+	var move: float = df * k * minf(na, nb)
+	o2[a] = o2.get(a, 0.0) - move
+	o2[b] = o2.get(b, 0.0) + move
+
+
+# the oxygen fraction of a room's air (0.21 is plain air)
+func o2_frac(room: String) -> float:
+	if not o2_on or not vols.has(room) or vols[room].n <= 1e-9:
+		return 0.21 if vols.has(room) and vols[room].n > 1e-9 else 0.0
+	return clampf(o2.get(room, 0.0) / vols[room].n, 0.0, 1.0)
 
 
 # how contaminated a room's air is (1 = an isolation room as its patient left it)
@@ -1046,6 +1104,9 @@ func _current(r: Dictionary) -> Array:
 		"bio":
 			var bv: float = bio_index(r.get("room", ""))
 			return [bv, "%.2f" % bv, 0, "bio"]
+		"o2":
+			var ov: float = o2_frac(r.get("room", ""))
+			return [ov, "%d %% O₂" % int(round(ov * 100.0)), 0, "gas"]
 	return [0.0, "", 0, ""]
 
 
@@ -1064,4 +1125,6 @@ func stale(r: Dictionary) -> bool:
 			return absf(cur[0] - r.val) > 2.0
 		"bio":
 			return absf(cur[0] - r.val) > maxf(0.05, absf(r.val) * 0.25)
+		"o2":
+			return absf(cur[0] - r.val) > 0.03
 	return false

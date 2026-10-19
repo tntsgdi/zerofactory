@@ -168,9 +168,9 @@ static func lamp(tag: String, x: float, y: float, room: String, on) -> void:
 	bolt(l, on, x, y)
 
 
-# a clamp to the berth at (x, y), on the hull piece found at (x, probe_y)
-static func clamp(n: int, x: float, y: float, probe_y: float) -> void:
-	var j = w.add_joint(at(x, probe_y, ["hull"]), null, "clamp", p(x, y))
+# a clamp to the berth at (x, y), on the hull piece (or what kinds says) found at (x, probe_y)
+static func clamp(n: int, x: float, y: float, probe_y: float, kinds: Array = ["hull"]) -> void:
+	var j = w.add_joint(at(x, probe_y, kinds), null, "clamp", p(x, y))
 	if j == null:
 		push_warning("%s clamp CL-%02d finds no hull at %s,%s" % [who, n, x, probe_y])
 		return
