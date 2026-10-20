@@ -49,7 +49,9 @@ static func build(world) -> void:
 	_supply()
 	_scanner()
 	_engine()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -262,7 +264,7 @@ static func _supply() -> void:
 	var pl = K.plate("", K.R(89.6, 6.0, 98.4, BELLY), {"density": 1.4, "barrier": false, "cut_speed": 170.0}, "strut")
 	K.bolt(pl, K.at(91.0, BELLY + 0.25, ["hull"]), 91.0, BELLY, "weld")
 	K.bolt(pl, K.at(97.0, BELLY + 0.25, ["hull"]), 97.0, BELLY, "weld")
-	var up = K.equip("UPS", "battery", K.rect(90.0, 0.6, 98.0, 6.0), {"mass": 3.2, "value": 12000.0, "fragile": 0.35, "room": "U", "hazard": "battery", "name_key": "p_ups"})
+	var up = K.equip("UPS", "battery", K.rect(90.0, 0.6, 98.0, 6.0), {"mass": 2.8, "value": 12000.0, "fragile": 0.35, "room": "U", "hazard": "battery", "name_key": "p_ups"})
 	K.bolt(up, pl, 91.0, 6.0)
 	K.bolt(up, pl, 97.0, 6.0)
 	K.lamp("LAMP-U", 92.0, -4.95, "U", K.at(92.0, -5.15, ["hull"]))
@@ -293,6 +295,130 @@ static func _engine() -> void:
 	K.bolt(nz, en, 121.0, 0.6)
 	K.bolt(nz, en, 121.0, 3.4)
 
+
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a survey ship carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.2, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1)
+	return p
+
+
+static func _fitout() -> void:
+	var ed = by_tag["ED"]
+	var md = by_tag["MD"]
+	# the equipment room: survey probes ready to launch, comms, air, oxygen, a sample
+	# freezer, the calibration bench, fresh water under the grating
+	for i in 3:
+		var x0 := 8.0 + i * 0.95
+		_stand("PROBE-%d" % (i + 1), "cap", x0, 4.4, x0 + 0.85, EDECK, ed, {"mass": 0.3, "value": 3500.0, "fragile": 0.5, "room": "E", "name_key": "p_survey_probe"})
+	_hang("COMM-E", "nav", 11.2, 13.8, -3.6, 1, {"mass": 0.3, "value": 7000.0, "fragile": 0.5, "room": "E", "name_key": "p_comms"})
+	_hang("AHU-E", "env", 15.0, 19.0, -3.4, 1, {"mass": 0.6, "value": 6000.0, "fragile": 0.4, "room": "E", "name_key": "p_ahu"})
+	_hang("O2-E", "gastank", 19.6, 20.6, -3.0, 1, {"mass": 0.15, "value": 900.0, "fragile": 0.3, "room": "E", "hazard": "gas_tank", "name_key": "p_o2_bottle"})
+	_hang("SAMPLE-F", "freezer", 21.0, 22.9, -3.4, 1, {"mass": 0.4, "value": 8000.0, "fragile": 0.45, "room": "E", "name_key": "p_sample_freezer"})
+	_stand("BENCH-E", "cabinet", 19.4, 4.4, 22.9, EDECK, ed, {"mass": 0.4, "value": 4000.0, "fragile": 0.4, "room": "E", "name_key": "p_cal_bench"})
+	_stand("WATER-E", "water", 11.0, EDECK + 0.25, 17.0, 8.05, ed, {"mass": 0.8, "value": 2500.0, "fragile": 0.3, "room": "E", "name_key": "p_water_tank"}, true)
+	# the mapping room: the chart display over the consoles, the data racks, an
+	# operator's seat; under the grating the computers' chiller, the inertial unit, the archive
+	_hang("CHART", "screen", 27.0, 41.5, -5.9, 2, {"mass": 0.4, "value": 7000.0, "fragile": 0.6, "room": "M", "name_key": "p_chart_display"})
+	_stand("DATA-1", "nav_rack", 44.0, -2.0, 45.7, MDECK, md, {"mass": 0.5, "value": 8000.0, "fragile": 0.45, "room": "M", "name_key": "p_data_rack"})
+	_stand("DATA-2", "nav_rack", 49.0, -2.0, 51.4, MDECK, md, {"mass": 0.6, "value": 8000.0, "fragile": 0.45, "room": "M", "name_key": "p_data_rack"})
+	var sm = K.seat("SEAT-M", Rect2(35.0, MDECK - 1.5, 0.8, 1.5), {"room": "M", "name_key": "p_seat_pilot"})
+	K.bolt(sm, md, 35.2, MDECK)
+	K.bolt(sm, md, 35.6, MDECK, "lock")
+	_stand("CHILL-M", "pump", 28.5, MDECK + 0.25, 32.5, 7.2, md, {"mass": 0.6, "value": 6000.0, "fragile": 0.35, "room": "M", "name_key": "p_chiller"}, true)
+	_stand("GYRO", "nav", 36.0, MDECK + 0.25, 39.0, 6.6, md, {"mass": 0.4, "value": 11000.0, "fragile": 0.6, "room": "M", "name_key": "p_inertial_unit"}, true)
+	_stand("ARCHIVE", "vault", 44.0, MDECK + 0.25, 48.6, 7.4, md, {"mass": 1.2, "value": 9000.0, "fragile": 0.3, "room": "M", "name_key": "p_data_archive"}, true)
+	# the cradle hall: an alignment bench under each instrument, thermal control at
+	# each end, the optics' nitrogen purge
+	for i in 3:
+		var x0: float = OPTS[i] + 1.0
+		var al = K.equip("ALIGN-%d" % (i + 1), "insp", K.rect(x0, 5.6, x0 + 4.0, BELLY), {"mass": 0.4, "value": 3500.0, "fragile": 0.5, "room": "I", "name_key": "p_align_bench"})
+		K.bolt(al, K.at(x0 + 0.4, BELLY + 0.2, ["hull"]), x0 + 0.4, BELLY)
+		K.bolt(al, K.at(x0 + 3.6, BELLY + 0.2, ["hull"]), x0 + 3.6, BELLY)
+	for e in [["TCU-1", 52.4, 55.0], ["TCU-2", 82.2, 84.8]]:
+		var tc = K.equip(e[0], "radiator", K.rect(e[1], 3.0, e[2], BELLY), {"mass": 0.5, "value": 5000.0, "fragile": 0.4, "room": "I", "name_key": "p_thermal_unit"})
+		K.bolt(tc, K.at(e[1] + 0.4, BELLY + 0.2, ["hull"]), e[1] + 0.4, BELLY)
+		K.bolt(tc, K.at(e[2] - 0.4, BELLY + 0.2, ["hull"]), e[2] - 0.4, BELLY)
+	var n2 = K.equip("N2-I", "gastank", K.rect(81.0, 3.6, 81.9, BELLY), {"mass": 0.15, "value": 900.0, "fragile": 0.3, "room": "I", "hazard": "gas_tank", "name_key": "p_n2_bottle"})
+	K.bolt(n2, K.at(81.45, BELLY + 0.2, ["hull"]), 81.45, BELLY, "lock")
+	# the supply room: the inverter and the battery management
+	var iv = K.equip("INV", "swb", K.rect(98.8, 2.0, 101.3, 7.15), {"mass": 0.5, "value": 6000.0, "fragile": 0.4, "room": "U", "name_key": "p_inverter"})
+	K.bolt(iv, K.at(100.6, _iy(7, 100.6) + 0.2, ["hull"]), 100.6, 7.15)
+	K.bolt(iv, K.at(101.0, _iy(7, 101.0) + 0.2, ["hull"]), 101.0, 7.15)
+	var bm = K.equip("BMS", "cabinet", K.rect(W3 + 0.4, -3.6, 88.4, 0.0), {"mass": 0.3, "value": 4000.0, "fragile": 0.4, "room": "U", "name_key": "p_bms"})
+	K.bolt(bm, by_tag["W3"], W3 + 0.4, -3.0)
+	K.bolt(bm, by_tag["W3"], W3 + 0.4, -0.6)
+	# the sensor bay: its cooler; a mast on its roof
+	var cs = K.equip("COOLER-S", "radiator", K.rect(86.2, -9.0, 87.6, -5.4), {"mass": 0.3, "value": 4000.0, "fragile": 0.4, "room": "S", "name_key": "p_sensor_cooler"})
+	K.bolt(cs, K.at(86.5, -5.15, ["hull"]), 86.5, -5.4)
+	K.bolt(cs, K.at(87.3, -5.15, ["hull"]), 87.3, -5.4)
+	var mt = K.equip("MAST-S", "radar", K.rect(76.0, -13.6, 79.0, -11.4), {"mass": 0.3, "value": 6000.0, "fragile": 0.5, "name_key": "p_sensor_mast"})
+	K.bolt(mt, by_tag["S-R2"], 76.6, -11.4)
+	K.bolt(mt, by_tag["S-R2"], 78.4, -11.4)
+	# the tower's lower level: its life support, the data link, a locker
+	for e in [["LIFE-T", "env", 25.4, 28.6, -9.6, 7000.0, "p_life_support"], ["DATA-T", "nav_rack", 29.4, 32.4, -10.8, 7500.0, "p_data_link"], ["LOCKER-T", "locker", 42.0, 44.6, -10.2, 1500.0, "p_locker"]]:
+		var tp = K.equip(e[0], e[1], K.rect(e[2], e[4], e[3], -7.2), {"mass": 0.4, "value": e[5], "fragile": 0.4, "room": "T", "name_key": e[6]})
+		K.bolt(tp, K.at(e[2] + 0.3, -7.0, ["hull"]), e[2] + 0.3, -7.2)
+		K.bolt(tp, K.at(e[2] + 1.0, -7.0, ["hull"]), e[2] + 1.0, -7.2)
+	# the cabin: the observation scope, the navigation unit, the comms display under the roof
+	var d1 = by_tag["TD-1"]
+	var d2 = by_tag["TD-2"]
+	_stand("OBS-SCOPE", "insp", 27.0, TDECK - 1.4, 29.6, TDECK, d1, {"mass": 0.3, "value": 9000.0, "fragile": 0.6, "room": "C", "name_key": "p_obs_scope"})
+	_stand("NAV-C", "nav", 39.4, TDECK - 1.4, 42.0, TDECK, d2, {"mass": 0.3, "value": 8000.0, "fragile": 0.5, "room": "C", "name_key": "p_nav"})
+	# the supply room's upper half: spares, a power board, the charge controller
+	_hang("SPARE-U", "locker", 88.4, 90.9, -1.6, 4, {"mass": 0.3, "value": 2000.0, "fragile": 0.3, "room": "U", "name_key": "p_locker"})
+	_hang("PDU-U", "swb", 92.6, 95.2, -2.0, 5, {"mass": 0.3, "value": 4500.0, "fragile": 0.4, "room": "U", "name_key": "p_power_board"})
+	_hang("CHG-U", "cap", 96.0, 99.6, -2.0, 5, {"mass": 0.4, "value": 5000.0, "fragile": 0.4, "room": "U", "name_key": "p_charge_ctrl"})
+	# the tower cabin: the star tracker under the roof, the cabin's air
+	var sk = K.equip("STAR-TRK", "insp", K.rect(34.2, -24.8, 35.8, -23.6), {"mass": 0.1, "value": 6000.0, "fragile": 0.6, "room": "C", "name_key": "p_star_tracker"})
+	K.bolt(sk, by_tag["T-R1"], 34.5, -24.8)
+	K.bolt(sk, by_tag["T-R1"], 35.5, -24.8)
+	_stand("AIR-C", "env", 43.0, TDECK - 2.2, 45.8, TDECK, by_tag["TD-2"], {"mass": 0.4, "value": 5000.0, "fragile": 0.4, "room": "C", "name_key": "p_ahu"})
+	var cm = K.equip("COMMS-C", "screen", K.rect(41.0, -24.8, 43.0, -23.8), {"mass": 0.1, "value": 3000.0, "fragile": 0.5, "room": "C", "name_key": "p_comms"})
+	K.bolt(cm, by_tag["T-R2"], 41.4, -24.8)
+	K.bolt(cm, by_tag["T-R2"], 42.6, -24.8)
+
+
+static func _fit_lines() -> void:
+	# the fit-out on the bus
+	K.line("f1", "cable", "power", "SWB", Vector2(23.2, -1.6), "COMM-E", Vector2(13.8, -4.0), [Vector2(22.6, -1.6), Vector2(22.6, -2.6), Vector2(14.2, -2.6), Vector2(14.2, -4.0)])
+	K.line("f2", "cable", "power", "COMM-E", Vector2(13.8, -3.8), "AHU-E", Vector2(15.0, -3.8))
+	K.line("f3", "cable", "power", "AHU-E", Vector2(19.0, -3.6), "SAMPLE-F", Vector2(21.0, -3.6), [Vector2(19.3, -3.6), Vector2(19.3, -2.8), Vector2(20.8, -2.8), Vector2(20.8, -3.6)])
+	K.line("f4", "cable", "power", "MAP-2", Vector2(40.0, -2.4), "CHART", Vector2(40.0, -5.9))
+	K.line("f5", "cable", "power", "SURVEY", Vector2(46.0, 1.6), "DATA-1", Vector2(45.7, 1.6))
+	K.line("f6", "cable", "power", "SURVEY", Vector2(48.6, 1.6), "DATA-2", Vector2(49.0, 1.6))
+	K.line("f7", "cable", "power", "MAP-1", Vector2(32.0, MDECK), "CHILL-M", Vector2(32.0, MDECK + 0.25))
+	K.line("f8", "cable", "power", "MAP-2", Vector2(37.4, MDECK), "GYRO", Vector2(37.4, MDECK + 0.25))
+	K.line("f9", "cable", "power", "LAMP-I", Vector2(68.2, -4.79), "TCU-1", Vector2(53.6, 3.0), [Vector2(68.2, -4.6), Vector2(53.6, -4.6)])
+	K.line("f10", "cable", "power", "LAMP-I", Vector2(67.8, -4.79), "TCU-2", Vector2(83.4, 3.0), [Vector2(67.8, -4.5), Vector2(83.4, -4.5)])
+	K.line("f11", "cable", "power", "SEN-3", Vector2(86.0, -7.0), "COOLER-S", Vector2(86.2, -7.0))
+	K.line("f12", "cable", "power", "LAMP-S", Vector2(66.2, -10.84), "MAST-S", Vector2(77.5, -11.4), [Vector2(77.5, -10.84)])
+	K.line("f13", "cable", "power", "LAMP-T", Vector2(29.8, TDECK + 0.46), "DATA-T", Vector2(30.9, -10.8), [Vector2(30.9, -13.6)])
+	K.line("f14", "cable", "power", "DATA-T", Vector2(29.4, -9.0), "LIFE-T", Vector2(28.6, -9.0))
+	K.line("f15", "cable", "power", "T-CON", Vector2(34.4, TDECK - 0.8), "OBS-SCOPE", Vector2(29.6, TDECK - 0.8))
+	K.line("f16", "cable", "power", "T-CON", Vector2(37.6, TDECK - 0.6), "NAV-C", Vector2(39.4, TDECK - 0.6))
+	K.line("f17", "cable", "power", "LAMP-C", Vector2(39.8, -24.64), "COMMS-C", Vector2(41.0, -24.3), [Vector2(39.8, -24.3)])
+	K.line("f18", "cable", "power", "LAMP-U", Vector2(92.2, -4.79), "PDU-U", Vector2(93.0, -2.0), [Vector2(93.0, -4.6)])
+	K.line("f19", "cable", "power", "PDU-U", Vector2(95.2, -2.4), "CHG-U", Vector2(96.0, -2.4))
+	K.line("f20", "cable", "power", "NAV-C", Vector2(42.0, TDECK - 0.6), "AIR-C", Vector2(43.0, TDECK - 0.6))
+	# the instruments' supply through its inverter, watched by the battery management
+	K.line("u4", "cable", "power", "UPS", Vector2(98.0, 3.0), "INV", Vector2(98.8, 3.0))
+	K.line("u5", "cable", "power", "UPS", Vector2(90.6, 0.6), "BMS", Vector2(87.6, 0.0), [Vector2(90.6, 0.3), Vector2(87.6, 0.3)])
+	# the chiller's loop to the two map computers
+	K.line("c1", "pipe", "mcool", "CHILL-M", Vector2(29.5, MDECK + 0.25), "MAP-1", Vector2(29.5, MDECK))
+	K.line("c2", "pipe", "mcool", "CHILL-M", Vector2(32.5, 6.0), "MAP-2", Vector2(41.5, MDECK), [Vector2(41.5, 6.0)])
 
 # ---------------------------------------------------------------- lines
 
@@ -347,6 +473,10 @@ static func _controls() -> void:
 	for i in 3:
 		var x0: float = OPTS[i]
 		K.ctrl("DL-%d" % (i + 1), "switch", by_tag["CRADLE"], Vector2(x0 + 3.0, -1.3), {"target": "DL-%d" % (i + 1), "state": true, "hidden_room": "I"})
+	K.ctrl("PO2", "port", by_tag["O2-E"], Vector2(20.1, -3.4), {"medium": "gas", "target": "O2E", "hidden_room": "E"})
+	K.ctrl("PN2", "port", by_tag["N2-I"], Vector2(81.45, 4.0), {"medium": "gas", "target": "N2I", "hidden_room": "I"})
+	K.ctrl("PW-E", "port", by_tag["WATER-E"], Vector2(14.0, 7.6), {"medium": "water", "target": "water", "hidden_room": "E"})
+	K.ctrl("PCM", "port", by_tag["CHILL-M"], Vector2(30.5, 6.8), {"medium": "coolant", "target": "mcool", "hidden_room": "M"})
 
 
 # ---------------------------------------------------------------- rooms
@@ -379,10 +509,15 @@ static func meta() -> Dictionary:
 		"title": ["SV-122「望楼」测绘船 · 126 m", "SV-122 WATCHTOWER · SURVEY SHIP · 126 m"],
 		"contract": "SV-122",
 		"length": 126.0,
-		"value": {"total": 250000.0, "metal": 34000.0},
+		"value": {"total": 438700.0, "metal": 34000.0},
 		"clamps": [[44.0, 8.4], [68.0, 8.4], [92.0, 8.4]],
 		"room_names": {"E": "room_svE", "M": "room_svM", "I": "room_svI", "U": "room_svU", "T": "room_svT", "C": "room_svC", "S": "room_svS"},
-		"gas": {"rooms": {"E": 101.0, "M": 101.0, "I": 101.0, "U": 101.0, "T": 101.0, "C": 101.0, "S": 101.0}, "vessels": {}, "valves": [], "value": 2200.0},
+		"gas": {"rooms": {"E": 101.0, "M": 101.0, "I": 101.0, "U": 101.0, "T": 101.0, "C": 101.0, "S": 101.0}, "vessels": {"O2E": {"V": 0.08, "kpa": 8000.0, "piece": "O2-E", "burst": 200.0}, "N2I": {"V": 0.08, "kpa": 3000.0, "piece": "N2-I", "burst": 200.0}},
+			"valves": [], "value": 2800.0},
+		"fluids": {"volumes": {
+			"water": {"fluid": "water", "amount": 0.3, "piece": "WATER-E", "port": "PW-E", "full": 0.4, "content": 1.0, "leak": 0.1, "pump": [0.15, 0.006]},
+			"mcool": {"fluid": "coolant", "amount": 0.15, "piece": "CHILL-M", "port": "PCM", "full": 0.15, "nets": ["mcool"], "leak": 0.2, "pump": [0.2, 0.006]},
+		}, "joins": [], "value": {"water": 600.0, "coolant": 900.0}},
 		"rails": rails,
 		"power": {
 			"bus": "SWB",
@@ -399,7 +534,7 @@ static func meta() -> Dictionary:
 		"labels": {"BAT": "BAT", "SWB": "SWB", "UPS": "UPS", "SURVEY": "SURVEY", "ARRAY": "ARRAY", "SCAN": "SCAN", "MAP-1": "MAP", "MAP-2": "MAP"},
 		"hints": {},
 		"market": {
-			"class": "SV", "name": ["望楼级测绘船", "WATCHTOWER-CLASS SURVEY SHIP"], "time": 48.0,
+			"class": "SV", "name": ["望楼级测绘船", "WATCHTOWER-CLASS SURVEY SHIP"], "time": 56.0,
 			"rooms": {"E": [0.2, 40.0, 101.0], "M": [0.2, 40.0, 101.0], "U": [0.2, 40.0, 101.0], "S": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {},

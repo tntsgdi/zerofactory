@@ -19,6 +19,7 @@ var ship := "gr7"              # the type drawn: one type, or "mix" the way the 
 var shard := "a"
 var prefix := "contracts"
 var play_every := 1            # play only every n-th contract that passed the static checks
+var only := ""                 # play just the contract with this id (replaying a failure)
 var res := {"drawn": 0, "discarded": 0, "reasons": {}, "examples": {}, "played": 0, "passed": 0, "failed": [], "traps": {}, "problems": {}, "rates": []}
 var finished := false
 
@@ -38,6 +39,8 @@ func _initialize() -> void:
 			shard = a.substr(6)
 		elif a.begins_with("play_every="):
 			play_every = int(a.substr(11))
+		elif a.begins_with("only="):
+			only = a.substr(5)
 		elif a.begins_with("prefix="):
 			prefix = a.substr(7)
 		elif a == "report":
@@ -106,7 +109,7 @@ func _run() -> void:
 		for p in Variant.problems(d):
 			res.problems[p] = res.problems.get(p, 0) + 1
 		res.accepted = int(res.get("accepted", 0)) + 1
-		if (int(res.accepted) - 1) % play_every != 0:
+		if (int(res.accepted) - 1) % play_every != 0 or (only != "" and o.id != only):
 			continue
 		var bad: Array = await _play(o)
 		res.played += 1

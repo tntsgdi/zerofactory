@@ -208,7 +208,7 @@ static func _m3() -> void:
 		for c in 4:
 			k += 1
 			var x0 := 40.6 + c * 4.0
-			var bx = K.equip("C-%d" % k, "cargo", K.rect(x0, y0, x0 + 3.8, y1), {"mass": 4.0, "value": 6000.0, "fragile": 0.3, "room": "M3", "name_key": "p_cargo_box"})
+			var bx = K.equip("C-%d" % k, "cargo", K.rect(x0, y0, x0 + 3.8, y1), {"mass": 2.8, "value": 6000.0, "fragile": 0.3, "room": "M3", "name_key": "p_cargo_box"})
 			if row == 0:
 				K.bolt(bx, K.at(x0 + 0.5, -4.75, ["hull"]), x0 + 0.5, y0, "lock")
 				K.bolt(bx, K.at(x0 + 3.3, -4.75, ["hull"]), x0 + 3.3, y0, "lock")

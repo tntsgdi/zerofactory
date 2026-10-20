@@ -28,6 +28,7 @@ var sail                      # a light sail held flat by its stays (SA-200), sc
 var reactor                   # a shut-down reactor's dose field (NR-95), scripts/reactor.gd
 var softshell                 # inflatable bags on a rigid spine (IH-55), scripts/softshell.gd
 var train                     # a train of modules on couplers (MT-140), scripts/train.gd
+var flywheel                  # a mass driver still spinning (MD-160), scripts/flywheel.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -292,6 +293,10 @@ func _ready() -> void:
 	train.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(train)
 	train.setup(self, ship)
+	flywheel = preload("res://scripts/flywheel.gd").new()
+	flywheel.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(flywheel)
+	flywheel.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -456,6 +461,8 @@ func _ready() -> void:
 			softshell.load_state(data.softshell)
 		if data.has("train"):
 			train.load_state(data.train)
+		if data.has("flywheel"):
+			flywheel.load_state(data.flywheel)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1654,6 +1661,8 @@ func on_body_freed(b) -> void:
 		reactor.on_freed(b)
 	if softshell != null:
 		softshell.on_freed(b)
+	if flywheel != null:
+		flywheel.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -1834,6 +1843,8 @@ func on_cut_into(p, pos: Vector2) -> void:
 		softshell.on_cut(p)
 	if train != null:
 		train.on_cut(p)
+	if flywheel != null:
+		flywheel.on_cut(p)
 	if atmos != null:
 		atmos.on_cut(p, pos)
 	if media != null:
@@ -2256,6 +2267,10 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "field", c.id, "inst_dose", {"ctrl": c, "field_fn": func(): return reactor.probe(c), "unit": "mSv/h"})
 					"bend":
 						sys.measure(c.id, "field", c.id, "inst_bend", {"ctrl": c, "field_fn": func(): return train.aft_mass(), "unit": "t"})
+					"rpm":
+						sys.measure(c.id, "field", c.id, "inst_rpm", {"ctrl": c, "field_fn": func(): return float(flywheel.rpm.get(c.target, 0.0)), "unit": "rpm"})
+					"rail":
+						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return flywheel.rail_pull(c.target), "unit": "kN"})
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
 						if sys.dead_leg_closed(c):
@@ -2359,6 +2374,12 @@ func restore_reading(rd: Dictionary) -> void:
 				elif c.medium == "bend":
 					extra.field_fn = func(): return train.aft_mass()
 					extra.unit = "t"
+				elif c.medium == "rpm":
+					extra.field_fn = func(): return float(flywheel.rpm.get(c.target, 0.0))
+					extra.unit = "rpm"
+				elif c.medium == "rail":
+					extra.field_fn = func(): return flywheel.rail_pull(c.target)
+					extra.unit = "kN"
 				else:
 					extra.field_fn = func(): return mech.field(c.target)
 			"bio", "o2":

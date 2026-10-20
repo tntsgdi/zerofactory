@@ -234,6 +234,26 @@ func _prep() -> void:
 				_note("tensioner %s slack" % tn)
 				_work(2.5)
 				return
+	# a mass driver: each wheel's brake cooling on, then its brake; the rails' tensioners
+	# let off from the tail
+	if g.flywheel != null and g.flywheel.active():
+		for wl in g.flywheel.cfg.get("wheels", {}):
+			var e: Dictionary = g.flywheel.cfg.wheels[wl]
+			for sw in [e.get("cool", ""), e.get("brake", "")]:
+				if sw != "" and not s.on(sw) and not _hidden(sw) and _once("fw " + sw):
+					_w(sw)
+					_note("%s on" % sw)
+					_work(2.5)
+					return
+		for rl in g.flywheel.cfg.get("rails", {}):
+			for t in g.flywheel.cfg.rails[rl].get("tensioners", []):
+				if s.on(str(t)) and not _hidden(str(t)) and _once("rt " + str(t)):
+					_w(str(t))
+					_note("tensioner %s off" % t)
+					_work(2.5)
+					return
+				if s.on(str(t)):
+					break
 	# a reactor's control drums locked before anything near the core moves
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
@@ -638,6 +658,8 @@ func _unsafe() -> Array:
 		out.append_array(g.boxbeam.unsafe())
 	if g.sail != null and g.sail.active():
 		out.append_array(g.sail.unsafe())
+	if g.flywheel != null and g.flywheel.active():
+		out.append_array(g.flywheel.unsafe())
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
 			if not s.on(str(g.reactor.cfg.drums[d])):
@@ -759,7 +781,8 @@ func _strip() -> void:
 		for b in w.bodies:
 			if not is_instance_valid(b) or b.capture != null or sent.has(b):
 				continue
-			_send(b)
+			if not _unmix(b):
+				_send(b)
 			break
 	if phase_t % 2 != 0:
 		return
@@ -823,6 +846,11 @@ func _strip_paced() -> void:
 		if plugged:
 			g.log_op("unplug")
 			_work(0.7)
+			return
+		# equipment carrying too much plain metal (a nozzle still on half an engine) would go
+		# to the scrap mouth: unbolt the equipment from the rest first
+		if _unmix(b):
+			_work(0.8)
 			return
 		var m: float = b.total_mass()
 		var zone := zone_for(b)
@@ -923,6 +951,42 @@ func _crack_in(b):
 		if j.alive and j.type == "crack" and b.pieces.any(func(q): return q.id == j.a or q.id == j.b):
 			return j
 	return null
+
+
+# equipment carrying too much plain metal (a nozzle still on half an engine) would go
+# to the scrap mouth: unbolt the equipment from the rest first
+func _unmix(b) -> bool:
+	if not _mixed(b):
+		return false
+	var w = g.world
+	for p in b.pieces:
+		if g.sys.dest_of(p) != "equip":
+			continue
+		for j in w.joints_of(p):
+			var o = w.pieces.get(j.b if j.a == p.id else j.a)
+			if o != null and g.sys.dest_of(o) != "equip":
+				w.kill_joint(j)
+	g.log_op("unfix")
+	return true
+
+
+func _mixed(b) -> bool:
+	if careless or b.pieces.size() < 2 or int(b.get_meta("bot_unmix", 0)) > 2:
+		return false
+	var equip := false
+	var other := false
+	for p in b.pieces:
+		var d: String = g.sys.dest_of(p)
+		if d == "hazard":
+			return false
+		if d == "equip":
+			equip = true
+		else:
+			other = true
+	if equip and other and zone_for(b) == "metal":
+		b.set_meta("bot_unmix", int(b.get_meta("bot_unmix", 0)) + 1)
+		return true
+	return false
 
 
 func zone_for(b) -> String:

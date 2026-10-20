@@ -230,7 +230,7 @@ static func _lift() -> void:
 	K.bolt(lf, K.at(103.0, BELLY + 0.25, ["hull"]), 103.0, BELLY, "lock", "LL-1")
 	K.bolt(lf, K.at(113.0, BELLY + 0.25, ["hull"]), 113.0, BELLY, "lock", "LL-2")
 	# the recovery drone parked on it, its pack on its back
-	var dr = K.equip("DR-7", "uav", K.rect(99.0, 3.0, 111.0, 10.2), {"mass": 3.2, "value": 16000.0, "fragile": 0.35, "room": "H", "name_key": "p_recovery_drone"}, _octo(99.0, 3.0, 12.0, 7.2))
+	var dr = K.equip("DR-7", "uav", K.rect(99.0, 3.0, 111.0, 10.2), {"mass": 2.9, "value": 16000.0, "fragile": 0.35, "room": "H", "name_key": "p_recovery_drone"}, _octo(99.0, 3.0, 12.0, 7.2))
 	K.bolt(dr, lf, 101.5, 10.2)
 	K.bolt(dr, lf, 108.5, 10.2)
 	var pk = K.equip("DP-7", "battery", K.rect(103.6, 1.6, 106.4, 3.0), {"mass": 0.45, "value": 2000.0, "fragile": 0.4, "room": "H", "hazard": "battery", "name_key": "p_drone_pack"})

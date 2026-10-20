@@ -45,7 +45,9 @@ static func build(world) -> void:
 	_furnace()
 	_heat_exchange()
 	_engine()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -155,7 +157,7 @@ static func _sorting() -> void:
 		var rx := 22.0 + i * 6.5
 		var rl = K.equip("RL-%d" % (i + 1), "drum", K.rect(rx - 0.9, 1.2, rx + 0.9, 3.0), {"cls": "metal", "dest": "metal", "mass": 0.25, "cut_speed": 160.0, "name_key": "p_roller"})
 		K.bolt(rl, cv, rx, 1.2)
-	var so = K.equip("SORT", "pump", K.rect(24.0, -6.0, 36.0, 0.6), {"mass": 3.4, "value": 13000.0, "fragile": 0.35, "room": "S", "name_key": "p_sorter"})
+	var so = K.equip("SORT", "pump", K.rect(24.0, -6.0, 36.0, 0.6), {"mass": 2.9, "value": 13000.0, "fragile": 0.35, "room": "S", "name_key": "p_sorter"})
 	K.bolt(so, cv, 25.0, 0.6)
 	K.bolt(so, cv, 35.0, 0.6)
 	# the feed ram off B1, pinned, on its own accumulator
@@ -255,6 +257,126 @@ static func _engine() -> void:
 	K.bolt(nz, en, 124.0, 6.0)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a smelter carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.2, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1)
+	return p
+
+
+static func _fitout() -> void:
+	var sd = by_tag["SDECK"]
+	# the cab: comms and its own air under the roof
+	_stand("COMMS-C", "screen", 30.4, -14.0, 32.4, -13.0, by_tag["CAB-R2"], {"mass": 0.1, "value": 3000.0, "fragile": 0.5, "room": "C", "name_key": "p_comms"}, true)
+	_stand("AHU-C", "env", 32.8, -14.0, 34.8, -12.8, by_tag["CAB-R2"], {"mass": 0.3, "value": 4000.0, "fragile": 0.4, "room": "C", "name_key": "p_ahu"}, true)
+	# sorting: the magnetic separator over the feed, the spectrometer by the sorter,
+	# the sample bins and the tool locker on the deck under the conveyor
+	_hang("MAG-SEP", "module", 19.0, 23.4, -5.4, 1, {"mass": 1.8, "value": 9000.0, "fragile": 0.35, "room": "S", "name_key": "p_mag_sep"})
+	_hang("SPECTRO", "insp", 36.2, 38.2, -7.4, 2, {"mass": 0.3, "value": 12000.0, "fragile": 0.6, "room": "S", "name_key": "p_spectro"})
+	_hang("CAM-S", "insp", 26.0, 29.0, -7.6, 1, {"mass": 0.15, "value": 4000.0, "fragile": 0.6, "room": "S", "name_key": "p_cargo_mon"})
+	_hang("DUST-S", "overhead", 32.4, 35.6, -7.4, 2, {"mass": 0.6, "value": 3500.0, "fragile": 0.3, "room": "S", "name_key": "p_dust_filter"})
+	_stand("BINS-S", "cargo", 24.0, 3.3, 27.0, SDECK, sd, {"mass": 0.8, "value": 3000.0, "fragile": 0.3, "room": "S", "name_key": "p_samples"})
+	_stand("LOCK-S", "locker", 30.0, 3.2, 33.4, SDECK, sd, {"mass": 0.4, "value": 2000.0, "fragile": 0.3, "room": "S", "name_key": "p_locker"})
+	# the power room: inverter, standby supply and charger under the deck, the battery's monitor on it
+	_stand("INV-L", "swb", 19.0, SDECK + 0.3, 21.8, 6.8, sd, {"mass": 0.4, "value": 5000.0, "fragile": 0.4, "room": "L", "name_key": "p_inverter"}, true)
+	_stand("UPS-L", "battery", 22.4, SDECK + 0.3, 25.4, 7.4, sd, {"mass": 0.7, "value": 6000.0, "fragile": 0.4, "room": "L", "name_key": "p_ups"}, true)
+	_stand("CHG-L", "cap", 27.0, SDECK + 0.3, 29.6, 6.9, sd, {"mass": 0.4, "value": 4000.0, "fragile": 0.4, "room": "L", "name_key": "p_charge_ctrl"}, true)
+	_stand("BMS-L", "panel", 31.0, 7.6, 33.0, 8.6, by_tag["BAT"], {"mass": 0.1, "value": 3500.0, "fragile": 0.5, "room": "L", "name_key": "p_bms"})
+	# the smelting hall: fume hoods, the off-gas scrubber and bag filter under the roof,
+	# pyrometers on the shell, the furnace control cabinet and the argon bank on the
+	# walls, the slag carts under the furnace, the finished ingots on their racks
+	_hang("FUME-1", "overhead", 46.5, 52.5, -10.8, 3, {"mass": 0.9, "value": 4000.0, "fragile": 0.3, "room": "F", "name_key": "p_fume_hood"})
+	_hang("SCRUB", "filter", 54.0, 59.2, -9.4, 3, {"mass": 2.6, "value": 11000.0, "fragile": 0.35, "room": "F", "name_key": "p_scrubber"})
+	_hang("BAGF", "filter", 61.0, 66.4, -10.2, 3, {"mass": 1.4, "value": 6000.0, "fragile": 0.35, "room": "F", "name_key": "p_dust_filter"})
+	_hang("FUME-2", "overhead", 67.5, 73.5, -10.8, 3, {"mass": 0.9, "value": 4000.0, "fragile": 0.3, "room": "F", "name_key": "p_fume_hood"})
+	for e in [["PYRO-1", 50.0], ["PYRO-2", 68.8]]:
+		_stand(e[0], "insp", e[1], -7.6, e[1] + 1.2, -6.6, by_tag["FS-1"], {"mass": 0.1, "value": 3500.0, "fragile": 0.6, "room": "F", "name_key": "p_pyro"})
+	var fc = K.equip("FCTL", "swb", K.rect(41.0, -5.0, 43.6, -0.5), {"mass": 0.6, "value": 9000.0, "fragile": 0.4, "room": "F", "name_key": "p_furnace_ctrl"})
+	K.bolt(fc, by_tag["B2"], 41.0, -4.4)
+	K.bolt(fc, by_tag["B2"], 41.0, -1.1)
+	var ar = K.equip("ARGON", "gastank", K.rect(78.0, -4.5, B3, 0.5), {"mass": 0.6, "value": 2500.0, "fragile": 0.3, "room": "F", "hazard": "gas_tank", "name_key": "p_argon"})
+	K.bolt(ar, by_tag["B3"], B3, -3.8)
+	K.bolt(ar, by_tag["B3"], B3, -0.2)
+	var mn = K.equip("MANI", "filter", K.rect(78.0, 1.5, B3, 5.0), {"mass": 0.5, "value": 3000.0, "fragile": 0.3, "room": "F", "name_key": "p_manifold"})
+	K.bolt(mn, by_tag["B3"], B3, 2.0)
+	K.bolt(mn, by_tag["B3"], B3, 4.5)
+	for e in [["SLAG-1", 49.2, 54.0], ["SLAG-2", 65.7, 71.2]]:
+		_stand(e[0], "cargo", e[1], 8.8, e[2], BELLY, K.at(e[1] + 1.0, BELLY + 0.25, ["hull"]), {"cls": "metal", "dest": "metal", "mass": 2.6, "cut_speed": 150.0, "name_key": "p_slag_car"})
+	for e in [["INGOT-1", 41.4, 48.0], ["INGOT-2", 72.2, 77.4]]:
+		_stand(e[0], "cargo", e[1], 8.0, e[2], BELLY, K.at(e[1] + 1.0, BELLY + 0.25, ["hull"]), {"mass": 2.8, "value": 14000.0, "fragile": 0.15, "room": "F", "name_key": "p_ingot_rack"})
+	# heat exchange: pump controllers on the pumps, the panel on the bulkhead, the
+	# expansion tank and the degasser under the roof, the steam drum, the booster pump
+	_stand("HXC-1", "panel", 83.2, 5.0, 85.6, 6.6, by_tag["HX-1"], {"mass": 0.2, "value": 3000.0, "fragile": 0.45, "room": "H", "name_key": "p_flow_ctrl"})
+	_stand("HXC-2", "panel", 88.4, 5.0, 90.8, 6.6, by_tag["HX-2"], {"mass": 0.2, "value": 3000.0, "fragile": 0.45, "room": "H", "name_key": "p_flow_ctrl"})
+	var hm = K.equip("HMI-H", "screen", K.rect(B3 + 0.4, -5.0, 82.4, -2.0), {"mass": 0.1, "value": 2500.0, "fragile": 0.5, "room": "H", "name_key": "p_temp_panel"})
+	K.bolt(hm, by_tag["B3"], B3 + 0.4, -4.4)
+	K.bolt(hm, by_tag["B3"], B3 + 0.4, -2.6)
+	_hang("EXP-T", "gastank", 82.6, 85.6, -8.0, 4, {"mass": 0.5, "value": 2500.0, "fragile": 0.3, "room": "H", "name_key": "p_expansion_tank"})
+	_hang("DEGAS", "pump", 87.0, 91.0, -7.0, 4, {"mass": 1.1, "value": 5000.0, "fragile": 0.35, "room": "H", "name_key": "p_strainer"})
+	_hang("DRUM", "sphere_tank", 96.0, 99.8, -4.0, 5, {"mass": 2.8, "value": 7000.0, "fragile": 0.3, "room": "H", "name_key": "p_steam_drum"})
+	# a grating mezzanine across the room: the plate exchanger, the lube skid, the water treatment, spares
+	var hg = K.plate("HGRATE", K.R(B3 + 0.4, 0.6, 102.6, 0.9), {"density": 0.6, "barrier": false, "cut_speed": 240.0, "art": "grating", "name_key": "p_floor"}, "deck")
+	K.bolt(hg, by_tag["B3"], B3 + 0.4, 0.75, "weld")
+	var hp = K.plate("", K.R(102.0, 0.9, 102.4, _iy(8, 102.4) + 0.05), {"density": 1.2, "barrier": false, "cut_speed": 180.0}, "strut")
+	K.bolt(hp, hg, 102.2, 0.9, "weld")
+	K.bolt(hp, K.at(102.2, _iy(8, 102.2) + 0.25, ["hull"]), 102.2, _iy(8, 102.2), "weld")
+	_stand("PHX", "radiator", 84.0, -2.6, 88.0, 0.6, hg, {"mass": 1.4, "value": 7000.0, "fragile": 0.3, "room": "H", "name_key": "p_heat_exchanger"})
+	_stand("LUBE", "pump", 89.0, -1.6, 92.0, 0.6, hg, {"mass": 0.6, "value": 3500.0, "fragile": 0.35, "room": "H", "name_key": "p_lube_pump"})
+	_stand("WTREAT", "filter", 93.0, -2.2, 95.8, 0.6, hg, {"mass": 0.7, "value": 4500.0, "fragile": 0.35, "room": "H", "name_key": "p_water_treat"})
+	_stand("SPARE-H", "locker", 99.6, -1.6, 101.8, 0.6, hg, {"mass": 0.4, "value": 2500.0, "fragile": 0.3, "room": "H", "name_key": "p_parts_rack"})
+	var y0 := maxf(_iy(8, 94.2), _iy(8, 98.8))
+	var bp = K.equip("BOOST", "pump", K.rect(94.2, y0 - 2.0, 98.8, y0), {"mass": 1.2, "value": 5500.0, "fragile": 0.35, "room": "H", "name_key": "p_return_pump"})
+	for x in [94.6, 98.4]:
+		K.bolt(bp, K.at(x, _iy(8, x) + 0.2, ["hull"]), x, y0)
+
+
+static func _fit_lines() -> void:
+	# the sorter's separator and spectrometer
+	K.line("f1", "cable", "power", "SORT", Vector2(24.4, -6.0), "MAG-SEP", Vector2(23.0, -5.4), [Vector2(24.4, -5.0), Vector2(23.0, -5.0)])
+	K.line("f2", "cable", "power", "SORT", Vector2(35.6, -6.0), "SPECTRO", Vector2(36.6, -7.4), [Vector2(35.6, -6.6), Vector2(36.6, -6.6)])
+	# the power room's chain off the switchboard
+	K.line("f3", "cable", "power", "SWB", Vector2(B2 - 2.2, 5.7), "CHG-L", Vector2(29.6, 5.7))
+	K.line("f4", "cable", "power", "CHG-L", Vector2(27.0, 5.7), "UPS-L", Vector2(25.4, 5.7))
+	K.line("f5", "cable", "power", "UPS-L", Vector2(22.4, 5.7), "INV-L", Vector2(21.8, 5.7))
+	K.line("f6", "cable", "power", "SWB", Vector2(38.8, 7.6), "BMS-L", Vector2(33.0, 8.1), [Vector2(38.8, 8.1)])
+	# the hall: off its lamp along the roof to the hoods, the scrubber and the filter
+	K.line("f7", "cable", "power", "LAMP-F", Vector2(59.8, -12.59), "SCRUB", Vector2(58.8, -11.0), [Vector2(59.6, -11.0)])
+	K.line("f8", "cable", "power", "SCRUB", Vector2(59.2, -10.0), "BAGF", Vector2(61.0, -10.4), [Vector2(60.4, -10.0), Vector2(60.4, -10.4)])
+	K.line("f9", "cable", "power", "SCRUB", Vector2(54.0, -11.0), "FUME-1", Vector2(52.5, -11.0))
+	K.line("f10", "cable", "power", "BAGF", Vector2(66.4, -11.0), "FUME-2", Vector2(67.5, -11.0))
+	K.line("f11", "cable", "power", "FUME-1", Vector2(50.6, -10.8), "PYRO-1", Vector2(50.6, -7.6))
+	K.line("f12", "cable", "power", "FUME-2", Vector2(69.4, -10.8), "PYRO-2", Vector2(69.4, -7.6))
+	K.line("f13", "cable", "power", "FUME-1", Vector2(46.5, -11.4), "FCTL", Vector2(42.3, -5.0), [Vector2(42.3, -11.4)])
+	# heat exchange: the controllers, the panel, the degasser, the drum's heater, the booster
+	K.line("f14", "cable", "power", "HXC-1", Vector2(85.6, 5.8), "HXC-2", Vector2(88.4, 5.8))
+	K.line("f15", "cable", "power", "HXC-1", Vector2(83.2, 5.8), "HMI-H", Vector2(82.0, -2.0), [Vector2(82.6, 5.8), Vector2(82.6, -1.4), Vector2(82.0, -1.4)])
+	K.line("f16", "cable", "power", "HMI-H", Vector2(81.7, -5.0), "DEGAS", Vector2(88.0, -7.0), [Vector2(81.7, -6.0), Vector2(88.0, -6.0)])
+	K.line("f17", "cable", "power", "HX-2", Vector2(92.4, 7.4), "BOOST", Vector2(94.2, y_boost() - 1.0), [Vector2(93.2, 7.4), Vector2(93.2, y_boost() - 1.0)])
+	K.line("f18", "cable", "power", "LAMP-H", Vector2(95.2, _iy(5, 95.0) + 0.16), "DRUM", Vector2(96.0, -5.0), [Vector2(95.2, -5.0)])
+	K.line("f19", "cable", "power", "HMI-H", Vector2(82.4, -2.4), "PHX", Vector2(84.0, -1.0), [Vector2(83.2, -2.4), Vector2(83.2, -1.0)])
+	K.line("f20", "cable", "power", "PHX", Vector2(88.0, -0.4), "LUBE", Vector2(89.0, -0.4))
+	K.line("f21", "cable", "power", "LUBE", Vector2(92.0, -0.4), "WTREAT", Vector2(93.0, -0.4))
+	K.line("f22", "cable", "power", "LAMP-S", Vector2(29.8, _iy(1, 30.0) + 0.16), "CAM-S", Vector2(29.0, -7.8), [Vector2(29.8, -7.8)])
+	K.line("f23", "cable", "power", "SPECTRO", Vector2(36.2, -7.6), "DUST-S", Vector2(35.6, -7.6))
+	# the expansion tank feeds the degasser; the drum's water
+	K.line("x1", "pipe", "xcool", "EXP-T", Vector2(85.6, -9.0), "DEGAS", Vector2(87.0, -9.0))
+
+
+static func y_boost() -> float:
+	return maxf(_iy(8, 94.2), _iy(8, 98.8))
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -299,6 +421,9 @@ static func _controls() -> void:
 	K.ctrl("PA-F", "port", by_tag["ACC-F"], Vector2(39.8, -2.8), {"medium": "gas", "target": "ACC-F", "hidden_room": "S"})
 	K.ctrl("PC", "port", by_tag["CT"], Vector2(106.0, 4.4), {"medium": "coolant", "target": "loop", "hidden_room": "H"})
 	K.ctrl("T-FR", "probe", by_tag["FEED"], Vector2(21.0, 3.4), {"medium": "tension", "target": "FR-P", "hidden_room": "S"})
+	K.ctrl("PAR", "port", by_tag["ARGON"], Vector2(79.3, 0.3), {"medium": "gas", "target": "ARGON", "hidden_room": "F"})
+	K.ctrl("PEX", "port", by_tag["EXP-T"], Vector2(84.1, -8.2), {"medium": "coolant", "target": "exp", "hidden_room": "H"})
+	K.ctrl("PDR", "port", by_tag["DRUM"], Vector2(97.9, -4.2), {"medium": "water", "target": "steam", "hidden_room": "H"})
 
 
 # ---------------------------------------------------------------- rooms
@@ -320,11 +445,12 @@ static func meta() -> Dictionary:
 		"title": ["MF-126「熔脊」熔炼船 · 129 m", "MF-126 MOLTEN RIDGE · SMELTER SHIP · 129 m"],
 		"contract": "MF-126",
 		"length": 129.0,
-		"value": {"total": 166000.0, "metal": 40000.0},
+		"value": {"total": 347100.0, "metal": 40000.0},
 		"clamps": [[36.0, 12.0], [62.0, 12.0], [88.0, 12.0]],
 		"room_names": {"C": "room_mfC", "S": "room_mfS", "L": "room_mfL", "F": "room_mfF", "H": "room_mfH"},
 		"gas": {"rooms": {"C": 101.0, "S": 101.0, "L": 101.0, "F": 101.0, "H": 101.0},
-			"vessels": {"ACC-F": {"V": 0.05, "kpa": 1700.0, "piece": "ACC-F", "burst": 200.0}}, "valves": [], "value": 1800.0},
+			"vessels": {"ACC-F": {"V": 0.05, "kpa": 1700.0, "piece": "ACC-F", "burst": 200.0}, "ARGON": {"V": 0.1, "kpa": 12000.0, "piece": "ARGON", "burst": 200.0}},
+			"valves": [], "value": 2600.0},
 		"furnace": {"core": "CORE", "T0": 760.0, "safe": 150.0, "crit": 350.0, "cool": 4.0, "idle": 0.1, "pumps": ["HX-1", "HX-2"], "loop": "loop", "loop_min": 0.6},
 		"preloads": {
 			"FR-P": {"pins": ["FR-L1", "FR-L2"], "vessel": "ACC-F", "kpa": 300.0, "piece": "FEED", "push": [1.0, -0.2], "hits": "SORT", "kn": 36.0},
@@ -339,12 +465,14 @@ static func meta() -> Dictionary:
 		"fluids": {"volumes": {
 			"loop": {"fluid": "coolant", "amount": 1.2, "piece": "CT", "content": 1.2, "leak": 0.14, "port": "PC", "pump": [0.12, 0.008]},
 			"loop_line": {"fluid": "coolant", "amount": 0.02, "nets": ["cool"], "leak": 0.06, "leak_min": 0.004},
-		}, "joins": [], "value": {"coolant": 1500.0}},
+			"exp": {"fluid": "coolant", "amount": 0.15, "piece": "EXP-T", "port": "PEX", "full": 0.2, "nets": ["xcool"], "leak": 0.1, "pump": [0.15, 0.006]},
+			"steam": {"fluid": "water", "amount": 0.4, "piece": "DRUM", "port": "PDR", "full": 0.5, "content": 1.0, "leak": 0.1, "pump": [0.15, 0.006]},
+		}, "joins": [], "value": {"coolant": 1700.0, "water": 500.0}},
 		"ctrls_cfg": {"G-C": {"rate": 12.0}, "G-S": {"rate": 34.0}, "G-L": {"rate": 22.0}, "G-F": {"rate": 48.0}, "G-H": {"rate": 30.0}, "PA-F": {"rate": 0.4}},
 		"labels": {"BAT": "BAT", "SWB": "SWB", "CORE": "CORE", "CT": "COOLANT", "SMELTLOG": "SMELT LOG", "HX-1": "HX", "HX-2": "HX", "ACC-F": "ACC"},
 		"hints": {},
 		"market": {
-			"class": "MF", "name": ["熔脊级熔炼船", "MOLTEN RIDGE-CLASS SMELTER"], "time": 50.0,
+			"class": "MF", "name": ["熔脊级熔炼船", "MOLTEN RIDGE-CLASS SMELTER"], "time": 60.0,
 			"rooms": {"C": [0.2, 40.0, 101.0], "S": [0.2, 40.0, 101.0], "L": [0.2, 40.0, 101.0], "H": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {"loop": [0.9, 1.2]}, "fill": {"loop_line": "loop"},

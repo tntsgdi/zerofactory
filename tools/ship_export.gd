@@ -24,6 +24,7 @@ func _initialize() -> void:
 		author.variant = id.substr(3)
 	var w := World.new()
 	author.build(w)
+	_cut_lines(w, id)
 	var d: Dictionary = author.meta()
 	d.merge(export_world(w), true)
 	var f := FileAccess.open("res://ships/%s.json" % id, FileAccess.WRITE)
@@ -32,6 +33,36 @@ func _initialize() -> void:
 	print("wrote ships/%s.json: %d pieces, %d joints, %d lines, %d controls, %d rooms" % [id, d.pieces.size(), d.joints.size(), d.lines.size(), d.ctrls.size(), d.rooms.size()])
 	w.free()
 	quit()
+
+
+# Equipment the base 3 t grapple can't take whole gets enough marked lines (across its
+# long side, evenly) for every part to be one it can (player 2026-10-19: "anything
+# recoverable must be cuttable or smaller, or the drone can't take it up").
+const GRAB_T := 3.0
+
+
+static func _cut_lines(w, id: String) -> void:
+	for pid in w.order:
+		var p = w.pieces[pid]
+		if p.cls != "equip" or p.gone:
+			continue
+		var seg: Array = p.get_meta("segments", [])
+		var need := ceili(float(p.mass) / GRAB_T)
+		if seg.size() + 1 >= need:
+			continue
+		var bb := Geom.bbox(p.poly)
+		var r := Rect2(bb.position / Geom.M, bb.size / Geom.M)
+		var out: Array = []
+		for i in range(1, need):
+			var f := float(i) / need
+			if r.size.x >= r.size.y:
+				var x := r.position.x + r.size.x * f
+				out.append([x, r.position.y, x, r.end.y])
+			else:
+				var y := r.position.y + r.size.y * f
+				out.append([r.position.x, y, r.end.x, y])
+		p.set_meta("segments", out)
+		print("  %s: %s %.1f t gets %d marked lines" % [id, p.tag, p.mass, out.size()])
 
 
 # Readable JSON: one record per line in the long lists, nested settings indented,

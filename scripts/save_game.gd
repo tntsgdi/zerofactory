@@ -168,6 +168,7 @@ static func save(g) -> void:
 		"reactor": g.reactor.save_state() if g.reactor != null and g.reactor.active() else {},
 		"softshell": g.softshell.save_state() if g.softshell != null and g.softshell.active() else {},
 		"train": g.train.save_state() if g.train != null and g.train.active() else {},
+		"flywheel": g.flywheel.save_state() if g.flywheel != null and g.flywheel.active() else {},
 		"bio": g.bio.save_state() if g.bio != null else {},
 		"ore": g.ore.save_state() if g.ore != null else {},
 		"cryo": g.cryo.save_state() if g.cryo != null else {},

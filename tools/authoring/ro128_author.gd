@@ -42,7 +42,9 @@ static func build(world) -> void:
 	_bridge()
 	_aft()
 	_engines()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -198,6 +200,115 @@ static func _engines() -> void:
 		K.bolt(nz, en, 124.0, y1 - 1.4)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a ro-ro carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.2, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false, type := "bolt"):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1, type)
+	return p
+
+
+const HDY := -5.6                # the hoistable car deck (to -5.2)
+const HD := [[16.0, 36.0], [38.0, 58.0], [60.0, 80.0]]
+
+
+static func _fitout() -> void:
+	var vd = by_tag["VDECK"]
+	# the hoistable car deck over the heavy units: three panels on hanger rods off the
+	# roof, three cars lashed on each
+	for i in 3:
+		var x0: float = HD[i][0]
+		var x1: float = HD[i][1]
+		var n := str(i + 1)
+		var pn = K.plate("HD-" + n, K.R(x0, HDY, x1, HDY + 0.4), {"density": 1.0, "barrier": false, "cut_speed": 200.0, "name_key": "p_hoist_deck"}, "deck")
+		for rx in [x0 + 2.0, x1 - 2.4]:
+			var ei := 0 if rx < 27.0 else 1
+			var ry := maxf(_iy(ei, rx), _iy(ei, rx + 0.3))
+			var rd = K.plate("", K.R(rx, ry, rx + 0.3, HDY), {"density": 1.4, "barrier": false, "cut_speed": 170.0, "name_key": "p_hanger"}, "strut")
+			K.bolt(rd, K.at(rx + 0.15, _iy(ei, rx + 0.15) - 0.2, ["hull"]), rx + 0.15, ry, "weld")
+			K.bolt(rd, pn, rx + 0.15, HDY, "weld")
+		for c in 3:
+			var cx := x0 + 0.8 + c * 6.4
+			_stand("CAR-%d%d" % [i + 1, c + 1], "cargo", cx, HDY - 1.6, cx + 5.0, HDY, pn, {"mass": 1.4, "value": 5000.0, "fragile": 0.4, "room": "V", "name_key": "p_car"}, false, "lock")
+	# under the roof: exhaust fans, the cameras, the drencher valves on the aft bulkhead
+	for e in [["FAN-1", 24.0], ["FAN-2", 44.0], ["FAN-3", 64.6]]:
+		_hang(e[0], "env", e[1], e[1] + 3.6, -8.6, 1, {"mass": 0.6, "value": 3500.0, "fragile": 0.35, "room": "V", "name_key": "p_deck_fan"})
+	for e in [["CCTV-1", 36.4], ["CCTV-2", 58.4], ["CCTV-3", 82.0]]:
+		_hang(e[0], "insp", e[1], e[1] + 1.2, -9.4, 1, {"mass": 0.05, "value": 2500.0, "fragile": 0.6, "room": "V", "name_key": "p_cargo_mon"})
+	var dr = K.equip("DRENCH", "pump", K.rect(90.6, -8.0, A1, -4.4), {"mass": 0.8, "value": 4500.0, "fragile": 0.35, "room": "V", "name_key": "p_drencher"})
+	K.bolt(dr, by_tag["A1"], A1, -7.4)
+	K.bolt(dr, by_tag["A1"], A1, -5.0)
+	# aft of the last unit: the deck tractor and the lashing gear
+	_stand("TRACTOR", "module", 87.4, 3.4, 91.0, VDECK, vd, {"mass": 2.6, "value": 9000.0, "fragile": 0.3, "room": "V", "name_key": "p_deck_tractor"}, false, "lock")
+	var ls = K.equip("LASH", "locker", K.rect(91.4, -2.4, A1, 2.8), {"mass": 0.5, "value": 2000.0, "fragile": 0.3, "room": "V", "name_key": "p_lashing"})
+	K.bolt(ls, by_tag["A1"], A1, -1.8)
+	K.bolt(ls, by_tag["A1"], A1, 2.2)
+	# under the vehicle deck, on the bearing girder: the ballast pump and three ballast tanks
+	var kg = by_tag["KEEL"]
+	_stand("BPUMP", "pump", 24.0, 7.4, 29.4, 9.4, kg, {"mass": 1.2, "value": 6000.0, "fragile": 0.35, "name_key": "p_ballast_pump"})
+	for e in [["BT-1", 32.0], ["BT-2", 52.0], ["BT-3", 72.0]]:
+		_stand(e[0], "water", e[1], 6.8, e[1] + 9.0, 9.4, kg, {"mass": 1.8, "value": 3000.0, "fragile": 0.3, "name_key": "p_ballast"})
+	# aft: the door controls and air under the roof, the emergency switchboard, the
+	# thruster hydraulics and the tool locker on the stern wall
+	_hang("AHU-U", "env", 94.2, 98.2, -6.4, 2, {"mass": 0.6, "value": 5000.0, "fragile": 0.4, "room": "U", "name_key": "p_ahu"})
+	_hang("DOOR-CON", "screen", 99.6, 102.6, -6.6, 2, {"mass": 0.2, "value": 4500.0, "fragile": 0.5, "room": "U", "name_key": "p_ramp_ctrl"})
+	_stand("EMG-SWB", "swb", 101.4, 5.0, 104.6, 7.0, by_tag["HPU-D"], {"mass": 0.6, "value": 5500.0, "fragile": 0.4, "room": "U", "name_key": "p_lv_dist"})
+	var sg = K.equip("THR-HPU", "gen", K.rect(110.5, -2.4, 114.55, 1.6), {"mass": 1.4, "value": 7000.0, "fragile": 0.35, "room": "U", "name_key": "p_hpu"})
+	K.bolt(sg, K.at(114.75, -1.8, ["hull"]), 114.55, -1.8)
+	K.bolt(sg, K.at(114.75, 1.0, ["hull"]), 114.55, 1.0)
+	var tl = K.equip("TOOLS-U", "locker", K.rect(112.0, 2.2, 114.55, 5.4), {"mass": 0.4, "value": 2500.0, "fragile": 0.3, "room": "U", "name_key": "p_locker"})
+	K.bolt(tl, K.at(114.75, 2.8, ["hull"]), 114.55, 2.8)
+	K.bolt(tl, K.at(114.75, 4.8, ["hull"]), 114.55, 4.8)
+	# the bridge: radar and camera screens under the roof, the loading computer, comms, air
+	_stand("RADAR-D", "radar", 77.4, -15.8, 79.4, -14.8, by_tag["BR-R1"], {"mass": 0.1, "value": 6000.0, "fragile": 0.5, "room": "B", "name_key": "p_radar"}, true)
+	_stand("CCTV-B", "screen", 84.2, -15.8, 87.0, -14.6, by_tag["BR-R2"], {"mass": 0.1, "value": 3000.0, "fragile": 0.5, "room": "B", "name_key": "p_cargo_mon"}, true)
+	_stand("LOADCOMP", "console", 81.7, -12.0, 83.4, -10.8, K.at(82.5, -10.55, ["hull"]), {"mass": 0.15, "value": 6500.0, "fragile": 0.5, "room": "B", "name_key": "p_load_mon"})
+	for e in [["COMMS-B", "nav", 89.4, 91.4, -13.0, 5000.0, "p_comms"], ["AHU-B", "env", 91.8, 93.4, -11.9, 3000.0, "p_ahu"]]:
+		var x0: float = e[2]
+		var x1: float = e[3]
+		var q = K.equip(e[0], e[1], K.rect(x0, e[4], x1, _oy(2, x1)), {"mass": 0.2, "value": e[5], "fragile": 0.45, "room": "B", "name_key": e[6]},
+			K.mp([Vector2(x0, e[4]), Vector2(x1, e[4]), Vector2(x1, _oy(2, x1)), Vector2(x0, _oy(2, x0))]))
+		for x in [x0 + 0.3, x1 - 0.3]:
+			K.bolt(q, K.at(x, _oy(2, x) + 0.25, ["hull"]), x, _oy(2, x))
+
+
+static func _fit_lines() -> void:
+	# the deck's fans and cameras off its lamps
+	K.line("f1", "cable", "power", "LAMP-V1", Vector2(29.8, -10.19), "FAN-1", Vector2(27.6, -9.0), [Vector2(29.8, -9.0)])
+	K.line("f2", "cable", "power", "LAMP-V1", Vector2(30.2, -10.19), "CCTV-1", Vector2(36.4, -9.6), [Vector2(30.2, -9.6)])
+	K.line("f3", "cable", "power", "CCTV-1", Vector2(37.6, -9.6), "FAN-2", Vector2(44.0, -9.6))
+	K.line("f4", "cable", "power", "FAN-2", Vector2(47.6, -9.6), "CCTV-2", Vector2(58.4, -9.6))
+	K.line("f5", "cable", "power", "CCTV-2", Vector2(59.6, -9.6), "FAN-3", Vector2(64.6, -9.6))
+	K.line("f6", "cable", "power", "LAMP-V2", Vector2(70.2, -10.19), "CCTV-3", Vector2(82.0, -9.6), [Vector2(70.4, -9.6)])
+	K.line("f7", "cable", "power", "CCTV-3", Vector2(83.2, -9.6), "DRENCH", Vector2(90.6, -7.4), [Vector2(86.0, -9.6), Vector2(86.0, -7.4)])
+	# aft: the switchboard to the emergency board, the thruster unit, the door console, the air
+	K.line("f8", "cable", "power", "SWB", Vector2(95.4, 5.4), "EMG-SWB", Vector2(101.4, 5.6), [Vector2(96.4, 5.4), Vector2(96.4, 5.6)])
+	K.line("f9", "cable", "power", "HPU-D", Vector2(104.8, 8.0), "THR-HPU", Vector2(111.0, 1.6), [Vector2(111.0, 8.0)])
+	K.line("f10", "cable", "power", "LAMP-U", Vector2(99.2, _iy(2, 99.0) + 0.16), "DOOR-CON", Vector2(100.0, -6.6), [Vector2(99.2, -6.0), Vector2(100.0, -6.0)])
+	K.line("f11", "cable", "power", "LAMP-U", Vector2(98.8, _iy(2, 99.0) + 0.16), "AHU-U", Vector2(98.2, -7.0), [Vector2(98.8, -7.0)])
+	# the bridge
+	K.line("f12", "cable", "power", "LAMP-B", Vector2(79.8, -15.64), "RADAR-D", Vector2(79.4, -15.2), [Vector2(79.8, -15.2)])
+	K.line("f13", "cable", "power", "HELM", Vector2(83.6, -11.4), "LOADCOMP", Vector2(83.4, -11.4))
+	K.line("f14", "cable", "power", "HELM", Vector2(86.0, -12.4), "CCTV-B", Vector2(86.0, -14.6))
+	K.line("f15", "cable", "power", "CARGOLOG", Vector2(89.0, -11.9), "COMMS-B", Vector2(89.4, -11.9))
+	K.line("f16", "cable", "power", "COMMS-B", Vector2(91.4, -11.4), "AHU-B", Vector2(91.8, -11.4))
+	# the ballast pump off the emergency board, under the deck; the ballast main
+	K.line("f17", "cable", "power", "EMG-SWB", Vector2(101.4, 6.6), "BPUMP", Vector2(29.4, 8.4), [Vector2(100.6, 6.6), Vector2(100.6, 9.0), Vector2(92.4, 9.0), Vector2(30.0, 9.0), Vector2(30.0, 8.4)])
+	K.line("w1", "pipe", "bal", "BPUMP", Vector2(29.4, 7.8), "BT-1", Vector2(32.0, 7.8))
+	K.line("w2", "pipe", "bal", "BT-1", Vector2(41.0, 7.8), "BT-2", Vector2(52.0, 7.8))
+	K.line("w3", "pipe", "bal", "BT-2", Vector2(61.0, 7.8), "BT-3", Vector2(72.0, 7.8))
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -234,6 +345,7 @@ static func _controls() -> void:
 	K.ctrl("PA-D", "port", by_tag["ACC-D"], Vector2(94.8, 6.0), {"medium": "gas", "target": "ACC-D", "hidden_room": "U"})
 	K.ctrl("PH", "port", by_tag["HPU-D"], Vector2(103.0, 7.2), {"medium": "hydraulic", "target": "hyd", "hidden_room": "U"})
 	K.ctrl("T-VH", "probe", by_tag["VISOR"], Vector2(11.0, -8.6), {"medium": "tension", "target": "VH"})
+	K.ctrl("PBT", "port", by_tag["BT-1"], Vector2(36.5, 7.0), {"medium": "water", "target": "ballast"})
 
 
 # ---------------------------------------------------------------- rooms
@@ -259,7 +371,7 @@ static func meta() -> Dictionary:
 		"title": ["RO-128「长桥」滚装运输船 · 129 m", "RO-128 LONG BRIDGE · RO-RO CARRIER · 129 m"],
 		"contract": "RO-128",
 		"length": 129.0,
-		"value": {"total": 180000.0, "metal": 44000.0},
+		"value": {"total": 318200.0, "metal": 44000.0},
 		"clamps": [[34.0, 10.8], [62.0, 10.8], [90.0, 10.8]],
 		"room_names": {"V": "room_roV", "U": "room_roU", "B": "room_roB"},
 		"gas": {"rooms": {"V": 101.0, "U": 101.0, "B": 101.0},
@@ -278,12 +390,13 @@ static func meta() -> Dictionary:
 		"fluids": {"volumes": {
 			"hyd": {"fluid": "hydraulic", "amount": 0.5, "piece": "HPU-D", "content": 1.0, "leak": 0.12, "port": "PH", "pump": [0.12, 0.008]},
 			"hyd_line": {"fluid": "hydraulic", "amount": 0.02, "nets": ["hyd"], "leak": 0.06, "leak_min": 0.004},
-		}, "joins": [], "value": {"hydraulic": 700.0}},
+			"ballast": {"fluid": "water", "amount": 2.4, "piece": "BT-1", "port": "PBT", "full": 3.0, "content": 1.0, "nets": ["bal"], "leak": 0.2, "pump": [0.3, 0.01]},
+		}, "joins": [], "value": {"hydraulic": 700.0, "water": 1200.0}},
 		"ctrls_cfg": {"G-V": {"rate": 150.0}, "G-U": {"rate": 26.0}, "G-B": {"rate": 12.0}, "PA-D": {"rate": 0.4}},
 		"labels": {"BAT": "BAT", "SWB": "SWB", "HPU-D": "HPU", "ACC-D": "ACC", "CARGOLOG": "CARGO LOG", "CARGO-1": "UNIT 1", "CARGO-2": "UNIT 2", "CARGO-3": "UNIT 3", "CARGO-4": "UNIT 4"},
 		"hints": {},
 		"market": {
-			"class": "RO", "name": ["长桥级滚装运输船", "LONG BRIDGE-CLASS RO-RO CARRIER"], "time": 50.0,
+			"class": "RO", "name": ["长桥级滚装运输船", "LONG BRIDGE-CLASS RO-RO CARRIER"], "time": 60.0,
 			"rooms": {"V": [0.2, 40.0, 101.0], "U": [0.2, 40.0, 101.0], "B": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {"hyd": [0.2, 0.5]}, "fill": {"hyd_line": "hyd"},
