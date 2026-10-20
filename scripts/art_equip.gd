@@ -600,12 +600,24 @@ static func _draw_art(ci: CanvasItem, art: String, r: Rect2, p, font: Font) -> v
 		"sphere_tank": sphere_tank(ci, r, p, font)
 		"rcs_quad": rcs_quad(ci, r)
 		"radar": radar(ci, r)
+		"eng_front": eng_front(ci, r)
+		"engine_s": engine_s(ci, r)
+		"brake": brake(ci, r)
+		"arm": arm(ci, r)
+		"dock": dock(ci, r)
+		"freezer": freezer(ci, r, p, font)
+		"barrel": barrel(ci, r)
+		"turret": turret(ci, r)
+		"launcher": launcher(ci, r)
+		"ciws": ciws(ci, r)
+		"gun_mount": gun_mount(ci, r)
+		"decoy": decoy(ci, r)
 		_:
 			if ext != null:
 				ext._draw_art(ci, art, r, p, font)
 
 
-const DRAWN := ["pump", "cabinet", "swb", "battery", "gen", "env", "filter", "trap", "locker", "console", "nav_rack", "module", "aux", "panel", "junction", "insp", "sensor", "overhead", "growlamp", "tray", "pipe", "cargo", "crate", "container", "gastank", "extinguisher", "water", "fueltank", "cap", "screen", "nav", "o2cab", "bunk", "blackbox", "table", "shelf", "desk", "toolwall", "fridge", "medcab", "galley", "bench", "radiator", "hx", "duct_fan", "chiller", "transformer", "inverter", "fuelcell", "hpu", "manifold", "charger", "actuator", "relief", "stator", "gauge_box", "beacon", "lamp", "eng_core", "nozzle", "reel", "drum", "hook", "sphere_tank", "rcs_quad", "radar"]
+const DRAWN := ["pump", "cabinet", "swb", "battery", "gen", "env", "filter", "trap", "locker", "console", "nav_rack", "module", "aux", "panel", "junction", "insp", "sensor", "overhead", "growlamp", "tray", "pipe", "cargo", "crate", "container", "gastank", "extinguisher", "water", "fueltank", "cap", "screen", "nav", "o2cab", "bunk", "blackbox", "table", "shelf", "desk", "toolwall", "fridge", "medcab", "galley", "bench", "radiator", "hx", "duct_fan", "chiller", "transformer", "inverter", "fuelcell", "hpu", "manifold", "charger", "actuator", "relief", "stator", "gauge_box", "beacon", "lamp", "eng_core", "nozzle", "reel", "drum", "hook", "sphere_tank", "rcs_quad", "radar", "eng_front", "engine_s", "brake", "arm", "dock", "freezer", "barrel", "turret", "launcher", "ciws", "gun_mount", "decoy"]
 
 
 static func _has(art: String) -> bool:
@@ -3014,3 +3026,287 @@ static func radar(ci: CanvasItem, r: Rect2) -> void:
 	L(ci, Vector2(vx + s * 0.05, h * 0.5), Vector2(w * 0.86, h * 0.5), 0.5, 1.4)
 	O(ci, Vector2(w * 0.86, h * 0.5), s * 0.06, 0.55)
 	R(ci, Rect2(w * 0.8, h * 0.5, w * 0.12, h * 0.46), 0.45)
+
+
+# ------------------------------------------------------------------ the older kinds
+
+# an engine's front end (its powerhead): the two propellant feed lines in through
+# their gimbal bellows and main valves, the turbopump between them, the injector
+# manifold dome where it meets the chamber (to the right)
+static func eng_front(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	var ay: float = h * 0.5
+	# injector dome on the right
+	var dr: float = minf(h * 0.36, w * 0.13)
+	var dx: float = w - dr - 2.0
+	A(ci, Vector2(dx, ay), dr, -PI * 0.5, PI * 0.5, 0.6, 1.4)
+	L(ci, Vector2(dx, ay - h * 0.36), Vector2(dx, ay + h * 0.36), 0.55, 1.4)
+	L(ci, Vector2(w * 0.9, ay - h * 0.2), Vector2(w * 0.9, ay + h * 0.2), 0.3)
+	# turbopump
+	var tc := Vector2(w * 0.5, ay)
+	var tr: float = minf(h * 0.18, w * 0.14)
+	O(ci, tc, tr, 0.6, 1.2)
+	impeller(ci, tc, tr * 0.72, 0.45)
+	R(ci, Rect2(tc.x - tr * 0.5, tc.y - tr * 2.0, tr, tr * 1.0), 0.45)
+	E_hatch(ci, Rect2(tc.x - tr * 0.45, tc.y - tr * 1.95, tr * 0.9, tr * 0.9))
+	# the two feed lines with bellows and valves
+	for sg in [-1.0, 1.0]:
+		var y: float = ay + sg * h * 0.34
+		L(ci, Vector2(1, y - 3.0), Vector2(minf(w * 0.8, dx), y - 3.0), 0.5)
+		L(ci, Vector2(1, y + 3.0), Vector2(minf(w * 0.8, dx), y + 3.0), 0.5)
+		var segs := PackedVector2Array()
+		for k in 5:
+			var x: float = w * 0.12 + k * 3.0
+			segs.append(Vector2(x, y - 4.5))
+			segs.append(Vector2(x, y + 4.5))
+		S(ci, segs, 0.4)
+		var vc := Vector2(w * 0.32, y)
+		P(ci, PackedVector2Array([vc + Vector2(-4, -4), vc + Vector2(4, 4), vc + Vector2(4, -4), vc + Vector2(-4, 4), vc + Vector2(-4, -4)]), 0.6)
+		L(ci, Vector2(w * 0.8, y), Vector2(dx, y - sg * h * 0.1), 0.45, 1.4)
+		L(ci, Vector2(tc.x, y), tc + Vector2(0, sg * tr), 0.4)
+
+
+static func E_hatch(ci: CanvasItem, r: Rect2) -> void:
+	hatch(ci, r, 3.0, true, 0.25, 20)
+
+
+# a small pressure-fed engine: the valves on its feed lines, the injector head, the
+# combustion chamber and its bell (exhaust right), the gimbal mount
+static func engine_s(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	var n := clampi(roundi(w / maxf(h * 1.6, 1.0)), 1, 6)
+	var uw: float = w / n
+	for i in n:
+		var x0: float = i * uw
+		var ay: float = h * 0.5
+		var cr: float = h * 0.2
+		var cx0: float = x0 + uw * 0.3
+		var cx1: float = x0 + uw * 0.55
+		R(ci, Rect2(x0 + uw * 0.22, ay - cr * 1.1, uw * 0.08, cr * 2.2), 0.55)
+		P(ci, PackedVector2Array([Vector2(cx0, ay - cr), Vector2(cx1, ay - cr), Vector2(cx1 + uw * 0.06, ay - cr * 0.5), Vector2(x0 + uw * 0.98, ay - h * 0.46), ]), 0.6, 1.2)
+		P(ci, PackedVector2Array([Vector2(cx0, ay + cr), Vector2(cx1, ay + cr), Vector2(cx1 + uw * 0.06, ay + cr * 0.5), Vector2(x0 + uw * 0.98, ay + h * 0.46), ]), 0.6, 1.2)
+		L(ci, Vector2(x0 + uw * 0.98, ay - h * 0.46), Vector2(x0 + uw * 0.98, ay + h * 0.46), 0.45)
+		var segs := PackedVector2Array()
+		for k in 4:
+			var t: float = (k + 1) / 5.0
+			var x: float = lerpf(cx1 + uw * 0.06, x0 + uw * 0.98, t)
+			var hh: float = lerpf(cr * 0.5, h * 0.46, t)
+			segs.append(Vector2(x, ay - hh))
+			segs.append(Vector2(x, ay + hh))
+		S(ci, segs, 0.22)
+		for sg in [-1.0, 1.0]:
+			var y: float = ay + sg * cr * 0.6
+			L(ci, Vector2(x0 + 2.0, y), Vector2(x0 + uw * 0.22, y), 0.45)
+			var vc := Vector2(x0 + uw * 0.12, y)
+			P(ci, PackedVector2Array([vc + Vector2(-3, -2.5), vc + Vector2(3, 2.5), vc + Vector2(3, -2.5), vc + Vector2(-3, 2.5), vc + Vector2(-3, -2.5)]), 0.55)
+		O(ci, Vector2(x0 + uw * 0.26, ay - cr * 1.3), 1.8, 0.55)
+
+
+# a disc brake caliper on the edge of its disc: the disc's rim, the caliper body
+# straddling it, the pistons and pads, the hydraulic line
+static func brake(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	var dy: float = h * 0.5
+	L(ci, Vector2(1, dy - h * 0.12), Vector2(w - 1, dy - h * 0.12), 0.45)
+	L(ci, Vector2(1, dy + h * 0.12), Vector2(w - 1, dy + h * 0.12), 0.45)
+	var segs := PackedVector2Array()
+	for k in clampi(int(w / 5.0), 2, 60):
+		var x: float = 2.0 + k * 5.0
+		segs.append(Vector2(x, dy - h * 0.12))
+		segs.append(Vector2(x + 2.0, dy + h * 0.12))
+	S(ci, segs, 0.15)
+	var n := clampi(int(w / (h * 1.8)), 1, 6)
+	for i in n:
+		var cx: float = (i + 0.5) * w / n
+		var cw: float = minf(w / n * 0.7, h * 1.2)
+		R(ci, Rect2(cx - cw * 0.5, h * 0.04, cw, h * 0.92), 0.6, 1.2)
+		R(ci, Rect2(cx - cw * 0.35, dy - h * 0.2, cw * 0.7, h * 0.06), 0.55)
+		R(ci, Rect2(cx - cw * 0.35, dy + h * 0.14, cw * 0.7, h * 0.06), 0.55)
+		for f in [0.3, 0.7]:
+			O(ci, Vector2(cx - cw * 0.5 + cw * f, h * 0.16), minf(cw * 0.12, h * 0.08), 0.45)
+		L(ci, Vector2(cx + cw * 0.5, h * 0.12), Vector2(cx + cw * 0.5 + 4.0, h * 0.04), 0.4)
+
+
+# a manipulator arm folded at rest: its base and turntable, the shoulder, the
+# upper and lower arm with their actuator cylinders, the wrist, the gripper
+static func arm(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	var vert: bool = h > w
+	var ln: float = h if vert else w
+	var th: float = w if vert else h
+	var X := func(u: float, v: float) -> Vector2: return Vector2(th - v, ln - u) if vert else Vector2(u, v)
+	var base: Vector2 = X.call(ln * 0.08, th * 0.82)
+	R(ci, Rect2(X.call(1.0, th * 0.9), X.call(ln * 0.2, th - 1.0) - X.call(1.0, th * 0.9)).abs(), 0.6, 1.2)
+	O(ci, base, minf(th, ln) * 0.12, 0.6, 1.2)
+	var elbow: Vector2 = X.call(ln * 0.55, th * 0.28)
+	var wrist: Vector2 = X.call(ln * 0.86, th * 0.62)
+	for seg in [[base, elbow, 0.14], [elbow, wrist, 0.1]]:
+		var a: Vector2 = seg[0]
+		var b: Vector2 = seg[1]
+		var t: Vector2 = (b - a).normalized().orthogonal() * minf(th, ln) * float(seg[2]) * 0.5
+		P(ci, PackedVector2Array([a + t, b + t, b - t, a - t, a + t]), 0.55, 1.2)
+		L(ci, a.lerp(b, 0.15) + t * 1.8, a.lerp(b, 0.7) + t * 1.8, 0.45, 1.4)
+	O(ci, elbow, minf(th, ln) * 0.09, 0.6)
+	O(ci, wrist, minf(th, ln) * 0.07, 0.6)
+	var d: Vector2 = (wrist - elbow).normalized()
+	var g: Vector2 = wrist + d * minf(th, ln) * 0.12
+	L(ci, wrist, g, 0.55, 1.6)
+	for s in [-1.0, 1.0]:
+		var o: Vector2 = d.orthogonal() * s * minf(th, ln) * 0.07
+		P(ci, PackedVector2Array([g + o * 0.4, g + o, g + o + d * minf(th, ln) * 0.1]), 0.6, 1.4)
+
+
+# a docking port: the ring flange with its bolt circle, the capture latches and the
+# guide petals standing proud of it, the seal, the hatch behind
+static func dock(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	var vert: bool = h > w
+	var ln: float = h if vert else w
+	var th: float = w if vert else h
+	var X := func(u: float, v: float) -> Vector2: return Vector2(v, u) if vert else Vector2(u, v)
+	L(ci, X.call(ln * 0.06, th * 0.4), X.call(ln * 0.94, th * 0.4), 0.65, 2.0)
+	L(ci, X.call(ln * 0.06, th * 0.55), X.call(ln * 0.94, th * 0.55), 0.5, 1.4)
+	bolts(ci, X.call(ln * 0.08, th * 0.475), X.call(ln * 0.92, th * 0.475), clampi(int(ln / 7.0), 3, 16), 0.5, 0.9)
+	# guide petals and latches out the face (v toward 0)
+	for f in [0.12, 0.88]:
+		P(ci, PackedVector2Array([X.call(ln * (f - 0.08), th * 0.4), X.call(ln * f, th * 0.04), X.call(ln * (f + 0.08), th * 0.4)]), 0.55, 1.2)
+	for f in [0.35, 0.65]:
+		L(ci, X.call(ln * f, th * 0.4), X.call(ln * f, th * 0.18), 0.55, 1.4)
+		L(ci, X.call(ln * f, th * 0.18), X.call(ln * f + (2.5 if f < 0.5 else -2.5), th * 0.22), 0.55, 1.4)
+	# the hatch and the tunnel behind
+	L(ci, X.call(ln * 0.18, th * 0.55), X.call(ln * 0.18, th * 0.96), 0.45)
+	L(ci, X.call(ln * 0.82, th * 0.55), X.call(ln * 0.82, th * 0.96), 0.45)
+	L(ci, X.call(ln * 0.24, th * 0.8), X.call(ln * 0.76, th * 0.8), 0.5, 1.4)
+	O(ci, X.call(ln * 0.5, th * 0.8), minf(ln, th) * 0.08, 0.5)
+
+
+# an ultra-low freezer: the insulated door with its gasket and lever handle, the
+# controller with its temperature readout, the compressor bay grille at the foot;
+# a wide one is a bank of them
+static func freezer(ci: CanvasItem, r: Rect2, p, font: Font) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	var n := clampi(roundi(w / maxf(h * 0.6, 0.8 * M)), 1, 8)
+	var uw: float = w / n
+	for i in n:
+		var b := Rect2(i * uw + 1.5, 1.5, uw - 3.0, h - 3.0)
+		R(ci, b, 0.55)
+		var dr := Rect2(b.position.x + b.size.x * 0.06, b.position.y + b.size.y * 0.16, b.size.x * 0.88, b.size.y * 0.66)
+		R(ci, dr, 0.5)
+		R(ci, E_inset(dr, 2.5), 0.25)
+		L(ci, Vector2(dr.end.x - dr.size.x * 0.1, dr.get_center().y - dr.size.y * 0.15), Vector2(dr.end.x - dr.size.x * 0.1, dr.get_center().y + dr.size.y * 0.15), 0.65, 2.0)
+		var disp := Rect2(b.position.x + b.size.x * 0.2, b.position.y + b.size.y * 0.03, b.size.x * 0.6, b.size.y * 0.1)
+		R(ci, disp, 0.5)
+		if font != null and disp.size.y >= 8.0 and disp.size.x >= 24.0:
+			T(ci, font, Vector2(disp.position.x + 2.0, disp.end.y - 2.0), "-80°C", disp.size.x - 3.0, clampi(int(disp.size.y * 0.8), 7, 9), 0.55)
+		louvres(ci, Rect2(b.position.x + b.size.x * 0.15, b.end.y - b.size.y * 0.15, b.size.x * 0.7, b.size.y * 0.12), 0.3)
+
+
+static func E_inset(r: Rect2, d: float) -> Rect2:
+	return inset(r, d)
+
+
+# a drum (barrel) standing: its rolling hoops, the chime, the bung; a long thin one
+# is a gun barrel (the bore, the rifling, the muzzle brake, the bore evacuator)
+static func barrel(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	if w > h * 4.0:
+		L(ci, Vector2(1, h * 0.2), Vector2(w * 0.9, h * 0.25), 0.6, 1.2)
+		L(ci, Vector2(1, h * 0.8), Vector2(w * 0.9, h * 0.75), 0.6, 1.2)
+		L(ci, Vector2(1, h * 0.5), Vector2(w, h * 0.5), 0.2)
+		R(ci, Rect2(w * 0.4, h * 0.1, w * 0.08, h * 0.8), 0.5)
+		R(ci, Rect2(w * 0.9, 1, w * 0.1 - 1.0, h - 2.0), 0.6)
+		for f in [0.93, 0.97]:
+			L(ci, Vector2(w * f, 2), Vector2(w * f, h - 2), 0.45)
+		return
+	var n := clampi(roundi(w / maxf(h * 0.7, 6.0)), 1, 12)
+	var dw: float = w / n
+	for i in n:
+		var d := Rect2(i * dw + dw * 0.08, 1.5, dw * 0.84, h - 3.0)
+		R(ci, d, 0.55)
+		for f in [0.33, 0.66]:
+			L(ci, Vector2(d.position.x, d.position.y + d.size.y * f), Vector2(d.end.x, d.position.y + d.size.y * f), 0.45, 1.4)
+		L(ci, Vector2(d.position.x, d.position.y + 2.0), Vector2(d.end.x, d.position.y + 2.0), 0.35)
+		O(ci, Vector2(d.position.x + d.size.x * 0.75, d.position.y + 1.0), 1.5, 0.55)
+
+
+# a naval gun turret: the faceted gunhouse, the barrel out of its mantlet, the
+# trunnion, the ring and the ammunition hoist below
+static func turret(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	P(ci, PackedVector2Array([Vector2(w * 0.08, h * 0.7), Vector2(w * 0.14, h * 0.18), Vector2(w * 0.5, h * 0.08), Vector2(w * 0.62, h * 0.3), Vector2(w * 0.62, h * 0.7), Vector2(w * 0.08, h * 0.7)]), 0.65, 1.4)
+	R(ci, Rect2(w * 0.58, h * 0.3, w * 0.06, h * 0.22), 0.55)
+	L(ci, Vector2(w * 0.64, h * 0.38), Vector2(w * 0.99, h * 0.36), 0.6, 1.4)
+	L(ci, Vector2(w * 0.64, h * 0.44), Vector2(w * 0.99, h * 0.42), 0.6, 1.4)
+	O(ci, Vector2(w * 0.5, h * 0.41), h * 0.08, 0.5)
+	R(ci, Rect2(w * 0.94, h * 0.32, w * 0.05, h * 0.14), 0.5)
+	L(ci, Vector2(w * 0.06, h * 0.72), Vector2(w * 0.66, h * 0.72), 0.55, 1.8)
+	bolts(ci, Vector2(w * 0.08, h * 0.76), Vector2(w * 0.64, h * 0.76), 8, 0.45, 0.9)
+	R(ci, Rect2(w * 0.28, h * 0.78, w * 0.12, h * 0.2), 0.5)
+	hatch(ci, Rect2(w * 0.29, h * 0.8, w * 0.1, h * 0.16), 2.5, false, 0.3, 10)
+
+
+# a box missile launcher: the canisters side by side, each with its frangible
+# cover, the blast vents along the base
+static func launcher(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	var n := clampi(int(w / maxf(h * 1.2, 6.0)), 2, 40)
+	var cw: float = w / n
+	for i in n:
+		R(ci, Rect2(i * cw + 0.8, 1, cw - 1.6, h - 2.0), 0.5)
+		L(ci, Vector2(i * cw + 2.0, 2.0), Vector2((i + 1) * cw - 2.0, h - 2.0), 0.25)
+
+
+# a close-in weapon system: the rotary gun, its radar dome above, the mount
+static func ciws(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	A(ci, Vector2(w * 0.5, h * 0.42), w * 0.22, PI, TAU, 0.6, 1.4)
+	R(ci, Rect2(w * 0.28, h * 0.42, w * 0.44, h * 0.3), 0.6, 1.2)
+	for k in 3:
+		L(ci, Vector2(w * 0.04, h * (0.54 + k * 0.05)), Vector2(w * 0.28, h * (0.54 + k * 0.05)), 0.5, 1.2)
+	R(ci, Rect2(w * 0.02, h * 0.5, w * 0.04, h * 0.16), 0.55)
+	R(ci, Rect2(w * 0.72, h * 0.48, w * 0.14, h * 0.2), 0.5)
+	L(ci, Vector2(w * 0.24, h * 0.96), Vector2(w * 0.76, h * 0.96), 0.55, 1.8)
+	L(ci, Vector2(w * 0.4, h * 0.72), Vector2(w * 0.36, h * 0.96), 0.5)
+	L(ci, Vector2(w * 0.6, h * 0.72), Vector2(w * 0.64, h * 0.96), 0.5)
+
+
+# a gun mount: the slewing ring with its roller race and the training gear, the base
+static func gun_mount(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	A(ci, Vector2(w * 0.5, 0), w * 0.4, 0.0, PI, 0.55, 1.4)
+	L(ci, Vector2(w * 0.08, h * 0.5), Vector2(w * 0.92, h * 0.5), 0.55, 1.6)
+	var segs := PackedVector2Array()
+	for k in clampi(int(w * 0.8 / 4.0), 3, 60):
+		var x: float = w * 0.1 + k * 4.0
+		segs.append(Vector2(x, h * 0.5))
+		segs.append(Vector2(x, h * 0.56))
+	S(ci, segs, 0.35)
+	for k in 7:
+		O(ci, Vector2(w * (0.14 + k * 0.12), h * 0.66), minf(h * 0.06, 3.0), 0.45)
+	R(ci, Rect2(w * 0.08, h * 0.76, w * 0.84, h * 0.2), 0.5)
+	O(ci, Vector2(w * 0.86, h * 0.4), h * 0.1, 0.5)
+
+
+# a decoy launcher: the tubes at their elevation, the cartridges' caps
+static func decoy(ci: CanvasItem, r: Rect2) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	for i in 3:
+		var x := w * (0.2 + i * 0.3)
+		var a := Vector2(x, h * 0.95)
+		var b := Vector2(x + w * 0.12, h * 0.1)
+		var t: Vector2 = (b - a).normalized().orthogonal() * 3.0
+		P(ci, PackedVector2Array([a + t, b + t, b - t, a - t]), 0.55)
+		L(ci, b + t * 1.3, b - t * 1.3, 0.65, 1.6)
+	L(ci, Vector2(1, h * 0.96), Vector2(w - 1, h * 0.96), 0.5, 1.4)

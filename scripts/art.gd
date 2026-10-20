@@ -366,20 +366,6 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 					var y0 := h * (0.3 + k * 0.3)
 					L(ci, Vector2(x, y0), Vector2(x - 2.0, y0 - h * 0.18), 0.4)
 					L(ci, Vector2(x, y0), Vector2(x + 2.0, y0 - h * 0.15), 0.3)
-		"barrel":
-			L(ci, Vector2(2, h * 0.5), Vector2(w - 2, h * 0.5), 0.3)
-			for x in [0.04, 0.07, 0.6, 0.94]:
-				L(ci, Vector2(w * x, 1), Vector2(w * x, h - 1), 0.45)
-		"turret":
-			L(ci, Vector2(w * 0.3, h * 0.35), Vector2(w * 0.8, h * 0.35), 0.35)
-			box(ci, Rect2(w * 0.55, h * 0.12, w * 0.14, h * 0.16), 0.45)
-			for i in 3:
-				L(ci, Vector2(w * (0.2 + i * 0.05), h * 0.6), Vector2(w * (0.2 + i * 0.05), h * 0.9), 0.3)
-			ci.draw_string(font, Vector2(w * 0.4, h * 0.82), "76", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.4))
-		"gun_mount":
-			ci.draw_arc(Vector2(w * 0.5, 0), w * 0.4, 0.0, PI, 20, Pal.ink(0.5), 1.0, true)
-			for i in 5:
-				L(ci, Vector2(w * (0.18 + i * 0.16), h * 0.5), Vector2(w * (0.18 + i * 0.16), h * 0.95), 0.25)
 		"missile", "shell":
 			# along its long side: the nose, the body's bands, the fins (a round: its driving band)
 			var hz := w > h
@@ -397,17 +383,6 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				L(ci, at.call(ln * 0.76, 1.0), at.call(ln * 0.76, br - 1.0), 0.5)
 			if p != null and p.has_meta("wet"):
 				ci.draw_string(font, at.call(ln * 0.36, br * 0.5) + Vector2(-8, 3), "WET", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.55))
-		"decoy":
-			for i in 3:
-				var x := w * (0.2 + i * 0.3)
-				L(ci, Vector2(x, h * 0.95), Vector2(x + w * 0.12, h * 0.1), 0.5, 2.0)
-		"launcher":
-			L(ci, Vector2(2, h * 0.5), Vector2(w - 2, h * 0.5), 0.35)
-			ci.draw_string(font, Vector2(w * 0.4, h * 0.9), "BOX L", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.4))
-		"ciws":
-			ci.draw_arc(Vector2(w * 0.5, h * 0.62), w * 0.3, PI, TAU, 18, Pal.ink(0.5), 1.0, true)
-			for i in 3:
-				L(ci, Vector2(w * 0.06, h * (0.52 + i * 0.1)), Vector2(w * 0.3, h * (0.52 + i * 0.1)), 0.4)
 		"reactor":
 			var c := Vector2(w * 0.5, h * 0.5)
 			for k in 3:
@@ -415,25 +390,6 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			for i in 5:
 				L(ci, Vector2(w * (0.3 + i * 0.1), h * 0.04), Vector2(w * (0.3 + i * 0.1), c.y - minf(w, h) * 0.2), 0.3)
 			ci.draw_string(font, Vector2(w * 0.32, h * 0.92), (p.tag + "  " + p.label).strip_edges() if p != null else "", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.5))
-		"arm":
-			var m := Geom.M
-			for x in [0.6, 2.4, 4.2, 6.0]:
-				if x * m < w:
-					L(ci, Vector2(x * m, h * 0.65), Vector2(x * m, h * 0.95), 0.3)
-			ring(ci, Vector2(w * 0.02 + 0.2 * m, h * 0.55), 0.18 * m, 0.6)
-			ring(ci, Vector2(w - 0.6 * m, h * 0.35), 0.22 * m, 0.6)
-		"brake":
-			box(ci, Rect2(w * 0.1, h * 0.1, w * 0.8, h * 0.8), 0.5)
-			ci.draw_string(font, Vector2(w * 0.14, h * 0.62), "BRK", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(6, int(h * 0.3)), Pal.ink(0.6))
-		"dock":
-			L(ci, Vector2(w * 0.08, 1), Vector2(w * 0.92, 1), 0.8, 1.6)
-			box(ci, Rect2(w * 0.2, h * 0.25, w * 0.6, h * 0.55), 0.45)
-		"engine_s":
-			for i in 5:
-				L(ci, Vector2(w * (0.08 + i * 0.08), h * 0.3), Vector2(w * (0.08 + i * 0.08), h * 0.7), 0.3)
-			for i in 3:
-				var t := 0.55 + i * 0.13
-				L(ci, Vector2(w * t, h * (0.32 - i * 0.08)), Vector2(w * t, h * (0.68 + i * 0.08)), 0.25)
 		"glove":
 			ring(ci, Vector2(w * 0.5, h * 0.3), w * 0.32, 0.6)
 			for gx in [0.32, 0.68]:
@@ -460,10 +416,6 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			while k < w - 4:
 				ring(ci, Vector2(k, h * 0.5), minf(h * 0.32, 3.0), 0.55)
 				k += 46.0
-		"eng_front":
-			for i in 4:
-				L(ci, Vector2(w * 0.15, h * (0.2 + i * 0.2)), Vector2(w * 0.85, h * (0.2 + i * 0.2)), 0.3)
-			ring(ci, Vector2(w * 0.5, h * 0.5), h * 0.18, 0.5)
 		"shroud":
 			for i in 8:
 				L(ci, Vector2(w * (0.06 + i * 0.12), 2), Vector2(w * (0.06 + i * 0.12), h - 2), 0.25)
@@ -482,13 +434,6 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			ci.draw_arc(Vector2(w * 0.5, h * 0.18), w * 0.2, PI, TAU, 16, Pal.ink(0.5), 1.0, true)
 			L(ci, Vector2(w * 0.3, h * 0.18), Vector2(w * 0.7, h * 0.18), 0.5)
 			L(ci, Vector2(w * 0.5, h * 0.18 - w * 0.2), Vector2(w * 0.5, 0), 0.3)
-		"freezer":
-			box(ci, Rect2(w * 0.04, h * 0.04, w * 0.92, h * 0.92), 0.5)
-			for k in 3:
-				box(ci, Rect2(w * (0.1 + k * 0.29), h * 0.14, w * 0.24, h * 0.66), 0.3)
-			for k in 4:
-				L(ci, Vector2(w * (0.14 + k * 0.22), h * 0.86), Vector2(w * (0.2 + k * 0.22), h * 0.92), 0.35)
-			ci.draw_string(font, Vector2(w * 0.12, h * 0.52), "-80°C", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.45))
 		"biobox":
 			box(ci, Rect2(w * 0.06, h * 0.12, w * 0.88, h * 0.82), 0.6, 1.2)
 			L(ci, Vector2(w * 0.02, h * 0.12), Vector2(w * 0.98, h * 0.12), 0.6, 1.6)

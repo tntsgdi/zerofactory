@@ -2480,6 +2480,10 @@ static func tow_winch(ci: CanvasItem, r: Rect2) -> void:
 static func spray_bar(ci: CanvasItem, r: Rect2) -> void:
 	var w := r.size.x
 	var h := r.size.y
+	if w < 1.5 * M:
+		# a hand spray can, not a bar
+		E.fueltank(ci, r, null, null)
+		return
 	L(ci, Vector2(1, h * 0.2), Vector2(w - 1, h * 0.2), 0.55, 1.6)
 	var n := clampi(int(w / 20.0), 2, 30)
 	var segs := PackedVector2Array()
