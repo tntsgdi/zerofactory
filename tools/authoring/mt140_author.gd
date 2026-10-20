@@ -42,7 +42,9 @@ static func build(world) -> void:
 	_m5()
 	_m6()
 	_m7()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -273,6 +275,49 @@ static func _m7() -> void:
 			K.bolt(nz, K.at(h.x, h.y, ["hull"]), a.x, a.y)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill each car with what it carries)
+
+static func _fitout() -> void:
+	aft_on = false
+	# M1, the locomotive: comms, navigation and the cab's air under the roof
+	E("COMMS-1", "console", 5.0, -4.55, 7.4, -3.0, {"mass": 0.2, "value": 4000.0, "fragile": 0.5, "room": "M1", "name_key": "p_comms"}, false)
+	E("NAV-1", "nav", 7.8, -4.55, 10.2, -2.6, {"mass": 0.25, "value": 6000.0, "fragile": 0.5, "room": "M1", "name_key": "p_nav"}, false)
+	E("AHU-1", "env", 12.2, -4.55, 15.2, -2.8, {"mass": 0.3, "value": 4000.0, "fragile": 0.4, "room": "M1", "name_key": "p_ahu"}, false)
+	# M2: the tank's level gauge over it, the flow meter on its pump
+	E("LVL-2", "insp", 26.0, -4.55, 27.6, -3.95, {"mass": 0.05, "value": 3000.0, "fragile": 0.55, "room": "M2", "name_key": "p_level"}, false)
+	E("FLOW-2", "panel", 33.6, 0.6, 34.8, 2.0, {"mass": 0.08, "value": 3500.0, "fragile": 0.45, "room": "M2", "name_key": "p_flow_meter"}, true, by_tag["P-2"])
+	# M4, living: lockers, the galley and the medical cabinet under the roof, the washroom unit
+	E("LOCKER-4", "locker", 61.0, -4.55, 63.4, -1.0, {"mass": 0.3, "value": 2000.0, "fragile": 0.3, "room": "M4", "name_key": "p_locker"}, false)
+	E("GALLEY-4", "cabinet", 65.0, -4.55, 69.4, -2.0, {"mass": 0.5, "value": 4500.0, "fragile": 0.35, "room": "M4", "name_key": "p_galley"}, false)
+	E("MED-4", "cabinet", 71.6, -4.55, 73.8, -2.2, {"mass": 0.2, "value": 5000.0, "fragile": 0.45, "room": "M4", "name_key": "p_pharmacy"}, false)
+	E("WASH-4", "water", 74.2, 2.6, 77.4, 4.55, {"mass": 0.4, "value": 2500.0, "fragile": 0.3, "room": "M4", "name_key": "p_sanitation"})
+	# M5 (bent): as M2
+	aft_on = true
+	E("LVL-5", "insp", 86.0, -4.55, 87.6, -4.1, {"mass": 0.05, "value": 3000.0, "fragile": 0.55, "room": "M5", "name_key": "p_level"}, false)
+	E("FLOW-5", "panel", 93.6, 0.6, 94.8, 2.0, {"mass": 0.08, "value": 3500.0, "fragile": 0.45, "room": "M5", "name_key": "p_flow_meter"}, true, by_tag["P-5"])
+	# M6, machinery: the exhaust silencer, the engine control cabinet and the lube tank under the roof
+	E("EXH-6", "pump", 100.6, -4.55, 103.4, -2.0, {"mass": 0.6, "value": 3000.0, "fragile": 0.3, "room": "M6", "name_key": "p_vent"}, false)
+	E("CTRL-6", "swb", 104.8, -4.55, 108.0, -2.4, {"mass": 0.4, "value": 7000.0, "fragile": 0.4, "room": "M6", "name_key": "p_process_cabinet"}, false)
+	E("LUBE-6", "gastank", 108.4, -4.55, 109.8, -1.0, {"mass": 0.3, "value": 1500.0, "fragile": 0.3, "room": "M6", "name_key": "p_lube_tank"}, false)
+	# M7: the foam station by the engines
+	E("FOAM-7", "gastank", 127.8, 2.8, 130.4, 4.55, {"mass": 0.3, "value": 2000.0, "fragile": 0.3, "room": "M7", "name_key": "p_foam"})
+
+
+static func _fit_lines() -> void:
+	var L := func(id: String, kind: String, net: String, a: String, pa: Vector2, b: String, pb: Vector2, via: Array = []):
+		K.line(id, kind, net, a, X(pa), b, X(pb), XA(via))
+	L.call("f1", "cable", "power", "LAMP-1", Vector2(4.2, -4.39), "COMMS-1", Vector2(5.0, -3.3), [Vector2(4.2, -3.3)])
+	L.call("f2", "cable", "power", "COMMS-1", Vector2(7.4, -3.3), "NAV-1", Vector2(7.8, -3.3))
+	L.call("f3", "cable", "power", "NAV-1", Vector2(10.2, -3.3), "AHU-1", Vector2(12.2, -3.3))
+	L.call("f4", "cable", "power", "LAMP-2", Vector2(24.2, -4.39), "LVL-2", Vector2(26.0, -4.2), [Vector2(24.2, -4.2)])
+	L.call("f5", "cable", "power", "JB-2", Vector2(34.4, -2.4), "FLOW-2", Vector2(34.2, 0.6), [Vector2(34.4, 0.2), Vector2(34.2, 0.2)])
+	L.call("f6", "cable", "power", "JB-4", Vector2(74.0, -3.0), "MED-4", Vector2(73.8, -3.0))
+	L.call("f7", "cable", "power", "MED-4", Vector2(71.6, -3.0), "GALLEY-4", Vector2(69.4, -3.0))
+	L.call("f8", "cable", "power", "ENV-4", Vector2(73.5, 3.0), "WASH-4", Vector2(74.2, 3.0))
+	L.call("f9", "cable", "power", "LAMP-5", Vector2(84.2, -4.39), "LVL-5", Vector2(86.0, -4.3), [Vector2(84.2, -4.3)])
+	L.call("f10", "cable", "power", "JB-5", Vector2(94.4, -2.4), "FLOW-5", Vector2(94.2, 0.6), [Vector2(94.4, 0.2), Vector2(94.2, 0.2)])
+	L.call("f11", "cable", "power", "PWR-6", Vector2(109.4, 1.0), "CTRL-6", Vector2(107.0, -2.4), [Vector2(109.4, -0.4), Vector2(107.0, -0.4)])
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -300,7 +345,7 @@ static func _lines() -> void:
 	L.call("p8", "cable", "power", "JB-4", Vector2(76.0, -4.55), "LAMP-4", Vector2(64.0, -4.39), [Vector2(76.0, -4.42), Vector2(64.0, -4.42)])
 	L.call("p9", "cable", "power", "JB-5", Vector2(95.5, -2.4), "P-5", Vector2(95.0, 2.0), [Vector2(95.5, 1.6), Vector2(95.0, 1.6)])
 	L.call("p10", "cable", "power", "JB-5", Vector2(96.0, -2.4), "LAMP-5", Vector2(84.0, -4.39), [Vector2(96.0, -2.0), Vector2(93.4, -2.0), Vector2(93.4, -3.9), Vector2(84.0, -3.9)])
-	L.call("p11", "cable", "power", "PWR-6", Vector2(110.0, 1.0), "LAMP-6", Vector2(104.0, -4.39), [Vector2(110.0, -3.8), Vector2(104.0, -3.8)])
+	L.call("p11", "cable", "power", "PWR-6", Vector2(110.0, 1.0), "LAMP-6", Vector2(104.0, -4.39), [Vector2(110.0, -1.6), Vector2(104.0, -1.6)])
 	L.call("p12", "cable", "power", "PWR-6", Vector2(109.0, 3.0), "BAT-6", Vector2(108.6, 3.0))
 	L.call("p13", "cable", "power", "PWR-6", Vector2(110.5, 1.0), "GEN-6", Vector2(104.0, 1.0), [Vector2(110.5, 0.6), Vector2(104.0, 0.6)])
 	L.call("p14", "cable", "power", "JB-7", Vector2(128.6, -3.0), "ENG-A", Vector2(132.0, -2.0), [Vector2(128.6, -2.0)])
@@ -373,7 +418,7 @@ static func meta() -> Dictionary:
 		"title": ["MT-140「蜈蚣」模块列车 · 140 m", "MT-140 CENTIPEDE · MODULAR TRAIN · 140 m"],
 		"contract": "MT-140",
 		"length": 142.0,
-		"value": {"total": 280000.0, "metal": 40000.0},
+		"value": {"total": 344100.0, "metal": 40000.0},
 		"clamps": [[29.0, 5.0], [X(Vector2(109.0, 5.0)).x, X(Vector2(109.0, 5.0)).y]],
 		"room_names": names,
 		"gas": {"rooms": rooms, "vessels": {}, "valves": [], "value": 5000.0},
@@ -393,7 +438,7 @@ static func meta() -> Dictionary:
 		"labels": {"BAT-1": "BAT", "DIST-1": "BUS", "BAT-6": "STBY BAT", "T-2": "T2", "T-5": "H2O", "K-1": "K1", "K-2": "K2", "K-3": "K3", "K-4": "K4", "K-5": "K5", "K-6": "K6"},
 		"hints": {},
 		"market": {
-			"class": "MT", "name": ["蜈蚣级模块列车", "CENTIPEDE-CLASS MODULAR TRAIN"], "time": 45.0,
+			"class": "MT", "name": ["蜈蚣级模块列车", "CENTIPEDE-CLASS MODULAR TRAIN"], "time": 49.0,
 			"rooms": mrooms,
 			"charge": {"BAT-1": [0.3, 1.0]},
 			"fluids": {"t2": [0.2, 0.8], "t5": [0.2, 0.9]},

@@ -21,6 +21,8 @@ for sid in ids:
         d = json.load(open('ships/%s.json' % sid, encoding='utf-8'))
     except Exception:
         continue
+    if 'pieces' not in d:
+        continue
     eq = [p for p in d['pieces'] if p.get('cls') == 'equip']
     ra = sum(area(r['poly']) for r in d.get('rooms', []))
     heavy = []
