@@ -716,6 +716,11 @@ func _go_strip() -> void:
 			return -1
 		return rank.get(p.kind, 5)
 	order.sort_custom(func(a, b): return rk.call(a) < rk.call(b))
+	# a train comes apart from its tail: everything aft of the jammed coupler first
+	if g.train != null and g.train.active():
+		var aft: Array = g.train.cfg.get("jam", {}).get("aft", [])
+		var tail: Array = order.filter(func(id): return aft.has(g.world.pieces[id].tag))
+		order = tail + order.filter(func(id): return not aft.has(g.world.pieces[id].tag))
 	# a container wall comes down from the ends inwards, each bay from the top
 	if g.boxbeam != null and g.boxbeam.active():
 		var seq: Array = []

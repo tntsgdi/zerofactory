@@ -2254,6 +2254,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return sail.pull(c.target), "unit": "kN"})
 					"dose":
 						sys.measure(c.id, "field", c.id, "inst_dose", {"ctrl": c, "field_fn": func(): return reactor.probe(c), "unit": "mSv/h"})
+					"bend":
+						sys.measure(c.id, "field", c.id, "inst_bend", {"ctrl": c, "field_fn": func(): return train.aft_mass(), "unit": "t"})
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
 						if sys.dead_leg_closed(c):
@@ -2354,6 +2356,9 @@ func restore_reading(rd: Dictionary) -> void:
 				elif c.medium == "dose":
 					extra.field_fn = func(): return reactor.probe(c)
 					extra.unit = "mSv/h"
+				elif c.medium == "bend":
+					extra.field_fn = func(): return train.aft_mass()
+					extra.unit = "t"
 				else:
 					extra.field_fn = func(): return mech.field(c.target)
 			"bio", "o2":

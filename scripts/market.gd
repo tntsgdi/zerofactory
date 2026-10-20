@@ -20,7 +20,7 @@ const TRIES := 30                 # draws per offer before the market gives up o
 
 static var stats := {"made": 0, "discarded": 0, "reasons": {}}   # what the contract validator threw away
 # the ship types on the market and how often each comes up ([type, weight, reputation needed])
-const POOL := [["gr7", 4, 0], ["s09", 3, 0], ["pod", 3, 0], ["tug", 1, 0], ["h22", 3, 6], ["m14", 3, 8], ["med47", 3, 10], ["fr26", 3, 12], ["pt34", 3, 16], ["jd38", 3, 2], ["tw64", 3, 7], ["hb86", 3, 11], ["cl104", 3, 13], ["es112", 3, 15], ["fl116", 3, 17], ["sv122", 3, 19], ["mf126", 3, 21], ["ro128", 3, 23], ["cv138", 3, 25], ["vt80", 3, 27], ["ps12", 3, 29], ["cf90", 3, 31], ["sa200", 3, 33], ["nr95", 3, 35], ["ih55", 3, 26]]
+const POOL := [["gr7", 4, 0], ["s09", 3, 0], ["pod", 3, 0], ["tug", 1, 0], ["h22", 3, 6], ["m14", 3, 8], ["med47", 3, 10], ["fr26", 3, 12], ["pt34", 3, 16], ["jd38", 3, 2], ["tw64", 3, 7], ["hb86", 3, 11], ["cl104", 3, 13], ["es112", 3, 15], ["fl116", 3, 17], ["sv122", 3, 19], ["mf126", 3, 21], ["ro128", 3, 23], ["cv138", 3, 25], ["vt80", 3, 27], ["ps12", 3, 29], ["cf90", 3, 31], ["sa200", 3, 33], ["nr95", 3, 35], ["ih55", 3, 26], ["mt140", 3, 37]]
 
 
 # a type's card data: class letters, name, length, value (the Heron's here, the rest from their files)
