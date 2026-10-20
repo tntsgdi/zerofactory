@@ -51,7 +51,9 @@ static func build(world) -> void:
 	_nutrient()
 	_plant()
 	_engines()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -288,6 +290,91 @@ static func _engines() -> void:
 		K.bolt(nz, en, 84.0, y1 - 1.4)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a culture ship carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.2, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1)
+	return p
+
+
+# equipment standing on a sloping floor (inner edge i), h tall at its high end
+static func _floor(tag: String, art: String, x0: float, x1: float, h: float, i: int, opts: Dictionary):
+	var ya := _iy(i, x0)
+	var yb := _iy(i, x1)
+	var top := minf(ya, yb) - h
+	var p = K.equip(tag, art, K.rect(x0, top, x1, maxf(ya, yb)), opts, K.mp([Vector2(x0, top), Vector2(x1, top), Vector2(x1, yb), Vector2(x0, ya)]))
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) + 0.2, ["hull"]), x, _iy(i, x))
+	return p
+
+
+const UPPER := -9.2              # the raised rack posts' tops
+
+
+static func _fitout() -> void:
+	# the halls: the rack posts carried up to a third tier, an irrigation boom over the top
+	for h in [["1", 22.0, 37.6], ["2", 40.0, 48.0], ["3", 50.6, 63.8]]:
+		var n: String = h[0]
+		var x0: float = h[1]
+		var x1: float = h[2]
+		var ups: Array = []
+		for px in [x0 - 0.3, x1]:
+			var lo = K.at(px + 0.15, -4.0, ["strut"])
+			var up = K.plate("", K.R(px, UPPER, px + 0.3, -4.2), {"density": 0.8, "barrier": false, "cut_speed": 200.0}, "strut")
+			K.bolt(up, lo, px + 0.15, -4.2, "weld")
+			ups.append(up)
+		var rk = K.equip("CR-%sc" % n, "plants", K.rect(x0, -7.8, x1, -5.4), {"mass": 0.8, "value": 3600.0, "fragile": 0.5, "room": "U" + n, "name_key": "p_seedling_rack"})
+		K.bolt(rk, ups[0], x0, -6.6)
+		K.bolt(rk, ups[1], x1, -6.6)
+		var ms = K.equip("MIST-" + n, "overhead", K.rect(x0, UPPER, x1, UPPER + 0.6), {"mass": 0.3, "value": 2500.0, "fragile": 0.4, "room": "U" + n, "name_key": "p_spray"})
+		K.bolt(ms, ups[0], x0, UPPER + 0.3)
+		K.bolt(ms, ups[1], x1, UPPER + 0.3)
+	# hall one's climate controller on the bulkhead
+	var cl = K.equip("CLIM-1", "env", K.rect(B1 + 0.4, -9.0, 21.6, -5.0), {"mass": 0.3, "value": 4500.0, "fragile": 0.4, "room": "U1", "name_key": "p_env_control"})
+	K.bolt(cl, by_tag["B1-1"], B1 + 0.4, -8.4)
+	K.bolt(cl, by_tag["B1-1"], B1 + 0.4, -5.6)
+	# the nutrient bay: the doser, the UV steriliser, the water purifier
+	for e in [["DOSER", "pump", 49.0, 52.0, 3500.0, "p_nutrient_pump"], ["UV-ST", "filter", 52.6, 55.4, 4000.0, "p_uv_steriliser"], ["RO-W", "filter", 57.0, 61.0, 4500.0, "p_water_treat"]]:
+		_stand(e[0], e[1], e[2], 6.6, e[3], BELLY, K.at(e[2] + 0.5, 8.8, ["hull"]), {"mass": 0.5, "value": e[4], "fragile": 0.35, "room": "N", "name_key": e[5]})
+	# the cockpit: the overhead panel and comms off the roof, a microscope by the console
+	_hang("OVH-C", "overhead", 7.4, 9.6, -7.2, 2, {"mass": 0.15, "value": 3000.0, "fragile": 0.45, "room": "C", "name_key": "p_ovh"})
+	_hang("COMMS-C", "nav", 15.2, 17.8, -7.0, 2, {"mass": 0.2, "value": 4500.0, "fragile": 0.5, "room": "C", "name_key": "p_comms"})
+	_stand("SCOPE-C", "insp", 11.8, 2.0, 13.4, CDECK, by_tag["CDECK"], {"mass": 0.1, "value": 6000.0, "fragile": 0.6, "room": "C", "name_key": "p_microscope"})
+	# the machinery room: the CO2 enrichment generator under the deck
+	_stand("CO2-GEN", "gen", 15.4, CDECK + 0.3, 19.2, 5.6, by_tag["CDECK"], {"mass": 0.6, "value": 5000.0, "fragile": 0.35, "room": "M", "name_key": "p_co2_gen"}, true)
+	# the environmental plant: the chiller and the CO2 scrubber under the roof, the water tank on the floor
+	_hang("CHILL-E", "pump", 65.6, 68.4, -6.0, 6, {"mass": 0.8, "value": 5500.0, "fragile": 0.35, "room": "E", "name_key": "p_chiller"})
+	_hang("CO2-SCR", "filter", 71.4, 74.6, -5.0, 7, {"mass": 0.6, "value": 5000.0, "fragile": 0.35, "room": "E", "name_key": "p_co2"})
+	_floor("WATER-E", "water", 71.0, 76.0, 1.6, 10, {"mass": 0.8, "value": 2500.0, "fragile": 0.3, "room": "E", "name_key": "p_water_tank"})
+
+
+static func _fit_lines() -> void:
+	for h in [["1", 22.0], ["2", 40.0], ["3", 50.6]]:
+		var x0: float = h[1]
+		K.line("fm" + h[0], "cable", "power", "GROW-" + h[0], Vector2(x0 + 1.4, -4.2), "MIST-" + h[0], Vector2(x0 + 1.4, UPPER + 0.6))
+	K.line("f1", "cable", "power", "CLIM-1", Vector2(21.6, -8.9), "MIST-1", Vector2(22.0, -8.9))
+	K.line("f2", "cable", "power", "NPMP", Vector2(48.0, 7.4), "DOSER", Vector2(49.0, 7.4))
+	K.line("f3", "cable", "power", "DOSER", Vector2(52.0, 7.4), "UV-ST", Vector2(52.6, 7.4))
+	K.line("f4", "cable", "power", "UV-ST", Vector2(55.4, 7.4), "RO-W", Vector2(57.0, 7.4))
+	K.line("f5", "cable", "power", "LAMP-C", Vector2(10.2, -7.84), "OVH-C", Vector2(9.6, -7.6), [Vector2(10.2, -7.6)])
+	K.line("f6", "cable", "power", "CON", Vector2(16.8, 1.8), "COMMS-C", Vector2(16.8, -7.0))
+	K.line("f7", "cable", "power", "CON", Vector2(13.8, 2.8), "SCOPE-C", Vector2(13.4, 2.8))
+	K.line("f8", "cable", "power", "AIR", Vector2(15.0, 4.6), "CO2-GEN", Vector2(15.4, 4.6))
+	K.line("f9", "cable", "power", "ECS", Vector2(66.4, -3.6), "CHILL-E", Vector2(66.4, -6.0))
+	K.line("f10", "cable", "power", "ECS", Vector2(73.0, -3.6), "CO2-SCR", Vector2(73.0, -5.0))
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -371,7 +458,7 @@ static func meta() -> Dictionary:
 		"title": ["HB-86「栖湾」培育船 · 89 m", "HB-86 HAVEN COVE · CULTURE SHIP · 89 m"],
 		"contract": "HB-86",
 		"length": 89.0,
-		"value": {"total": 180000.0, "metal": 30000.0},
+		"value": {"total": 246600.0, "metal": 30000.0},
 		"clamps": [[24.0, 10.8], [42.0, 10.8], [60.0, 10.8]],
 		"room_names": {"C": "room_hbC", "M": "room_hbM", "U1": "room_hbU1", "U2": "room_hbU2", "U3": "room_hbU3", "N": "room_hbN", "E": "room_hbE"},
 		"gas": {"rooms": {"C": 101.0, "M": 101.0, "U1": 104.0, "U2": 101.0, "U3": 108.0, "N": 101.0, "E": 101.0},
@@ -393,7 +480,7 @@ static func meta() -> Dictionary:
 		"labels": {"NUT": "NUTRIENT", "BAT": "BAT", "SWB": "SWB", "SEED": "SEED", "ECS": "ECS", "O2-T": "O₂", "AIR": "AIR"},
 		"hints": {},
 		"market": {
-			"class": "HB", "name": ["栖湾级培育船", "HAVEN COVE-CLASS CULTURE SHIP"], "time": 36.0,
+			"class": "HB", "name": ["栖湾级培育船", "HAVEN COVE-CLASS CULTURE SHIP"], "time": 44.0,
 			"rooms": {"C": [0.2, 40.0, 101.0], "N": [0.2, 40.0, 101.0], "E": [0.2, 40.0, 101.0], "M": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {"nut": [0.2, 1.4]}, "fill": {"nut_line": "nut"},

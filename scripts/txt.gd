@@ -624,6 +624,8 @@ const S := {
 	"p_uv_steriliser": ["紫外消毒器", "UV STERILISER"],
 	"p_microscope": ["显微镜台", "MICROSCOPE"],
 	"p_co2_gen": ["二氧化碳增施机", "CO2 ENRICHER"],
+	"p_vaccine_box": ["疫苗冷藏箱", "VACCINE COLD BOX"],
+	"p_forklift": ["电动叉车", "ELECTRIC FORKLIFT"],
 	"p_cargo_log": ["装载记录机", "LOADING RECORDER"],
 	"cargo_thawed": ["冷舱回温：这一舱的货解冻了，只剩不到一半的价值", "THE HOLD HAS WARMED: ITS CARGO THAWED, LESS THAN HALF ITS VALUE LEFT"],
 	"loss_thaw": ["货物解冻", "CARGO THAWED"],
