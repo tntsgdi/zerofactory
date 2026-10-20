@@ -116,7 +116,7 @@ static func _tank() -> void:
 	var x1 := 62.0
 	var poly := K.mp([Vector2(x0 + 1.6, -5.6), Vector2(x1 - 1.6, -5.6), Vector2(x1, -3.6), Vector2(x1, 3.6), Vector2(x1 - 1.6, 5.6),
 		Vector2(x0 + 1.6, 5.6), Vector2(x0, 3.6), Vector2(x0, -3.6)])
-	var tk = K.equip("LH2-T", "cryotank", Geom.bbox(poly), {"mass": 28.0, "value": 90000.0, "fragile": 0.2, "hazard": "gas_tank", "name_key": "p_lh2_tank"}, poly)
+	var tk = K.equip("LH2-T", "cryotank", K.mbox(poly), {"mass": 28.0, "value": 90000.0, "fragile": 0.2, "hazard": "gas_tank", "name_key": "p_lh2_tank"}, poly)
 	var seg: Array = []
 	for i in range(1, 6):
 		var sx := x0 + (x1 - x0) * i / 6.0
@@ -146,7 +146,7 @@ static func _reactor() -> void:
 	K.bolt(kp, by_tag["KEEL"], 62.7, KY, "weld")
 	var top := -5.0 + T
 	var bot := 5.0 - T
-	var cr = K.equip("CORE", "reactor", K.rect(65.7, -1.4, 68.5, 1.4), {"mass": 2.8, "value": 40000.0, "fragile": 0.2, "hazard": "rad", "name_key": "p_reactor_core"})
+	var cr = K.equip("CORE", "reactor", K.rect(65.7, -1.4, 68.5, 1.4), {"mass": 2.8, "value": 40000.0, "fragile": 0.2, "hazard": "rad", "name_key": "p_ntr_core"})
 	# eight bolts and a clamp, to the housing's floor through a cradle
 	var cd = K.plate("CRADLE", K.R(65.4, 1.4, 68.8, bot), {"density": 1.8, "barrier": false, "cut_speed": 150.0, "name_key": "p_core_cradle"}, "strut")
 	K.bolt(cd, K.at(66.0, bot + 0.2, ["hull"]), 66.0, bot, "weld")
@@ -168,7 +168,7 @@ static func _reactor() -> void:
 
 static func _engine() -> void:
 	var poly := K.mp([Vector2(72.1, -4.6), Vector2(84.0, -6.9), Vector2(84.0, 6.9), Vector2(72.1, 4.6)])
-	var nz = K.equip("NOZ", "nozzle", Geom.bbox(poly), {"mass": 8.0, "value": 70000.0, "fragile": 0.2, "name_key": "p_thrust_chamber"}, poly)
+	var nz = K.equip("NOZ", "nozzle", K.mbox(poly), {"mass": 8.0, "value": 70000.0, "fragile": 0.2, "name_key": "p_thrust_chamber"}, poly)
 	nz.set_meta("segments", [[76.0, -5.4, 76.0, 5.4], [80.0, -6.2, 80.0, 6.2]])
 	for y in [-3.6, -1.2, 1.2, 3.6]:
 		K.bolt(nz, K.at(71.9, y, ["hull"]), 72.1, y)
@@ -180,7 +180,7 @@ static func _engine() -> void:
 		var ya: float = e[0]
 		var yb: float = e[1]
 		var pp := K.mp([Vector2(84.0, ya - 0.5), Vector2(95.0, yb - 0.5), Vector2(95.0, yb + 0.5), Vector2(84.0, ya + 0.5)])
-		var pe = K.equip("RAD-%d" % k, "radiator", Geom.bbox(pp), {"mass": 1.2, "value": 7500.0, "fragile": 0.3, "name_key": "p_radiator_petal"}, pp)
+		var pe = K.equip("RAD-%d" % k, "radiator", K.mbox(pp), {"mass": 1.2, "value": 7500.0, "fragile": 0.3, "name_key": "p_radiator_petal"}, pp)
 		K.bolt(pe, nz, 84.0, ya - 0.2, "bolt")
 		K.bolt(pe, nz, 84.0, ya + 0.2, "lock")
 

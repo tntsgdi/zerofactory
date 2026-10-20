@@ -82,6 +82,12 @@ static func at(x: float, y: float, kinds: Array = []):
 	return w.piece_at(p(x, y), kinds)
 
 
+# the bounds of an outline (px) in metres, for equip()'s r when a poly is given
+static func mbox(poly: PackedVector2Array) -> Rect2:
+	var b := Geom.bbox(poly)
+	return Rect2(b.position / Geom.M, b.size / Geom.M)
+
+
 # a piece of equipment (or a fixture, cls "metal"): its art fills r unless a poly is given
 static func equip(tag: String, art: String, r: Rect2, opts: Dictionary, poly = null):
 	var rr := Rect2(r.position * Geom.M, r.size * Geom.M)

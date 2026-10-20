@@ -270,7 +270,10 @@ static func _drill_room() -> void:
 	_row("D", IN, -1.0, 30.8, 46.8, [["STP", "panel", 1.0, 2.4, {"mass": 0.3, "value": 9000.0, "name_key": "p_dr_standpipe"}], ["", "aux", 1.2, 1.0, {"mass": 0.2, "value": 7400.0, "name_key": "p_dr_choke"}],
 		["", "gastank", 0.8, 2.0, {"mass": 0.2, "value": 12000.0, "hazard": "gas_tank", "name_key": "p_dr_bop_accumulator"}], ["", "cargo", 2.0, 1.2, {"mass": 1.2, "value": 20000.0, "name_key": "p_dr_spare_bha"}],
 		["", "module", 1.4, 2.0, {"mass": 0.6, "value": 9800.0, "name_key": "p_dr_mud_gas_sep"}], ["", "module", 2.0, 1.6, {"mass": 0.8, "value": 11000.0, "name_key": "p_dr_shaker"}],
-		["", "toolwall", 1.2, 2.0, {"mass": 0.12, "value": 2400.0, "name_key": "p_tool_wall"}]])
+		["", "toolwall", 1.2, 2.0, {"mass": 0.12, "value": 2400.0, "name_key": "p_tool_wall"}],
+		# the blowout preventer stack on its skid by the moonpool, ready to go over the well
+		# (2026-10-20: a drilling ship without one was missing its most important safety kit)
+		0.3, ["BOP", "bop", 2.0, 4.0, {"mass": 3.6, "value": 85000.0, "fragile": 0.3, "cut_speed": 110.0, "name_key": "p_dr_bop"}]])
 	_row("D", 0.25, 1.0, 30.8, 46.8, [["", "overhead", 1.6, 0.4, {"mass": 0.04, "value": 1600.0, "name_key": "p_ark_overhead"}], 1.2, ["", "pipe", 2.0, 0.4, {"mass": 0.05, "value": 1800.0, "name_key": "p_dr_mud_line"}],
 		1.2, ["", "junction", 0.6, 0.4, {"mass": 0.03, "value": 600.0, "name_key": "p_junction"}]])
 	_lamp("LAMP-D2", 36.0, 0.25, "D")
@@ -541,6 +544,6 @@ static func meta() -> Dictionary:
 	}
 
 
-const VALUE := 1554300.0
+const VALUE := 1639300.0
 const FIRE_X := 143.0
 const FIRE_BASE := "HD5-1"

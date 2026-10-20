@@ -56,6 +56,7 @@ static var _tc: Array = []
 static var _ti: Array = []
 static var _texts: Array = []    # [font, pos, text, width, size, color]
 static var _cache := {}
+static var ext = null          # art_ships.gd: each ship's signature machines (set by Art)
 const CACHE_MAX := 9000
 
 
@@ -510,9 +511,13 @@ static func door_leaf(ci: CanvasItem, r: Rect2, hinge_left: bool, al: float = 0.
 
 # true if it drew the art
 static func draw(ci: CanvasItem, art: String, w: float, h: float, p, font: Font) -> bool:
-	if p != null and BY_NAME.has(p.name_key):
-		var alt: String = BY_NAME[p.name_key]
-		if alt != art and _has(alt):
+	if p != null:
+		var alt: String = ""
+		if ext != null and ext.BY_NAME.has(p.name_key):
+			alt = ext.BY_NAME[p.name_key]
+		elif BY_NAME.has(p.name_key):
+			alt = BY_NAME[p.name_key]
+		if alt != "" and alt != art and _has(alt):
 			art = alt
 	if not _has(art):
 		return false
@@ -596,14 +601,15 @@ static func _draw_art(ci: CanvasItem, art: String, r: Rect2, p, font: Font) -> v
 		"rcs_quad": rcs_quad(ci, r)
 		"radar": radar(ci, r)
 		_:
-			pass
+			if ext != null:
+				ext._draw_art(ci, art, r, p, font)
 
 
 const DRAWN := ["pump", "cabinet", "swb", "battery", "gen", "env", "filter", "trap", "locker", "console", "nav_rack", "module", "aux", "panel", "junction", "insp", "sensor", "overhead", "growlamp", "tray", "pipe", "cargo", "crate", "container", "gastank", "extinguisher", "water", "fueltank", "cap", "screen", "nav", "o2cab", "bunk", "blackbox", "table", "shelf", "desk", "toolwall", "fridge", "medcab", "galley", "bench", "radiator", "hx", "duct_fan", "chiller", "transformer", "inverter", "fuelcell", "hpu", "manifold", "charger", "actuator", "relief", "stator", "gauge_box", "beacon", "lamp", "eng_core", "nozzle", "reel", "drum", "hook", "sphere_tank", "rcs_quad", "radar"]
 
 
 static func _has(art: String) -> bool:
-	return art in DRAWN
+	return art in DRAWN or (ext != null and art in ext.DRAWN)
 
 
 # ------------------------------------------------------------------ pump
@@ -1742,21 +1748,22 @@ static func container(ci: CanvasItem, r: Rect2, p, font: Font) -> void:
 static func gastank(ci: CanvasItem, r: Rect2) -> void:
 	var w := r.size.x
 	var h := r.size.y
+	var o := r.position
 	if w > h * 1.2 and h < 0.9 * M:
 		# lying down: a cylinder bank seen from its side, all heads one way
 		var nl := clampi(roundi(h / maxf(w * 0.18, 10.0)), 1, 8)
 		var lh: float = h / nl
 		for i in nl:
-			_bottle(ci, Rect2(2, i * lh + 1.0, w - 4, lh - 2.0), false)
+			_bottle(ci, Rect2(o + Vector2(2, i * lh + 1.0), Vector2(w - 4, lh - 2.0)), false)
 		return
 	var n := clampi(roundi(w / maxf(h * 0.3, 10.0)), 1, 16)
 	var bw: float = w / n
 	for i in n:
-		_bottle(ci, Rect2(i * bw + bw * 0.08, 1.0, bw * 0.84, h - 2.0), true)
+		_bottle(ci, Rect2(o + Vector2(i * bw + bw * 0.08, 1.0), Vector2(bw * 0.84, h - 2.0)), true)
 	if n > 1:
-		L(ci, Vector2(bw * 0.5, h * 0.05), Vector2(w - bw * 0.5, h * 0.05), 0.5, 1.4)
+		L(ci, o + Vector2(bw * 0.5, h * 0.05), o + Vector2(w - bw * 0.5, h * 0.05), 0.5, 1.4)
 	for f in [0.42, 0.78]:
-		L(ci, Vector2(1, h * f), Vector2(w - 1, h * f), 0.35)
+		L(ci, o + Vector2(1, h * f), o + Vector2(w - 1, h * f), 0.35)
 
 
 static func _bottle(ci: CanvasItem, r: Rect2, up: bool) -> void:

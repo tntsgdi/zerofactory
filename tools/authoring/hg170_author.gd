@@ -273,7 +273,10 @@ static func _cryo() -> void:
 		["CRY-2", "module", 2.2, 2.6, {"mass": 2.4, "value": 40000.0, "fragile": 0.4, "name_key": "p_hg_cryocooler"}],
 		["CCON", "console", 1.4, 1.2, {"mass": 0.2, "value": 14000.0, "fragile": 0.5, "name_key": "p_hg_cryo_console"}], ["", "seat", 0.6, 1.0, {"mass": 0.04, "value": 600.0, "name_key": "p_ark_chair"}],
 		["CDM", "panel", 1.0, 2.0, {"mass": 0.3, "value": 9600.0, "name_key": "p_hg_cryo_manifold"}], ["", "cabinet", 1.0, 1.8, {"mass": 0.12, "value": 4200.0, "name_key": "p_fx_cryo_spares"}],
-		["", "toolwall", 1.2, 2.0, {"mass": 0.12, "value": 2400.0, "name_key": "p_tool_wall"}]])
+		["", "toolwall", 1.2, 2.0, {"mass": 0.12, "value": 2400.0, "name_key": "p_tool_wall"}],
+		# the twin turboexpander skid that does the liquefier's real cooling (2026-10-20:
+		# a hydrogen liquefier without its expansion turbines was missing its heart)
+		["TX", "turboexpander", 2.4, 1.6, {"mass": 1.3, "value": 36000.0, "fragile": 0.5, "name_key": "p_hg_turboexpander"}]])
 	_row("C", -IN, 1.0, 131.0, 149.5, [["", "pipe", 2.0, 0.4, {"mass": 0.06, "value": 2600.0, "name_key": "p_fx_he_line"}], 1.0, ["", "junction", 0.6, 0.4, {"mass": 0.03, "value": 600.0, "name_key": "p_junction"}],
 		1.0, ["", "pipe", 2.0, 0.4, {"mass": 0.06, "value": 2600.0, "name_key": "p_fx_he_line"}], 1.0, ["", "sensor", 0.5, 0.4, {"mass": 0.02, "value": 1800.0, "name_key": "p_fx_o2_monitor"}]])
 	_lamp("LAMP-C", 140.0, -IN, "C")
@@ -469,6 +472,6 @@ static func meta() -> Dictionary:
 	}
 
 
-const VALUE := 1490200.0
+const VALUE := 1526200.0
 const FIRE_X := 166.0
 const FIRE_BASE := "HA4-0"

@@ -198,7 +198,7 @@ static func _tanks() -> void:
 		var n := str(i + 1)
 		var x0: float = TX0[i]
 		var x1: float = TX1[i]
-		var tk = K.equip("T-" + n, "fueltank", Geom.bbox(_capsule(x0, TY0, x1, TY1)), {"mass": 6.0, "value": 18000.0, "fragile": 0.25, "hazard": "fuel_tank", "name_key": "p_prop_tank"}, _capsule(x0, TY0, x1, TY1))
+		var tk = K.equip("T-" + n, "fueltank", K.mbox(_capsule(x0, TY0, x1, TY1)), {"mass": 6.0, "value": 18000.0, "fragile": 0.25, "hazard": "fuel_tank", "name_key": "p_prop_tank"}, _capsule(x0, TY0, x1, TY1))
 		var third := (x1 - x0) / 3.0
 		tk.set_meta("segments", [[x0 + third, TY0, x0 + third, TY1], [x1 - third, TY0, x1 - third, TY1]])
 		# slung from the spine on two hangers, each strapped with two locks

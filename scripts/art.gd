@@ -4,6 +4,7 @@ class_name Art
 # (pumps, switchboards, batteries...) live in art_equip.gd.
 
 const EQ = preload("res://scripts/art_equip.gd")
+const SH = preload("res://scripts/art_ships.gd")
 
 static func L(ci: CanvasItem, a: Vector2, b: Vector2, al: float = 0.5, wd: float = 1.0) -> void:
 	ci.draw_line(a, b, Pal.ink(al), wd, true)
@@ -20,6 +21,8 @@ static func ring(ci: CanvasItem, c: Vector2, r: float, al: float = 0.5, wd: floa
 static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void:
 	var w := s.x
 	var h := s.y
+	if EQ.ext == null:
+		EQ.ext = SH
 	if EQ.draw(ci, art, w, h, p, font):
 		return
 	match art:
@@ -509,7 +512,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				L(ci, Vector2(w * 0.86, h * (0.2 + k * 0.12)), Vector2(w * 0.9, h * (0.2 + k * 0.12)), 0.35)
 			L(ci, Vector2(w * 0.2, h * 0.55), Vector2(w * 0.8, h * 0.55), 0.18)
 			ci.draw_string(font, Vector2(w * 0.4, h * 0.48), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, int(h * 0.1)), Pal.ink(0.5))
-			ci.draw_string(font, Vector2(w * 0.4, h * 0.66), "-163°C", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(8, int(h * 0.07)), Pal.ink(0.4))
+			ci.draw_string(font, Vector2(w * 0.4, h * 0.66), "-253°C" if p != null and p.name_key == "p_lh2_tank" else "-163°C", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(8, int(h * 0.07)), Pal.ink(0.4))
 		"guard":
 			L(ci, Vector2(w * 0.5, 3), Vector2(w * 0.45, h - 3), 0.3)
 		"uav":
