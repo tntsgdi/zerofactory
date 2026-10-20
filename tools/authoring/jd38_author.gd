@@ -43,7 +43,9 @@ static func build(world) -> void:
 	_machinery()
 	_hold()
 	_engine()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -215,6 +217,41 @@ static func _engine() -> void:
 		K.bolt(ft, lg, lx + 0.2, 7.7, "weld")
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms, clear of the boxes' run)
+
+static func _iy(i: int, x: float) -> float:
+	var inn := K.inner(OUT, T)
+	var a: Vector2 = inn[i]
+	var b: Vector2 = inn[(i + 1) % inn.size()]
+	return a.y + (x - a.x) / (b.x - a.x) * (b.y - a.y)
+
+
+static func _fitout() -> void:
+	# the hold's high forward corner under the canopy's back: the locked mail cabinet
+	# on the bulkhead, the parcel scanner off the roof
+	var ml = K.equip("MAIL", "locker", K.rect(B1 + 0.4, -6.0, 16.6, -2.6), {"mass": 0.3, "value": 6000.0, "fragile": 0.35, "room": "H", "name_key": "p_mail"})
+	K.bolt(ml, by_tag["B1-T"], B1 + 0.4, -5.4, "lock")
+	K.bolt(ml, by_tag["B1-T"], B1 + 0.4, -3.2, "lock")
+	var top := maxf(_iy(3, 16.6), _iy(3, 18.4))
+	var sc = K.equip("SCAN-H", "insp", K.rect(16.6, top, 18.4, -3.4), {"mass": 0.1, "value": 5000.0, "fragile": 0.6, "room": "H", "name_key": "p_scanner"})
+	for x in [16.9, 18.1]:
+		K.bolt(sc, K.at(x, _iy(3, x) - 0.2, ["hull"]), x, top)
+	# under the lower rail: the stores and the propellant transfer pump
+	for e in [["STORES-H", "cabinet", 17.0, 18.8, 3.6, 2500.0, "p_stores"], ["PUMP-F", "pump", 24.2, 26.4, 4.0, 3000.0, "p_transfer_pump"]]:
+		var x0: float = e[2]
+		var x1: float = e[3]
+		var q = K.equip(e[0], e[1], K.rect(x0, e[4], x1, BELLY), {"mass": 0.3, "value": e[5], "fragile": 0.35, "room": "H", "name_key": e[6]})
+		K.bolt(q, K.at(x0 + 0.3, 5.8, ["hull"]), x0 + 0.3, BELLY)
+		K.bolt(q, K.at(x1 - 0.3, 5.8, ["hull"]), x1 - 0.3, BELLY)
+	# the machinery room: the fresh water tank under the deck
+	var wt = K.equip("WATER-M", "water", K.rect(2.6, DECK + 0.3, 5.2, 3.0), {"mass": 0.2, "value": 800.0, "fragile": 0.3, "room": "M", "name_key": "p_water_tank"})
+	K.bolt(wt, by_tag["DK-C"], 3.0, DECK + 0.3)
+	K.bolt(wt, by_tag["DK-C"], 4.8, DECK + 0.3)
+
+
+static func _fit_lines() -> void:
+	K.line("f2", "cable", "power", "LAMP-H", Vector2(21.3, ROOF + 0.16), "SCAN-H", Vector2(18.4, -3.8), [Vector2(18.6, -1.9), Vector2(18.6, -3.8)])
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -286,7 +323,7 @@ static func meta() -> Dictionary:
 		"title": ["JD-38「斑鸠」短途快件艇 · 37 m", "JD-38 TURTLEDOVE · EXPRESS COURIER · 37 m"],
 		"contract": "JD-38",
 		"length": 37.0,
-		"value": {"total": 98000.0, "metal": 9000.0},
+		"value": {"total": 111000.0, "metal": 9000.0},
 		"clamps": [[12.0, 6.0], [18.0, 6.0], [24.0, 6.0]],
 		"room_names": {"C": "room_jdC", "M": "room_jdM", "H": "room_jdH", "L": "room_jdL"},
 		"gas": {"rooms": {"C": 101.0, "M": 101.0, "H": 101.0, "L": 101.0},
@@ -310,7 +347,7 @@ static func meta() -> Dictionary:
 		"labels": {"BAT-P": "BAT", "PDU": "PDU", "TK-F": "FUEL", "O2-1": "O₂", "BOX-1": "EXPRESS", "BOX-2": "EXPRESS", "FDR": "FDR", "ECS": "ECS"},
 		"hints": {},
 		"market": {
-			"class": "JD", "name": ["斑鸠级快件艇", "TURTLEDOVE-CLASS COURIER"], "time": 18.0,
+			"class": "JD", "name": ["斑鸠级快件艇", "TURTLEDOVE-CLASS COURIER"], "time": 20.0,
 			"rooms": {"C": [0.2, 40.0, 101.0], "H": [0.2, 40.0, 101.0], "M": [0.2, 40.0, 101.0], "L": [0.2, 40.0, 101.0]},
 			"charge": {"BAT-P": [0.2, 1.0]},
 			"fluids": {"fuel": [0.05, 0.35]}, "fill": {"fuel_line": "fuel"},

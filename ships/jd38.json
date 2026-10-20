@@ -4,7 +4,7 @@
 	"title": ["JD-38「斑鸠」短途快件艇 · 37 m","JD-38 TURTLEDOVE · EXPRESS COURIER · 37 m"],
 	"contract": "JD-38",
 	"length": 37.0,
-	"value": {"metal":9000.0,"total":98000.0},
+	"value": {"metal":9000.0,"total":111000.0},
 	"clamps": [[12.0,6.0],[18.0,6.0],[24.0,6.0]],
 	"room_names": {"C":"room_jdC","H":"room_jdH","L":"room_jdL","M":"room_jdM"},
 	"gas": {
@@ -46,7 +46,7 @@
 	"market": {
 		"class": "JD",
 		"name": ["斑鸠级快件艇","TURTLEDOVE-CLASS COURIER"],
-		"time": 18.0,
+		"time": 20.0,
 		"rooms": {"C":[0.2,40.0,101.0],"H":[0.2,40.0,101.0],"L":[0.2,40.0,101.0],"M":[0.2,40.0,101.0]},
 		"charge": {"BAT-P":[0.2,1.0]},
 		"fluids": {"fuel":[0.05,0.35]},
@@ -139,6 +139,11 @@
 		{"cut_speed":200.0,"density":1.0,"key":"p60","kind":"fixture","mass":0.05,"name_key":"p_foot","poly":[[9.8,7.7],[11.4,7.7],[11.4,7.95],[9.8,7.95]]},
 		{"cut_speed":180.0,"density":1.0,"key":"LEG-2","kind":"fixture","mass":0.12,"name_key":"p_leg","poly":[[21.0,6.0],[21.4,6.0],[21.4,7.7],[21.0,7.7]],"tag":"LEG-2"},
 		{"cut_speed":200.0,"density":1.0,"key":"p62","kind":"fixture","mass":0.05,"name_key":"p_foot","poly":[[20.4,7.7],[22.0,7.7],[22.0,7.95],[20.4,7.95]]},
+		{"art":"locker","art_size":[2.6,3.4],"art_xf":[1.0,0.0,0.0,1.0,14.0,-6.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.35,"key":"MAIL","kind":"equip","mass":0.3,"name_key":"p_mail","poly":[[14.0,-6.0],[16.6,-6.0],[16.6,-2.6],[14.0,-2.6]],"room":"H","tag":"MAIL","value":6000.0},
+		{"art":"insp","art_size":[1.8,1.3518],"art_xf":[1.0,0.0,0.0,1.0,16.6000010172526,-4.75183359781901],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.6,"key":"SCAN-H","kind":"equip","mass":0.1,"name_key":"p_scanner","poly":[[16.6,-4.7518],[18.4,-4.7518],[18.4,-3.4],[16.6,-3.4]],"room":"H","tag":"SCAN-H","value":5000.0},
+		{"art":"cabinet","art_size":[1.8,2.05],"art_xf":[1.0,0.0,0.0,1.0,17.0,3.59999974568685],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.35,"key":"STORES-H","kind":"equip","mass":0.3,"name_key":"p_stores","poly":[[17.0,3.6],[18.8,3.6],[18.8,5.65],[17.0,5.65]],"room":"H","tag":"STORES-H","value":2500.0},
+		{"art":"pump","art_size":[2.2,1.65],"art_xf":[1.0,0.0,0.0,1.0,24.2000020345052,4.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.35,"key":"PUMP-F","kind":"equip","mass":0.3,"name_key":"p_transfer_pump","poly":[[24.2,4.0],[26.4,4.0],[26.4,5.65],[24.2,5.65]],"room":"H","tag":"PUMP-F","value":3000.0},
+		{"art":"water","art_size":[2.6,1.1],"art_xf":[1.0,0.0,0.0,1.0,2.59999990463257,1.89999993642171],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"WATER-M","kind":"equip","mass":0.2,"name_key":"p_water_tank","poly":[[2.6,1.9],[5.2,1.9],[5.2,3.0],[2.6,3.0]],"room":"M","tag":"WATER-M","value":800.0},
 		{"art":"panel","art_size":[3.4,0.5],"art_xf":[1.0,0.0,0.0,1.0,13.0,6.0],"cut_speed":240.0,"density":1.0,"key":"PNL-X","kind":"fixture","mass":0.05,"name_key":"p_panel","poly":[[13.0,6.0],[16.4,6.0],[16.4,6.5],[13.0,6.5]],"tag":"PNL-X"}
 	],
 	"joints": [
@@ -250,6 +255,16 @@
 		{"a":"p60","at":[10.6,7.7],"b":"LEG-1","type":"weld"},
 		{"a":"LEG-2","at":[21.2,6.0],"b":"BELLY-2","type":"bolt"},
 		{"a":"p62","at":[21.2,7.7],"b":"LEG-2","type":"weld"},
+		{"a":"MAIL","at":[14.0,-5.4],"b":"B1-T","type":"lock"},
+		{"a":"MAIL","at":[14.0,-3.2],"b":"B1-T","type":"lock"},
+		{"a":"SCAN-H","at":[16.9,-4.7518],"b":"CAN-R","type":"bolt"},
+		{"a":"SCAN-H","at":[18.1,-4.7518],"b":"CAN-R","type":"bolt"},
+		{"a":"STORES-H","at":[17.3,5.65],"b":"BELLY-3","type":"bolt"},
+		{"a":"STORES-H","at":[18.5,5.65],"b":"BELLY-2","type":"bolt"},
+		{"a":"PUMP-F","at":[24.5,5.65],"b":"BELLY-1","type":"bolt"},
+		{"a":"PUMP-F","at":[26.1,5.65],"b":"BELLY-1","type":"bolt"},
+		{"a":"WATER-M","at":[3.0,1.9],"b":"DK-C","type":"bolt"},
+		{"a":"WATER-M","at":[4.8,1.9],"b":"DK-C","type":"bolt"},
 		{"a":"PNL-X","at":[13.5,6.0],"b":"BELLY-4","type":"bolt"},
 		{"a":"PNL-X","at":[15.9,6.0],"b":"BELLY-3","type":"bolt"}
 	],
@@ -265,7 +280,8 @@
 		{"a":"PDU","b":"LAMP-H","id":"p9","kind":"cable","net":"power","pa":[8.6,3.0],"path":[[8.6,3.0],[13.0,3.0],[13.0,-1.9],[21.5,-1.9],[21.5,-1.89]],"pb":[21.5,-1.89]},
 		{"a":"LAMP-H","b":"PNL-R","id":"p10","kind":"cable","net":"power","pa":[21.7,-1.89],"path":[[21.7,-1.89],[28.8,-1.9],[29.8,-1.9],[29.8,-1.6]],"pb":[29.8,-1.6]},
 		{"a":"PNL-R","b":"LAMP-L","id":"p11","kind":"cable","net":"power","pa":[31.6,-1.6],"path":[[31.6,-1.6],[32.4,-1.6],[32.4,-1.25]],"pb":[32.4,-1.25]},
-		{"a":"TK-F","b":"ENG","id":"f1","kind":"pipe","net":"fuel","pa":[23.4,5.4],"path":[[23.4,5.4],[24.0,5.4],[24.0,6.6],[25.4,6.6]],"pb":[25.4,6.6]}
+		{"a":"TK-F","b":"ENG","id":"f1","kind":"pipe","net":"fuel","pa":[23.4,5.4],"path":[[23.4,5.4],[24.0,5.4],[24.0,6.6],[25.4,6.6]],"pb":[25.4,6.6]},
+		{"a":"LAMP-H","b":"SCAN-H","id":"f2","kind":"cable","net":"power","pa":[21.3,-1.89],"path":[[21.3,-1.89],[18.6,-1.9],[18.6,-3.8],[18.4,-3.8]],"pb":[18.4,-3.8]}
 	],
 	"ctrls": [
 		{"at":[13.4,-7.25],"id":"G-C","kind":"port","medium":"gas","piece":"HL2-2","target":"C"},

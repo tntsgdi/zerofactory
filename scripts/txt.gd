@@ -633,6 +633,7 @@ const S := {
 	"p_pack_rack": ["电池包架", "PACK RACK"],
 	"p_tool_wall": ["工具墙", "TOOL WALL"],
 	"p_drill": ["台钻", "PILLAR DRILL"],
+	"p_mail": ["邮件柜", "MAIL CABINET"],
 	"p_cargo_log": ["装载记录机", "LOADING RECORDER"],
 	"cargo_thawed": ["冷舱回温：这一舱的货解冻了，只剩不到一半的价值", "THE HOLD HAS WARMED: ITS CARGO THAWED, LESS THAN HALF ITS VALUE LEFT"],
 	"loss_thaw": ["货物解冻", "CARGO THAWED"],

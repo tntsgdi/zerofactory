@@ -50,7 +50,9 @@ static func build(world) -> void:
 	_aft()
 	_arm()
 	_pods()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -317,6 +319,59 @@ static func _pods() -> void:
 		K.bolt(nz, en, 65.0, sg * 9.4)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a salvage tug carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.2, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1)
+	return p
+
+
+# equipment bolted by its side to a wall at x
+static func _wall(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, wall, wx: float, opts: Dictionary):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	K.bolt(p, wall, wx, y0 + 0.5)
+	K.bolt(p, wall, wx, y1 - 0.5)
+	return p
+
+
+static func _fitout() -> void:
+	var dk = by_tag["DECK"]
+	# the workshop: the tool wall on the bulkhead, a chain hoist and the stores off the
+	# roof, the pillar drill on the bench
+	_wall("TOOLWALL", "locker", 29.4, -9.0, BH2, -5.0, by_tag["BH2-T"], BH2, {"mass": 0.4, "value": 3000.0, "fragile": 0.3, "room": "W", "name_key": "p_tool_wall"})
+	_hang("CRANE-W", "arm", 26.4, 28.8, -7.6, 3, {"mass": 0.3, "value": 3000.0, "fragile": 0.35, "room": "W", "name_key": "p_hoist"})
+	_hang("STORES-W", "cabinet", 17.4, 20.6, -5.6, 2, {"mass": 0.4, "value": 2500.0, "fragile": 0.3, "room": "W", "name_key": "p_stores"})
+	_stand("DRILL", "insp", 21.6, 1.0, 23.0, DECK - 1.6, by_tag["BENCH"], {"mass": 0.15, "value": 2500.0, "fragile": 0.4, "room": "W", "name_key": "p_drill"})
+	# the hydraulics room: the oil cooler off the roof, the spare tow line on its reel
+	_hang("COOLER-H", "radiator", 41.8, 44.6, -6.2, 4, {"mass": 0.5, "value": 4000.0, "fragile": 0.35, "room": "H", "name_key": "p_hx"})
+	_stand("SPOOL", "reel", 46.4, 2.4, 48.0, DECK, dk, {"mass": 0.9, "value": 3500.0, "fragile": 0.2, "room": "H", "name_key": "p_reel"})
+	# the battery bay: the inverter and the charger on the floor
+	for e in [["INV-L", "swb", 36.0, 39.0, 5000.0, "p_inverter"], ["CHG-L", "cap", 41.0, 44.0, 4000.0, "p_charge_ctrl"]]:
+		_stand(e[0], e[1], e[2], 6.4, e[3], BELLY, K.at(e[2] + 0.5, 8.75, ["hull"]), {"mass": 0.4, "value": e[4], "fragile": 0.4, "room": "L", "name_key": e[5]})
+	# the bridge's radar display off the roof
+	_stand("RADAR-B", "radar", 28.6, -13.4, 31.0, -12.6, by_tag["BR-R2"], {"mass": 0.1, "value": 4500.0, "fragile": 0.5, "room": "B", "name_key": "p_radar"}, true)
+
+
+static func _fit_lines() -> void:
+	K.line("f1", "cable", "power", "LAMP-W", Vector2(23.2, -10.19), "CRANE-W", Vector2(26.4, -8.0), [Vector2(23.2, -8.0)])
+	K.line("f2", "cable", "power", "W-CON", Vector2(24.0, -3.8), "DRILL", Vector2(22.3, 1.0), [Vector2(22.3, -3.8)])
+	K.line("f3", "cable", "power", "LAMP-H", Vector2(36.8, -10.19), "COOLER-H", Vector2(41.8, -7.0), [Vector2(36.8, -7.0)])
+	K.line("f4", "cable", "power", "LAMP-L", Vector2(40.2, DECK + 0.46), "INV-L", Vector2(39.0, 7.0), [Vector2(40.2, 7.0)])
+	K.line("f5", "cable", "power", "INV-L", Vector2(39.0, 7.6), "CHG-L", Vector2(41.0, 7.6))
+	K.line("f6", "cable", "power", "HELM", Vector2(30.8, -12.2), "RADAR-B", Vector2(30.8, -12.6))
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -393,7 +448,7 @@ static func meta() -> Dictionary:
 		"title": ["TW-64「磐石」维修拖船 · 70 m", "TW-64 BEDROCK · SALVAGE TUG AND WORKSHOP · 70 m"],
 		"contract": "TW-64",
 		"length": 70.0,
-		"value": {"total": 190000.0, "metal": 26000.0},
+		"value": {"total": 221900.0, "metal": 26000.0},
 		"clamps": [[22.0, 9.0], [34.0, 9.0], [44.0, 9.0]],
 		"room_names": {"F": "room_twF", "W": "room_twW", "H": "room_twH", "L": "room_twL", "A": "room_twA", "B": "room_twB"},
 		"gas": {"rooms": {"F": 101.0, "W": 101.0, "H": 101.0, "L": 101.0, "A": 101.0, "B": 101.0},
@@ -431,7 +486,7 @@ static func meta() -> Dictionary:
 		"labels": {"HYD": "HYD", "ACC-A": "ACC", "ACC-J": "ACC", "SWB": "SWB", "BAT": "BAT", "TOWLOG": "LOG", "WINCH": "WINCH", "HPU": "HPU", "WELD-1": "O₂", "WELD-2": "C₂H₂"},
 		"hints": {},
 		"market": {
-			"class": "TW", "name": ["磐石级维修拖船", "BEDROCK-CLASS SALVAGE TUG"], "time": 32.0,
+			"class": "TW", "name": ["磐石级维修拖船", "BEDROCK-CLASS SALVAGE TUG"], "time": 36.0,
 			"rooms": {"W": [0.2, 40.0, 101.0], "H": [0.2, 40.0, 101.0], "B": [0.2, 40.0, 101.0], "L": [0.2, 40.0, 101.0], "F": [0.25, 0.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {"hyd": [0.1, 0.7]}, "fill": {"hyd_line": "hyd"},
