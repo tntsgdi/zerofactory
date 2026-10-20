@@ -193,9 +193,13 @@ func _whip(q, at: Vector2) -> void:
 func _blowout(q, at: Vector2) -> void:
 	blown = true
 	var vk: String = str(cfg.get("mud", ""))
+	var gush := 0.0
 	if game.sys.fvol.has(vk):
-		game.sys.fluid_lost += float(game.sys.fvol[vk].amount)
+		gush = float(game.sys.fvol[vk].amount)
+		game.sys.fluid_lost += gush
 		game.sys.fvol[vk].amount = 0.0
+	if game.liquids != null:
+		game.liquids.spill(at, Vector2.UP, minf(gush, 2.0) * 0.6, "mud", 34, 1.4, 3.5, true)
 	var lost := 0.0
 	var keep: float = float(cfg.get("spray", 0.6))
 	for p in game._equip_near(at, float(cfg.get("reach", 8.0)) * Geom.M):

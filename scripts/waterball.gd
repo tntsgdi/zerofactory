@@ -118,6 +118,9 @@ func _burst(by: String) -> void:
 		game._dent(fish, minf(fish.cond, 0.2), "dv_fish_lost")
 		lost += (b0 - fish.cond) * fish.value
 	var at := _centre()
+	# the ball comes apart into globules that go on drifting in the room
+	if game.liquids != null:
+		game.liquids.spill(at, Vector2.ZERO, lost_w * 0.9, "water", 46, TAU, 0.5, true)
 	for i in 6:
 		game.fx.puff(at + Vector2.from_angle(i * TAU / 6.0) * 2.0 * Geom.M, Vector2.from_angle(i * TAU / 6.0) * 60.0, 2.5, 30.0, 140.0, Pal.ink(0.08))
 	if live:

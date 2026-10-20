@@ -474,7 +474,7 @@ static func _rooms() -> void:
 
 static func meta() -> Dictionary:
 	var vols := {}
-	vols["mud"] = {"fluid": "water", "amount": 2.5, "nets": ["mud"], "piece": "STP", "port": "PMUD", "full": 3.0, "leak": 0.3, "pump": [0.03, 0.02]}
+	vols["mud"] = {"fluid": "water", "look": "mud", "amount": 2.5, "nets": ["mud"], "piece": "STP", "port": "PMUD", "full": 3.0, "leak": 0.3, "pump": [0.03, 0.02]}
 	vols["loop"] = {"fluid": "water", "amount": 0.25, "nets": ["loop"], "piece": "MCP-1", "port": "PL", "full": 0.3, "leak": 0.1, "leak_min": 0.004, "pump": [0.1, 0.006]}
 	vols["fuel"] = {"fluid": "fuel", "amount": 0.6, "nets": ["fuel"], "piece": "FUEL-1", "port": "PF", "full": 0.9, "content": 1.0, "leak": 0.12, "pump": [0.1, 0.008]}
 	var rooms := {}

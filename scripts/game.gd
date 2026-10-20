@@ -34,6 +34,7 @@ var spine                     # a spine carrying the tail (ARK-01), scripts/spin
 var workday                   # a job of several working days (ARK-01), scripts/workday.gd
 var boiloff                   # cryogenic tanks boiling off (HG-170), scripts/boiloff.gd
 var liquids                   # liquid adrift in free fall (every leak and spill), scripts/liquids.gd
+var liquids                   # liquid adrift in free fall (every leak and spill), scripts/liquids.gd
 var drillstring               # a drill string in its derrick (DR-150), scripts/drillstring.gd
 var nested                    # a ship carried inside the ship (LC-140), scripts/nested.gd
 var waterball                 # a water ball in its net (BL-88), scripts/waterball.gd
@@ -328,6 +329,9 @@ func _ready() -> void:
 	workday.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(workday)
 	workday.setup(self, ship)
+	liquids = preload("res://scripts/liquids.gd").new()
+	world.add_child(liquids)
+	liquids.setup(self)
 	liquids = preload("res://scripts/liquids.gd").new()
 	world.add_child(liquids)
 	liquids.setup(self)

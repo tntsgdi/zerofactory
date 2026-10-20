@@ -15,10 +15,10 @@
 	},
 	"boiloff": {
 		"tanks": {
-			"TK1": {"centre":[73.0,0.0],"frozen":false,"heater":"","line":"cr1","rate":0.8,"shell":["TA0-0","TA1-0","TA2-0","TA3-0","TA4-0","TA5-0","TA6-0","TA7-0"],"valve":"RV-1","vol":"t1"},
-			"TK2": {"centre":[89.0,0.0],"frozen":false,"heater":"","line":"cr2","rate":2.4,"shell":["TB0-0","TB1-0","TB2-0","TB3-0","TB4-0","TB5-0","TB6-0","TB7-0"],"valve":"RV-2","vol":"t2"},
-			"TK3": {"centre":[105.0,0.0],"frozen":true,"heater":"RVH-3","line":"cr3","rate":0.8,"shell":["TC0-0","TC1-0","TC2-0","TC3-0","TC4-0","TC5-0","TC6-0","TC7-0"],"valve":"RV-3","vol":"t3"},
-			"TK4": {"centre":[121.0,0.0],"frozen":false,"heater":"","line":"cr4","rate":0.8,"shell":["TD0-0","TD1-0","TD2-0","TD3-0","TD4-0","TD5-0","TD6-0","TD7-0"],"valve":"RV-4","vol":"t4"}
+			"TK1": {"centre":[73.0,0.0],"frozen":false,"heater":"","line":"cr1","look":"lh2","rate":0.8,"shell":["TA0-0","TA1-0","TA2-0","TA3-0","TA4-0","TA5-0","TA6-0","TA7-0"],"valve":"RV-1","vol":"t1"},
+			"TK2": {"centre":[89.0,0.0],"frozen":false,"heater":"","line":"cr2","look":"lh2","rate":2.4,"shell":["TB0-0","TB1-0","TB2-0","TB3-0","TB4-0","TB5-0","TB6-0","TB7-0"],"valve":"RV-2","vol":"t2"},
+			"TK3": {"centre":[105.0,0.0],"frozen":true,"heater":"RVH-3","line":"cr3","look":"lh2","rate":0.8,"shell":["TC0-0","TC1-0","TC2-0","TC3-0","TC4-0","TC5-0","TC6-0","TC7-0"],"valve":"RV-3","vol":"t3"},
+			"TK4": {"centre":[121.0,0.0],"frozen":false,"heater":"","line":"cr4","look":"lh2","rate":0.8,"shell":["TD0-0","TD1-0","TD2-0","TD3-0","TD4-0","TD5-0","TD6-0","TD7-0"],"valve":"RV-4","vol":"t4"}
 		},
 		"plant": ["CRY-1","CRY-2"],
 		"P0": 420.0,
@@ -44,10 +44,10 @@
 	},
 	"fluids": {
 		"volumes": {
-			"t1": {"amount":5.0,"content":1.0,"fluid":"coolant","full":6.0,"leak":0.3,"nets":["t1"],"piece":"TA5-0","port":"PT-1","pump":[0.02,0.02]},
-			"t2": {"amount":5.0,"content":1.0,"fluid":"coolant","full":6.0,"leak":0.3,"nets":["t2"],"piece":"TB5-0","port":"PT-2","pump":[0.02,0.02]},
-			"t3": {"amount":5.0,"content":1.0,"fluid":"coolant","full":6.0,"leak":0.3,"nets":["t3"],"piece":"TC5-0","port":"PT-3","pump":[0.02,0.02]},
-			"t4": {"amount":5.0,"content":1.0,"fluid":"coolant","full":6.0,"leak":0.3,"nets":["t4"],"piece":"TD5-0","port":"PT-4","pump":[0.02,0.02]},
+			"t1": {"amount":5.0,"content":1.0,"fluid":"coolant","full":6.0,"leak":0.3,"look":"lh2","nets":["t1"],"piece":"TA5-0","port":"PT-1","pump":[0.02,0.02]},
+			"t2": {"amount":5.0,"content":1.0,"fluid":"coolant","full":6.0,"leak":0.3,"look":"lh2","nets":["t2"],"piece":"TB5-0","port":"PT-2","pump":[0.02,0.02]},
+			"t3": {"amount":5.0,"content":1.0,"fluid":"coolant","full":6.0,"leak":0.3,"look":"lh2","nets":["t3"],"piece":"TC5-0","port":"PT-3","pump":[0.02,0.02]},
+			"t4": {"amount":5.0,"content":1.0,"fluid":"coolant","full":6.0,"leak":0.3,"look":"lh2","nets":["t4"],"piece":"TD5-0","port":"PT-4","pump":[0.02,0.02]},
 			"cryo_lines": {"amount":0.0,"fluid":"n2","nets":["cryo"]},
 			"he_lines": {"amount":0.0,"fluid":"n2","nets":["he"]},
 			"loop": {"amount":0.25,"fluid":"water","full":0.3,"leak":0.1,"leak_min":0.004,"nets":["loop"],"piece":"MCP-1","port":"PL","pump":[0.1,0.006]},

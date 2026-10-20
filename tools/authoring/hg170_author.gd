@@ -409,9 +409,9 @@ static func meta() -> Dictionary:
 	var tanks := {}
 	for k in 4:
 		var vk := "t%d" % (k + 1)
-		vols[vk] = {"fluid": "coolant", "amount": 5.0, "nets": [vk], "piece": TP[k] + "5-0", "port": "PT-%d" % (k + 1), "full": 6.0, "content": 1.0, "leak": 0.3, "pump": [0.02, 0.02]}
+		vols[vk] = {"fluid": "coolant", "look": "lh2", "amount": 5.0, "nets": [vk], "piece": TP[k] + "5-0", "port": "PT-%d" % (k + 1), "full": 6.0, "content": 1.0, "leak": 0.3, "pump": [0.02, 0.02]}
 		tanks["TK%d" % (k + 1)] = {"vol": vk, "valve": "RV-%d" % (k + 1), "line": "cr%d" % (k + 1), "rate": 2.4 if k == 1 else 0.8, "frozen": k == 2,
-			"heater": "RVH-3" if k == 2 else "", "centre": [CX[k], 0.0],
+			"heater": "RVH-3" if k == 2 else "", "centre": [CX[k], 0.0], "look": "lh2",
 			"shell": range(8).map(func(i): return "%s%d-0" % [TP[k], i])}
 	# the refrigeration's own lines hold no cargo
 	vols["cryo_lines"] = {"fluid": "n2", "amount": 0.0, "nets": ["cryo"]}

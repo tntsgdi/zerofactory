@@ -197,6 +197,9 @@ func _quench(c: String, why: String) -> void:
 	for n in cfg.coils[c].get("next", []):
 		if energised(str(n)) and not _pending.has(str(n)):
 			_pending[str(n)] = SPREAD_T
+	# the helium in the coil's channels flashes out as boiling liquid
+	if game.liquids != null:
+		game.liquids.spill(at, Vector2.ZERO, 0.05, "lhe", 10, TAU, 2.5, true)
 	game.fx.flash(at, 5.0 * Geom.M, 0.5, Pal.heat(1.0, 2.0))
 	game.fx.sparks(at, Vector2.UP, 30, Pal.heat(1.0, 2.0), 360.0, 0.5, PI)
 	game.shake(0.35)

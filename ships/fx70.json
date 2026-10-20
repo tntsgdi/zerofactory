@@ -48,7 +48,7 @@
 	},
 	"fluids": {
 		"volumes": {
-			"lhe": {"amount":0.4,"content":1.0,"fluid":"coolant","full":0.5,"leak":0.1,"nets":["he"],"piece":"HE-DEW","port":"PHE","pump":[0.08,0.006]},
+			"lhe": {"amount":0.4,"content":1.0,"fluid":"coolant","full":0.5,"leak":0.1,"look":"lhe","nets":["he"],"piece":"HE-DEW","port":"PHE","pump":[0.08,0.006]},
 			"loop": {"amount":0.25,"fluid":"water","full":0.3,"leak":0.1,"leak_min":0.004,"nets":["loop"],"piece":"MCP-1","port":"PL","pump":[0.1,0.006]},
 			"fuel": {"amount":0.3,"content":1.0,"fluid":"fuel","full":0.5,"leak":0.12,"nets":["fuel"],"piece":"FUEL-P","port":"PF","pump":[0.1,0.008]}
 		},

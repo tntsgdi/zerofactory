@@ -82,6 +82,11 @@ func valve_temp(t: String) -> float:
 	return lerpf(-196.0, -40.0, k)
 
 
+# the look of a tank's cargo for scripts/liquids.gd
+func look(t: String) -> String:
+	return str(_e(t).get("look", "lh2"))
+
+
 func tank_kpa(t: String) -> float:
 	return float(kpa.get(t, 0.0))
 
@@ -188,6 +193,10 @@ func _physics_process(dt: float) -> void:
 			if not _venting.has(t):
 				_venting[t] = true
 				_vent_start(t)
+			if game.liquids != null and randf() < dt * 1.5:
+				var rvv = world.tag(str(e.get("valve", "")))
+				if rvv != null:
+					game.liquids.spill(world.frame(rvv) * Geom.centroid(rvv.poly), Vector2(1.0 if randf() < 0.5 else -1.0, -0.2), 0.006, look(t), 2, 0.9, 2.2, true)
 			var dp: float = minf(p - float(cfg.get("reseat", 540.0)), 30.0 * dt)
 			p -= dp
 			var vk: String = str(e.get("vol", ""))
@@ -208,6 +217,9 @@ func _vent_start(t: String) -> void:
 	var at: Vector2 = world.frame(rv) * Geom.centroid(rv.poly) if rv != null else Vector2.ZERO
 	for i in 6:
 		game.fx.puff(at, Vector2(randf_range(-40, 40), -160.0), 2.0, 12.0, 90.0, Pal.ink(0.1))
+	if game.liquids != null:
+		# the valve's discharge is sideways out of its body (the truss sits right over it)
+		game.liquids.spill(at, Vector2(1.0 if randf() < 0.5 else -1.0, -0.2), 0.04, look(t), 6, 0.9, 2.5, true)
 	game.sfx.play("hiss", at, 0.8)
 	game.incident("tank_vent", t)
 	game.say("tank_vent", at, t)
@@ -237,6 +249,8 @@ func _burst(t: String) -> void:
 		game._dent(p, maxf(0.0, p.cond - p.fragile * k * 1.2), "dv_tank_burst")
 		lost += (before - p.cond) * p.value
 	kpa[t] = 0.0
+	if game.liquids != null:
+		game.liquids.spill(at, Vector2.ZERO, 0.8, look(t), 36, TAU, 3.0, true)
 	# the shell comes apart at its welds
 	for st in e.get("shell", []):
 		var sp = world.tag(str(st))

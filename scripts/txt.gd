@@ -774,6 +774,8 @@ const S := {
 	"inst_load": ["载荷表", "LOAD CELL"],
 	"dv_wet_short": ["液体溅入短路", "SHORTED BY LIQUID"],
 	"frost_hit": ["无人机撞上低温液团：外壳结霜", "THE DRONE HIT A GLOBULE OF CRYOGEN: ITS SHELL FROSTED"],
+	"dv_wet_short": ["液体溅入短路", "SHORTED BY LIQUID"],
+	"frost_hit": ["无人机撞上低温液团：外壳结霜", "THE DRONE HIT A GLOBULE OF CRYOGEN: ITS SHELL FROSTED"],
 	"p_fx_pf_coil": ["极向场线圈", "POLOIDAL FIELD COIL"],
 	"p_fx_port_plug": ["赤道窗口插件", "EQUATORIAL PORT PLUG"],
 	"p_fx_nbi": ["中性束注入器", "NEUTRAL BEAM INJECTOR"],

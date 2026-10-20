@@ -85,6 +85,9 @@ func _spill(q) -> void:
 	var s = game.sys
 	var vk: String = str(e.get("vol", ""))
 	if s.fvol.has(vk):
+		if game.liquids != null:
+			var q_at: Vector2 = world.frame(q) * Geom.centroid(q.poly)
+			game.liquids.spill(q_at, Vector2.UP, float(s.fvol[vk].amount) * 0.6, "glycol", 18, PI, 0.8, true)
 		s.fvol[vk].amount = 0.0
 	var lost := 0.0
 	var at: Vector2 = world.frame(q) * Geom.centroid(q.poly)
