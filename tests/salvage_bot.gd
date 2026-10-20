@@ -188,6 +188,8 @@ func _prep() -> void:
 			return
 	# dead legs: the valve between a test port and its room opens first
 	for gv in s.gas_valves:
+		if g.tanknet != null and g.tanknet.pv_valve(gv.ctrl):
+			continue
 		if not s.on(gv.ctrl) and not _hidden(gv.ctrl) and _once("valve " + gv.ctrl):
 			_w(gv.ctrl)
 			_note("open %s" % gv.ctrl)
@@ -271,12 +273,46 @@ func _prep() -> void:
 				_work(2.5)
 				return
 			break
+	# a propellant network: every cross valve open, drawn at the recovery port while the
+	# pump has power and the tanks are still pressurised; then the hose off, the
+	# pressurisation shut, and only then the ullages vented
+	if g.tanknet != null and g.tanknet.active():
+		var tn: Dictionary = g.tanknet.cfg
+		if g.tanknet.fuel_left() > 0.02:
+			for t in tn.tanks:
+				var xv: String = tn.tanks[t].valve
+				if w.ctrls.has(xv) and not w.ctrls[xv].state and not _hidden(xv) and _once("xv " + xv):
+					_w(xv)
+					_note("cross valve %s open" % xv)
+					_work(2.5)
+					return
+			if not s.hoses.has(tn.port) and not _hidden(tn.port) and _once("draw " + tn.port):
+				done_ops["hose " + tn.port] = true
+				_h(tn.port)
+				_note("draw the propellant at %s" % tn.port)
+				_work(2.5)
+				return
+		else:
+			if s.hoses.has(tn.port) and _once("draw off " + tn.port):
+				_h(tn.port)
+				_note("propellant drawn: %s off" % tn.port)
+				_work(1.5)
+				return
+			for t in tn.tanks:
+				var pv: String = tn.tanks[t].get("pv", "")
+				if pv != "" and s.on(pv) and not _hidden(pv) and _once("pv " + pv):
+					_w(pv)
+					_note("pressurisation %s shut" % pv)
+					_work(2.5)
+					return
 	# every gas port on something under pressure gets a hose
 	for id in w.ctrls:
 		var c = w.ctrls[id]
 		if c.kind != "port" or s.hoses.has(id) or _hidden(id) or done_ops.has("hose " + id):
 			continue
 		if g.media != null and g.media.active() and g.media.branch_of_port(id) != "":
+			continue
+		if g.tanknet != null and (g.tanknet.hold_port(id) or id == g.tanknet.cfg.get("port", "")):
 			continue
 		if not w.ctrl_alive(c) or g.tools._ctrl_blocked(c) != "":
 			continue
@@ -295,8 +331,9 @@ func _prep() -> void:
 			_note("hose %s" % id)
 			_work(2.5)
 			return
-	# a hot furnace core: its heat exchange keeps running on the bus until it is cool
-	var core_hot: bool = g.furnace != null and g.furnace.hot()
+	# a hot furnace core: its heat exchange keeps running on the bus until it is cool;
+	# a propellant network's pump runs on the bus until the propellant is drawn
+	var core_hot: bool = (g.furnace != null and g.furnace.hot()) or (g.tanknet != null and g.tanknet.active() and g.tanknet.fuel_left() > 0.02)
 	# power: open every source switch, send remote stops, then bleed capacitors
 	for tg in s.src_order:
 		if core_hot:

@@ -845,11 +845,7 @@ func _step_fluids(dt: float) -> void:
 	var joins: Array = cfg.get("fluids", {}).get("joins", [])
 	var joined := {}
 	for jn in joins:
-		var open := false
-		for v in jn.valves:
-			if on(v):
-				open = true
-		if not open:
+		if not join_open(jn):
 			continue
 		joined[jn.b] = jn
 		var a: Dictionary = fvol[jn.a]
@@ -947,11 +943,19 @@ func fluid_of_net(net: String) -> String:
 func fluid_behind(vk: String) -> float:
 	var amt := fluid(vk)
 	for jn in cfg.get("fluids", {}).get("joins", []):
-		if jn.b == vk and jn.has("leak_through"):
-			for v in jn.valves:
-				if on(v) and fluid(jn.a) > 0.02:
-					return maxf(amt, fluid(jn.a))
+		if jn.b == vk and jn.has("leak_through") and join_open(jn) and fluid(jn.a) > 0.02:
+			return maxf(amt, fluid(jn.a))
 	return amt
+
+
+# a join passes while any of its valves is open, or always if its valve leaks shut (a trap)
+func join_open(jn: Dictionary) -> bool:
+	if jn.get("stuck", false):
+		return true
+	for v in jn.valves:
+		if on(v):
+			return true
+	return false
 
 
 # reading of a fluid port: amount relative to its full level

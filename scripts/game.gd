@@ -21,6 +21,7 @@ var vault                     # vault doors on two lock circuits and a release (
 var media                     # look-alike media in crossed branches (FL-116), scripts/media.gd
 var furnace                   # a furnace core shut down but not cool (MF-126), scripts/furnace.gd
 var drones                    # drones parked live on their own packs (CV-138), scripts/drones.gd
+var tanknet                   # a cross-connected propellant network (VT-80), scripts/tanknet.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -257,6 +258,10 @@ func _ready() -> void:
 	drones.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(drones)
 	drones.setup(self, ship)
+	tanknet = preload("res://scripts/tanknet.gd").new()
+	tanknet.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(tanknet)
+	tanknet.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -407,6 +412,8 @@ func _ready() -> void:
 			furnace.load_state(data.furnace)
 		if data.has("drones"):
 			drones.load_state(data.drones)
+		if data.has("tanknet"):
+			tanknet.load_state(data.tanknet)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):

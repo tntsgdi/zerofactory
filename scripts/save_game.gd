@@ -161,6 +161,7 @@ static func save(g) -> void:
 		"media": g.media.save_state() if g.media != null and g.media.active() else {},
 		"furnace": g.furnace.save_state() if g.furnace != null and g.furnace.active() else {},
 		"drones": g.drones.save_state() if g.drones != null and g.drones.active() else {},
+		"tanknet": g.tanknet.save_state() if g.tanknet != null and g.tanknet.active() else {},
 		"bio": g.bio.save_state() if g.bio != null else {},
 		"ore": g.ore.save_state() if g.ore != null else {},
 		"cryo": g.cryo.save_state() if g.cryo != null else {},

@@ -24,12 +24,14 @@ class_name Traps
 #                   set pressure: it cannot relieve itself; warmed further, it ruptures
 #   heater_live     the anti-freeze heater left switched on, on its own supply, warming its tank
 #   jacket_loss     a tank's vacuum jacket has let air in: heat leaks in fast, the cargo is warmer
+#   valve_leak      a propellant tank's cross valve leaks while it reads shut: its tank keeps feeding
+#                   its branch, so the branch cut "isolated" still leaks propellant
 
 const ALL := ["wrong_valve", "fake_stop", "hidden_tank", "live_cargo", "welded_hatch",
 	"rerouted_line", "second_source", "hidden_damage", "explosive_cargo", "fire_system"]
-const EXTRA := ["bio_breach", "gate_jam", "psv_stuck", "heater_live", "jacket_loss"]
+const EXTRA := ["bio_breach", "gate_jam", "psv_stuck", "heater_live", "jacket_loss", "valve_leak"]
 const TIER := {
-	"gate_jam": 0, "heater_live": 0, "jacket_loss": 0, "psv_stuck": 1,
+	"gate_jam": 0, "heater_live": 0, "jacket_loss": 0, "psv_stuck": 1, "valve_leak": 1,
 	"bio_breach": 0,
 	"wrong_valve": 0, "fake_stop": 0, "hidden_tank": 0, "live_cargo": 0, "welded_hatch": 0,
 	"explosive_cargo": 0, "fire_system": 0, "rerouted_line": 1, "second_source": 1, "hidden_damage": 1,
@@ -102,6 +104,10 @@ static func evidence(d: Dictionary, trap: String) -> Array:
 			"jacket_loss":
 				var n2: String = tg.trim_prefix("T-")
 				return [["ctrl", "JP-" + n2], ["ctrl", "TT-" + n2]]
+			"valve_leak":
+				# its level probe still falling with the valve shut, its branch refilling at the drain
+				var n3: String = tg.trim_prefix("T-")
+				return [["ctrl", "L-" + n3], ["ctrl", "XV-" + n3], ["ctrl", "LD-" + n3]]
 	match trap:
 		"wrong_valve":
 			return [["ctrl", "P-C01"], ["ctrl", "V-C01"]]
@@ -148,6 +154,8 @@ static func intel(d: Dictionary, trap: String) -> Array:
 			return ["in_heater_live", [tg]]
 		"jacket_loss":
 			return ["in_jacket_loss", [tg, int(float(gas.rooms.get("J" + tg.trim_prefix("T-"), 0.0)))]]
+		"valve_leak":
+			return ["in_valve_leak", ["XV-" + tg.trim_prefix("T-"), tg]]
 		"live_cargo", "explosive_cargo":
 			return ["in_" + trap, [tg]]
 		"hidden_damage":
@@ -189,6 +197,9 @@ static func bit(trap: String, incidents: Array) -> bool:
 					return true
 			"explosive_cargo":
 				if k in ["blast", "furnace"]:
+					return true
+			"valve_leak":
+				if k == "leak" and det in ["b1", "b2", "b3"]:
 					return true
 	return false
 
@@ -341,6 +352,16 @@ static func _apply_slot(d: Dictionary, trap: String, sl: Dictionary, rng: Random
 				if c.id == sw:
 					c.state = true
 			_warm(d, d.cryo.heater.tank, rng.randf_range(2.0, 4.0))
+		"valve_leak":
+			# its cross valve leaks shut: the propellant network passes a little through it,
+			# and its branch keeps being fed from the tank
+			var tk3: String = sl.tanks[rng.randi_range(0, sl.tanks.size() - 1)]
+			_target(d, trap, tk3)
+			var te: Dictionary = d.tanknet.tanks[tk3]
+			te.leak = snappedf(rng.randf_range(0.04, 0.07), 0.001)
+			for jn in d.fluids.joins:
+				if jn.b == te.branch:
+					jn.stuck = true
 		"jacket_loss":
 			# air has got into the vacuum jacket: it no longer insulates, the cargo is warmer
 			var tk2: String = sl.tanks[rng.randi_range(0, sl.tanks.size() - 1)]

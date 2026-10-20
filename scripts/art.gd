@@ -432,3 +432,11 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				var x1 := w * (0.04 + 0.92 * (i + 1) / n)
 				L(ci, Vector2(x0, h * 0.15), Vector2(x1, h * 0.87), 0.4)
 				L(ci, Vector2(x0, h * 0.87), Vector2(x1, h * 0.15), 0.4)
+		"pipe":
+			# a run of pipe: its two walls, a flange every few metres
+			L(ci, Vector2(0, h * 0.2), Vector2(w, h * 0.2), 0.5)
+			L(ci, Vector2(0, h * 0.8), Vector2(w, h * 0.8), 0.5)
+			var fl := maxi(1, int(w / 120.0))
+			for i in fl + 1:
+				var x := w * float(i) / float(fl)
+				L(ci, Vector2(clampf(x, 1, w - 1), 0), Vector2(clampf(x, 1, w - 1), h), 0.4)
