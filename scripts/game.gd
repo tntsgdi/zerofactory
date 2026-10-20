@@ -19,6 +19,7 @@ var atmos                     # air that isn't plain air: oxygen-rich halls (HB-
 var coldchain                 # cold holds that have to stay cold (CL-104), scripts/coldchain.gd
 var vault                     # vault doors on two lock circuits and a release (ES-112), scripts/vault.gd
 var media                     # look-alike media in crossed branches (FL-116), scripts/media.gd
+var furnace                   # a furnace core shut down but not cool (MF-126), scripts/furnace.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -247,6 +248,10 @@ func _ready() -> void:
 	media.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(media)
 	media.setup(self, ship)
+	furnace = preload("res://scripts/furnace.gd").new()
+	furnace.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(furnace)
+	furnace.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -393,6 +398,8 @@ func _ready() -> void:
 			coldchain.load_state(data.cold)
 		if data.has("media"):
 			media.load_state(data.media)
+		if data.has("furnace"):
+			furnace.load_state(data.furnace)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1577,6 +1584,8 @@ func on_body_freed(b) -> void:
 			media.on_manifold(q)
 	if rails != null:
 		rails.on_freed(b)
+	if furnace != null:
+		furnace.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -2149,6 +2158,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "temp", c.id, "inst_hold_temp", {"ctrl": c, "temp_fn": func(): return coldchain.room_temp(c.target)})
 					"sample":
 						sys.measure(c.id, "sample", c.id, "inst_sample", {"ctrl": c, "sample_fn": func(): return media.sample(c.id)})
+					"core":
+						sys.measure(c.id, "temp", c.id, "inst_core", {"ctrl": c, "temp_fn": func(): return furnace.core_temp()})
 					"mag":
 						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
 					"heat":
@@ -2237,6 +2248,8 @@ func restore_reading(rd: Dictionary) -> void:
 					extra.temp_fn = func(): return munitions.room_temp(c.target)
 				elif c.medium == "cold":
 					extra.temp_fn = func(): return coldchain.room_temp(c.target)
+				elif c.medium == "core":
+					extra.temp_fn = func(): return furnace.core_temp()
 				else:
 					extra.temp_fn = func(): return sys.loop_T
 			"field":

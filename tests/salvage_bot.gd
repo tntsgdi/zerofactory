@@ -285,6 +285,9 @@ func _prep() -> void:
 			want = s.P(c.target) > (1.0 if w.rooms.has(c.target) or s.vessel_cfg.get(c.target, {}).has("dead_leg") else 40.0)
 		elif c.medium != "volt":
 			var vk: String = s.fluid_at_port(id)
+			# the cooling loop stays full while the core is hot
+			if g.furnace != null and g.furnace.hot() and vk == g.furnace.cfg.get("loop", ""):
+				continue
 			want = vk != "" and s.fluid(vk) > 0.015
 		if want:
 			done_ops["hose " + id] = true
@@ -292,8 +295,12 @@ func _prep() -> void:
 			_note("hose %s" % id)
 			_work(2.5)
 			return
+	# a hot furnace core: its heat exchange keeps running on the bus until it is cool
+	var core_hot: bool = g.furnace != null and g.furnace.hot()
 	# power: open every source switch, send remote stops, then bleed capacitors
 	for tg in s.src_order:
+		if core_hot:
+			break
 		var src: Dictionary = s.src[tg]
 		if src.has("switch") and s.on(src.switch) and not _hidden(src.switch) and _once("sw " + src.switch):
 			_w(src.switch)
@@ -578,6 +585,8 @@ func _unsafe() -> Array:
 		for rs in g.rails.cfg:
 			if not g.rails.released.has(rs):
 				out.append("rail %s locked" % rs)
+	if g.furnace != null and g.furnace.hot():
+		out.append("core %.0f C" % g.furnace.core_temp())
 	if s.bus_live:
 		out.append("bus live")
 	return out
