@@ -290,6 +290,22 @@ func _prep() -> void:
 					_note("clamp %s off" % t)
 					_work(2.0)
 					return
+	# a hull of ice: every heater on; once it has all melted, the saddle's seats let go
+	if g.ice != null and g.ice.active():
+		if g.ice.blocks_left() > 0:
+			for h in g.ice.cfg.get("heaters", {}):
+				if not s.on(str(h)) and not _hidden(str(h)) and _once("heat " + str(h)):
+					_w(str(h))
+					_note("heater %s on" % h)
+					_work(1.5)
+					return
+		else:
+			for t in g.ice.cfg.get("pads", {}).get("holds", []):
+				if s.on(str(t)) and not _hidden(str(t)) and _once("pad " + str(t)):
+					_w(str(t))
+					_note("seat %s let go" % t)
+					_work(2.0)
+					return
 	# a reactor's control drums locked before anything near the core moves
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
@@ -448,7 +464,7 @@ func _prep() -> void:
 			return
 	# a hot furnace core: its heat exchange keeps running on the bus until it is cool;
 	# a propellant network's pump runs on the bus until the propellant is drawn
-	var core_hot: bool = (g.furnace != null and g.furnace.hot()) or (g.tanknet != null and g.tanknet.active() and g.tanknet.fuel_left() > 0.02) 		or (g.train != null and g.train.active() and g.train.fluid_left() > 0.02)
+	var core_hot: bool = (g.furnace != null and g.furnace.hot()) or (g.tanknet != null and g.tanknet.active() and g.tanknet.fuel_left() > 0.02) 		or (g.train != null and g.train.active() and g.train.fluid_left() > 0.02) or (g.ice != null and g.ice.active() and g.ice.blocks_left() > 0)
 	# power: open every source switch, send remote stops, then bleed capacitors
 	for tg in s.src_order:
 		if core_hot:
@@ -709,6 +725,8 @@ func _unsafe() -> Array:
 		out.append_array(g.tether.unsafe())
 	if g.sandwich != null and g.sandwich.active():
 		out.append_array(g.sandwich.unsafe())
+	if g.ice != null and g.ice.active():
+		out.append_array(g.ice.unsafe())
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
 			if not s.on(str(g.reactor.cfg.drums[d])):

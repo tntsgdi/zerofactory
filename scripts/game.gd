@@ -31,6 +31,7 @@ var train                     # a train of modules on couplers (MT-140), scripts
 var flywheel                  # a mass driver still spinning (MD-160), scripts/flywheel.gd
 var tether                    # a tethered pair still turning (TB-180), scripts/tether.gd
 var sandwich                  # a cargo module clamped between two hulls (CH-110), scripts/sandwich.gd
+var ice                       # a hull of ice (IC-120), scripts/ice.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -307,6 +308,10 @@ func _ready() -> void:
 	sandwich.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(sandwich)
 	sandwich.setup(self, ship)
+	ice = preload("res://scripts/ice.gd").new()
+	ice.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(ice)
+	ice.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -477,6 +482,8 @@ func _ready() -> void:
 			tether.load_state(data.tether)
 		if data.has("sandwich"):
 			sandwich.load_state(data.sandwich)
+		if data.has("ice"):
+			ice.load_state(data.ice)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1681,6 +1688,8 @@ func on_body_freed(b) -> void:
 		tether.on_freed(b)
 	if sandwich != null:
 		sandwich.on_freed(b)
+	if ice != null:
+		ice.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -1867,6 +1876,8 @@ func on_cut_into(p, pos: Vector2) -> void:
 		tether.on_cut(p)
 	if sandwich != null:
 		sandwich.on_cut(p)
+	if ice != null:
+		ice.on_cut(p)
 	if atmos != null:
 		atmos.on_cut(p, pos)
 	if media != null:
@@ -2303,6 +2314,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "field", c.id, "inst_strands", {"ctrl": c, "field_fn": func(): return tether.strands(), "unit": "/7"})
 					"load":
 						sys.measure(c.id, "field", c.id, "inst_load", {"ctrl": c, "field_fn": func(): return sandwich.load(c.id), "unit": "kN"})
+					"crack":
+						sys.measure(c.id, "field", c.id, "inst_strain", {"ctrl": c, "field_fn": func(): return ice.strain(), "unit": "%"})
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
 						if sys.dead_leg_closed(c):
@@ -2427,6 +2440,9 @@ func restore_reading(rd: Dictionary) -> void:
 				elif c.medium == "load":
 					extra.field_fn = func(): return sandwich.load(c.id)
 					extra.unit = "kN"
+				elif c.medium == "crack":
+					extra.field_fn = func(): return ice.strain()
+					extra.unit = "%"
 				else:
 					extra.field_fn = func(): return mech.field(c.target)
 			"bio", "o2":

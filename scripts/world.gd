@@ -1078,6 +1078,10 @@ func _style(p) -> Array:
 		"fixture":
 			fill = Color(0.06, 0.063, 0.072)
 			line_c = Pal.ink(0.62)
+		"ice":
+			# a hull of water ice (IC-120): pale, the fluid tint in its edges
+			fill = Color(0.085, 0.108, 0.13)
+			line_c = Pal.ink(0.5).lerp(Pal.tint(Pal.FLUID, 0.7), 0.5)
 	if p.cls == "equip" and not p.intact:
 		fill = Color(0.045, 0.045, 0.05)
 		line_c = Pal.ink(0.42)
