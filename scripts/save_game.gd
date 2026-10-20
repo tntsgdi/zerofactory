@@ -172,6 +172,7 @@ static func save(g) -> void:
 		"rings": g.rings.save_state() if g.rings != null and g.rings.active() else {},
 		"spine": g.spine.save_state() if g.spine != null and g.spine.active() else {},
 		"workday": g.workday.save_state() if g.workday != null and g.workday.active() else {},
+		"boiloff": g.boiloff.save_state() if g.boiloff != null and g.boiloff.active() else {},
 		"drillstring": g.drillstring.save_state() if g.drillstring != null and g.drillstring.active() else {},
 		"nested": g.nested.save_state() if g.nested != null and g.nested.active() else {},
 		"waterball": g.waterball.save_state() if g.waterball != null and g.waterball.active() else {},

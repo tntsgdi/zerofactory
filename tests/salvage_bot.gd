@@ -965,7 +965,7 @@ func _unsafe() -> Array:
 # loose equipment not yet sent off lying within reach of a piece
 # the newer ship modules, which tell the bot what they need themselves
 # (bot_prep(), unsafe(), optionally bot_order())
-const GEN_MODS := ["optics", "magnets", "waterball", "nested", "drillstring"]
+const GEN_MODS := ["optics", "magnets", "waterball", "nested", "drillstring", "boiloff"]
 
 
 func _gen_mods() -> Array:

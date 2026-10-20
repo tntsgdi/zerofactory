@@ -32,6 +32,7 @@ var flywheel                  # a mass driver still spinning (MD-160), scripts/f
 var rings                     # habitat rings still turning (ARK-01), scripts/rings.gd
 var spine                     # a spine carrying the tail (ARK-01), scripts/spine.gd
 var workday                   # a job of several working days (ARK-01), scripts/workday.gd
+var boiloff                   # cryogenic tanks boiling off (HG-170), scripts/boiloff.gd
 var drillstring               # a drill string in its derrick (DR-150), scripts/drillstring.gd
 var nested                    # a ship carried inside the ship (LC-140), scripts/nested.gd
 var waterball                 # a water ball in its net (BL-88), scripts/waterball.gd
@@ -324,6 +325,10 @@ func _ready() -> void:
 	workday.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(workday)
 	workday.setup(self, ship)
+	boiloff = preload("res://scripts/boiloff.gd").new()
+	boiloff.process_mode = Node.PROCESS_MODE_PAUSABLE
+	world.add_child(boiloff)
+	boiloff.setup(self, ship)
 	drillstring = preload("res://scripts/drillstring.gd").new()
 	drillstring.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(drillstring)
@@ -544,6 +549,8 @@ func _ready() -> void:
 			spine.load_state(data.spine)
 		if data.has("workday") and workday.active():
 			workday.load_state(data.workday)
+		if data.has("boiloff"):
+			boiloff.load_state(data.boiloff)
 		if data.has("drillstring"):
 			drillstring.load_state(data.drillstring)
 		if data.has("nested"):
@@ -1785,6 +1792,8 @@ func on_body_freed(b) -> void:
 		rings.on_freed(b)
 	if spine != null:
 		spine.on_freed(b)
+	if boiloff != null:
+		boiloff.on_freed(b)
 	if drillstring != null:
 		drillstring.on_freed(b)
 	if nested != null:
@@ -2005,6 +2014,8 @@ func on_cut_into(p, pos: Vector2) -> void:
 		flywheel.on_cut(p)
 	if spine != null:
 		spine.on_cut(p)
+	if boiloff != null:
+		boiloff.on_cut(p)
 	if drillstring != null:
 		drillstring.on_cut(p)
 	if nested != null:
@@ -2459,6 +2470,10 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "field", c.id, "inst_temp", {"ctrl": c, "field_fn": func(): return rings.temp(c.target), "unit": "°C"})
 					"spine":
 						sys.measure(c.id, "field", c.id, "inst_load", {"ctrl": c, "field_fn": func(): return spine.gauge(c.id), "unit": "%"})
+					"valve_temp":
+						sys.measure(c.id, "field", c.id, "inst_valve_temp", {"ctrl": c, "field_fn": func(): return boiloff.valve_temp(str(c.target)), "unit": "°C"})
+					"tank_kpa":
+						sys.measure(c.id, "field", c.id, "inst_tank_kpa", {"ctrl": c, "field_fn": func(): return boiloff.tank_kpa(str(c.target)), "unit": "kPa"})
 					"mudp":
 						sys.measure(c.id, "field", c.id, "inst_mudp", {"ctrl": c, "field_fn": func(): return drillstring.mud_kpa(), "unit": "kPa"})
 					"torque":
@@ -2606,6 +2621,12 @@ func restore_reading(rd: Dictionary) -> void:
 				elif c.medium == "spine":
 					extra.field_fn = func(): return spine.gauge(c.id)
 					extra.unit = "%"
+				elif c.medium == "valve_temp":
+					extra.field_fn = func(): return boiloff.valve_temp(str(c.target))
+					extra.unit = "°C"
+				elif c.medium == "tank_kpa":
+					extra.field_fn = func(): return boiloff.tank_kpa(str(c.target))
+					extra.unit = "kPa"
 				elif c.medium == "mudp":
 					extra.field_fn = func(): return drillstring.mud_kpa()
 					extra.unit = "kPa"
