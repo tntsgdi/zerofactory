@@ -2921,6 +2921,12 @@ func do_hose(tg: Dictionary, by_plan := false) -> void:
 		say("hose_off", tg.pos, c.id)
 		sfx.play("unplug")
 		return
+	# a port behind a jammed valve: it has to be freed first
+	var jam = world.ctrls.get(Ship.ctrl_cfg(ship, c.id).get("jam", ""))
+	if jam != null and not jam.state:
+		say("vent_jammed", tg.pos, c.id)
+		sfx.play("deny")
+		return
 	var mode := tools.hose_mode if c.medium == "gas" else "recover"
 	if sys.dead_leg_closed(c):
 		hint("dead_leg_hose")

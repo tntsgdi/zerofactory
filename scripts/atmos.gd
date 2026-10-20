@@ -36,6 +36,11 @@ func active() -> bool:
 	return not cfg.is_empty()
 
 
+# the oxygen fraction over which a cut beside the room flashes it over ("fire_o2" in the ship file)
+func fire_o2() -> float:
+	return float(cfg.get("fire_o2", FIRE_O2))
+
+
 func save_state() -> Dictionary:
 	return {"o2": game.sys.o2.duplicate()}
 
@@ -62,7 +67,7 @@ func on_cut(p, pos: Vector2) -> void:
 	_glass(p, pos)
 	var s = game.sys
 	for r in _rooms_near(pos):
-		if s.P(r) < FIRE_P or s.o2_frac(r) < FIRE_O2:
+		if s.P(r) < FIRE_P or s.o2_frac(r) < fire_o2():
 			continue
 		if s.time - float(_last.get(r, -99.0)) < COOL:
 			continue
@@ -86,7 +91,7 @@ func _glass(p, pos: Vector2) -> void:
 
 func _flash(room: String, pos: Vector2) -> void:
 	var s = game.sys
-	var k: float = clampf((s.o2_frac(room) - FIRE_O2) / 0.3, 0.3, 1.0) * clampf(s.P(room) / 101.0, 0.3, 1.0)
+	var k: float = clampf((s.o2_frac(room) - fire_o2()) / 0.3, 0.3, 1.0) * clampf(s.P(room) / 101.0, 0.3, 1.0)
 	game.incident("o2_fire", room)
 	game.say("o2_fire", pos, room)
 	var c: Vector2 = world.rooms[room].bbox.get_center()

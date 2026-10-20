@@ -432,6 +432,15 @@ func _prep() -> void:
 				continue
 			want = vk != "" and s.fluid(vk) > 0.015
 		if want:
+			# a jammed valve in the way: freed first
+			var jm: String = str(Ship.ctrl_cfg(g.ship, id).get("jam", ""))
+			if jm != "" and w.ctrls.has(jm) and not w.ctrls[jm].state:
+				if _once("jam " + jm):
+					_w(jm)
+					_note("jam %s freed" % jm)
+					_work(3.0)
+					return
+				continue
 			done_ops["hose " + id] = true
 			_h(id)
 			_note("hose %s" % id)
