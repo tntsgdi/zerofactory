@@ -850,6 +850,10 @@ func buy(it: Array, n: int = 1) -> void:
 			ji[id] = int(ji.get(id, 0)) + n
 			game_ref.job.items = ji
 	else:
+		# a longer berth is built on site the next time the berth is in view (berth_build.gd):
+		# remember how long it was before this
+		if id.begins_with("berth") and not d.has("berth_seen"):
+			d["berth_seen"] = Dock.owned(d.upgrades)
 		d.upgrades[id] = 1
 		install[id] = 0.0
 	if not d.get("seen", {}).has("bought"):

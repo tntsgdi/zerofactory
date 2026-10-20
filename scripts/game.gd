@@ -33,6 +33,7 @@ var rings                     # habitat rings still turning (ARK-01), scripts/ri
 var spine                     # a spine carrying the tail (ARK-01), scripts/spine.gd
 var workday                   # a job of several working days (ARK-01), scripts/workday.gd
 var boiloff                   # cryogenic tanks boiling off (HG-170), scripts/boiloff.gd
+var liquids                   # liquid adrift in free fall (every leak and spill), scripts/liquids.gd
 var drillstring               # a drill string in its derrick (DR-150), scripts/drillstring.gd
 var nested                    # a ship carried inside the ship (LC-140), scripts/nested.gd
 var waterball                 # a water ball in its net (BL-88), scripts/waterball.gd
@@ -238,7 +239,9 @@ func _ready() -> void:
 		_factory["l:" + l.id] = true
 	# the berth: extended once the career has paid for it, or for a ship too long for the standard one
 	var ext := Ship.extent(ship)
-	Dock.configure(Dock.length_for(float(ship.get("length", 0.0)), _upgrades_for_berth()), ext.x, ext.y)
+	berth_ext = ext
+	berth_len = Dock.length_for(float(ship.get("length", 0.0)), _upgrades_for_berth())
+	Dock.configure(berth_len, ext.x, ext.y)
 	if has_upgrade("port2"):
 		Dock.add_port2()
 	dock.set_ship(ship)
@@ -325,6 +328,9 @@ func _ready() -> void:
 	workday.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(workday)
 	workday.setup(self, ship)
+	liquids = preload("res://scripts/liquids.gd").new()
+	world.add_child(liquids)
+	liquids.setup(self)
 	boiloff = preload("res://scripts/boiloff.gd").new()
 	boiloff.process_mode = Node.PROCESS_MODE_PAUSABLE
 	world.add_child(boiloff)
@@ -611,6 +617,8 @@ func _ready() -> void:
 			_end_intro()
 	if in_berth():
 		_enter_berth()
+	if data.is_empty():
+		_maybe_build()
 
 
 func _is_test() -> bool:
@@ -726,6 +734,10 @@ func _process(dt: float) -> void:
 			_ending(rdt)
 		"towout":
 			_towout(rdt)
+		"survey":
+			_survey(rdt)
+		"build":
+			_build_step(rdt)
 	fx.step(dt)
 	if not menu_open:
 		radio.step(rdt, tools.cutting or (tools.held_piece != null and tools.tether_force > 0.2))
@@ -829,6 +841,14 @@ func _unhandled_input(ev: InputEvent) -> void:
 			if k in [KEY_ESCAPE, KEY_SPACE, KEY_ENTER]:
 				_end_intro()
 			return
+		if state == "survey":
+			if state_t > 0.3:
+				_end_survey()
+			return
+		if state == "build":
+			if state_t > 0.3:
+				_end_build()
+			return
 		if state == "ending":
 			if exam != null:
 				if exam.result_t > 1.0 and k in [KEY_1, KEY_2]:
@@ -918,6 +938,14 @@ func _unhandled_input(ev: InputEvent) -> void:
 		if state == "intro":
 			_end_intro()
 			return
+		if state == "survey":
+			if state_t > 0.3:
+				_end_survey()
+			return
+		if state == "build":
+			if state_t > 0.3:
+				_end_build()
+			return
 		if ev.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom_target = clampf(zoom_target * 1.1, zoom_min(), 2.6)
 		elif ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -985,6 +1013,9 @@ func open_console(which: String) -> void:
 		get_tree().paused = false
 		paused_sim = false
 		sfx.play("menu")
+		# an extension just bought: built in front of the operator
+		if in_berth():
+			_maybe_build()
 	get_tree().paused = true
 	paused_sim = true
 	layer.add_child(term)
@@ -1014,6 +1045,195 @@ func close_contract() -> void:
 			Copy.say(radio, "%s_%d" % [job.intro, i + 1])
 	if story != null:
 		story.on_start()
+	_start_survey()
+
+
+# ---------------------------------------------------------------- the survey pass
+# Once the contract is signed the camera flies the ship from bow to stern, then
+# pulls back until all of it is in view and measures it: length, height, mass,
+# its centre of mass, its rooms (player 2026-10-20: "after taking the job, a
+# camera move that shows the whole ship"). A ship type's first contract gets the
+# whole pass, later ones the short look (Jev B 0.49 / 0.23). Any key or click
+# skips it; the drone waits in its bay until it is over.
+static var cine_in_tests := false     # tests that want to see the cinematics switch them on
+static var surveyed := {}             # ship types seen this session (outside a career)
+var survey := {}
+
+
+func _start_survey() -> void:
+	if bot != null or (testing and not cine_in_tests) or training or exam != null or in_berth() or state != "play":
+		return
+	var M := Geom.M
+	var x0 := INF
+	var x1 := -INF
+	var y0 := INF
+	var y1 := -INF
+	var mass := 0.0
+	var mom := Vector2.ZERO
+	var n := 0
+	for p in world.pieces.values():
+		if p.gone or p.body != null:
+			continue
+		var bb := Geom.bbox(p.poly)
+		x0 = minf(x0, bb.position.x)
+		x1 = maxf(x1, bb.end.x)
+		y0 = minf(y0, bb.position.y)
+		y1 = maxf(y1, bb.end.y)
+		mass += p.mass
+		mom += Geom.centroid(p.poly) * p.mass
+		n += 1
+	if n == 0:
+		return
+	var off := world.position
+	var vs := get_viewport().get_visible_rect().size
+	var L := (x1 - x0) / M
+	var H := (y1 - y0) / M
+	var win := clampf(L * 0.35, 26.0, 150.0)
+	var z_pass := clampf(minf(vs.x / (win * M), (vs.y - 160.0) / ((H * 1.25 + 4.0) * M)), 0.04, 1.3)
+	# framed for the hold: room on the right for the height, below for the length and the title
+	var z_fit := clampf(minf((vs.x - 360.0) / ((L + 2.0) * M), (vs.y - 400.0) / ((H + 2.0) * M)), 0.02, 1.3)
+	var half := vs.x * 0.5 / z_pass
+	var xa := x0 + half - 2.0 * M
+	var xb := x1 - half + 2.0 * M
+	if xb < xa:
+		xa = (x0 + x1) * 0.5
+		xb = xa
+	var seen: Dictionary = Career.data.get("surveyed", {}) if career() else surveyed
+	var full := not seen.has(ship_id)
+	var tp := clampf((xb - xa) / M / 16.0, 2.5, 7.0) if full else 0.0
+	survey = {"x0": x0 + off.x, "x1": x1 + off.x, "y0": y0 + off.y, "y1": y1 + off.y, "mass": mass, "com": mom / maxf(mass, 0.001) + off,
+		"n": n, "xa": xa + off.x, "xb": xb + off.x, "cy": (y0 + y1) * 0.5 + off.y, "z_pass": z_pass, "z_fit": z_fit, "full": full,
+		"t_in": 1.3 if full else 0.0, "tp": tp, "t_out": 1.5, "hold": 3.0 if full else 2.2}
+	survey.t_end = survey.t_in + tp + survey.t_out + survey.hold
+	state = "survey"
+	state_t = 0.0
+	sfx.play("measure")
+
+
+func _survey(_dt: float) -> void:
+	var s := survey
+	var t := state_t
+	if t < s.t_in:
+		cam_override = Vector2(s.xa, s.cy)
+		zoom_override = s.z_pass
+	elif t < s.t_in + s.tp:
+		var k := Pal.ease_io((t - s.t_in) / s.tp)
+		cam_override = Vector2(lerpf(s.xa, s.xb, k), s.cy)
+		zoom_override = s.z_pass
+	else:
+		cam_override = Vector2((s.x0 + s.x1) * 0.5 + 100.0 / maxf(s.z_fit, 0.01), s.cy + 75.0 / maxf(s.z_fit, 0.01))
+		zoom_override = s.z_fit
+	if t >= s.t_end:
+		_end_survey()
+
+
+# where the survey is: "pass" (flying the hull), "out" (pulling back), "hold" (measured), and 0..1 through it
+func survey_phase() -> Array:
+	if survey.is_empty():
+		return ["", 0.0]
+	var t := state_t
+	var a: float = survey.t_in + survey.tp
+	if t < a:
+		return ["pass", clampf((t - survey.t_in) / maxf(survey.tp, 0.01), 0.0, 1.0)]
+	if t < a + survey.t_out:
+		return ["out", (t - a) / survey.t_out]
+	return ["hold", clampf((t - a - survey.t_out) / survey.hold, 0.0, 1.0)]
+
+
+func _end_survey() -> void:
+	if state != "survey":
+		return
+	if career():
+		var sv: Dictionary = Career.data.get("surveyed", {})
+		sv[ship_id] = true
+		Career.data["surveyed"] = sv
+	else:
+		surveyed[ship_id] = true
+	cam_override = null
+	zoom_override = -1.0
+	state = "play"
+	state_t = 0.0
+	if hud != null:
+		hud.in_t = 0.0
+
+
+# ---------------------------------------------------------------- the berth extension, built on site
+# An extension bought since the berth was last seen is built in front of the
+# operator the next time the berth comes up: over the empty berth when the
+# terminal closes, or before the tug brings the next ship in (scripts/berth_build.gd).
+var berth_ext := Vector2.ZERO
+var berth_len := Dock.STANDARD
+var build = null
+var _after_build := "play"
+
+
+func _maybe_build() -> void:
+	if build != null or bot != null or (testing and not cine_in_tests) or not career() or state == "build":
+		return
+	var d := Career.data
+	if not d.has("berth_seen"):
+		return
+	var seen := float(d.berth_seen)
+	var owned := Dock.owned(d.get("upgrades", {}))
+	if owned <= seen + 0.5:
+		return
+	# what the berth is now (over the empty berth the purchase has only just been made)
+	berth_len = Dock.length_for(float(ship.get("length", 0.0)), _upgrades_for_berth())
+	if absf(berth_len - owned) > 0.5:
+		# this contract's berth isn't simply what was bought: nothing to show
+		d["berth_seen"] = owned
+		return
+	_layout_berth(seen)
+	build = preload("res://scripts/berth_build.gd").new()
+	dock.add_child(build)
+	build.setup(self, seen, owned)
+	_after_build = state
+	state = "build"
+	state_t = 0.0
+	if not in_berth():
+		world.visible = false
+
+
+func _layout_berth(x: float) -> void:
+	Dock.configure(x, berth_ext.x, berth_ext.y)
+	if has_upgrade("port2"):
+		Dock.add_port2()
+	dock.set_ship(ship)
+
+
+# the build re-lays the berth at its full new length
+func _relayout_berth() -> void:
+	_layout_berth(berth_len)
+
+
+func _build_step(dt: float) -> void:
+	if build == null:
+		state = _after_build
+		return
+	var done: bool = build.step(dt)
+	var c: Array = build.cam(get_viewport().get_visible_rect().size)
+	cam_override = c[0]
+	zoom_override = c[1]
+	if done:
+		_end_build()
+
+
+func _end_build() -> void:
+	if build == null:
+		return
+	build.finish()
+	build.queue_free()
+	build = null
+	Career.data["berth_seen"] = Dock.owned(Career.data.get("upgrades", {}))
+	if in_berth():
+		Career.save()
+	world.visible = true
+	cam_override = null
+	zoom_override = -1.0
+	state = _after_build
+	state_t = 0.0
+	if hud != null:
+		hud.in_t = 0.0
 
 
 # ---------------------------------------------------------------- camera

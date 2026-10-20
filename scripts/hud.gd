@@ -468,6 +468,13 @@ func _draw_hud() -> void:
 	if g.state == "towout":
 		_radio_box(s)
 		return
+	if g.state == "survey":
+		_survey_overlay(s)
+		_radio_box(s)
+		return
+	if g.state == "build":
+		_build_overlay(s)
+		return
 	if not ending and g.state != "ending":
 		_world_tags()
 		_messages()
@@ -715,6 +722,160 @@ func _intro_overlay(s: Vector2) -> void:
 	var bar := 70.0 * clampf((5.2 - game.state_t) / 0.6, 0.0, 1.0)
 	c.draw_rect(Rect2(0, 0, s.x, bar), Color(0, 0, 0, 1))
 	c.draw_rect(Rect2(0, s.y - bar, s.x, bar), Color(0, 0, 0, 1))
+
+
+# the survey pass after the contract is signed: letterbox, the station the
+# scan line stands at while the camera flies the hull, then the ship framed and
+# measured (brackets, length and height with arrowheads, the centre of mass)
+func _survey_overlay(s: Vector2) -> void:
+	var g = game
+	var sv: Dictionary = g.survey
+	if sv.is_empty():
+		return
+	var M := Geom.M
+	var ph: Array = g.survey_phase()
+	var tt: float = g.state_t
+	var k_in := Pal.ease_out(clampf(tt / 0.4, 0.0, 1.0)) * clampf((float(sv.t_end) - tt) / 0.35, 0.0, 1.0)
+	var xf: Transform2D = g.get_viewport().get_canvas_transform()
+	var bar := 70.0 * k_in
+	var hc := Pal.tint(Pal.AIR, 0.9, 1.1)
+	# the scan line at the middle of the view while the hull goes by
+	if ph[0] == "pass" or (ph[0] == "" and tt < float(sv.t_in)):
+		var cx := s.x * 0.5
+		var a := k_in * clampf(tt / 0.8, 0.0, 1.0)
+		c.draw_line(Vector2(cx, bar + 10.0), Vector2(cx, s.y - bar - 10.0), Pal.tint(Pal.AIR, 0.35 * a, 1.3), 1.4)
+		var wx: float = (xf.affine_inverse() * Vector2(cx, s.y * 0.5)).x
+		var sta: float = (wx - float(sv.x0)) / M
+		_text(g.txt("sv_sta") % maxf(0.0, sta), Vector2(cx + 10.0, bar + 34.0), 14, Pal.tint(Pal.AIR, 0.85 * a, 1.1), font_b)
+		# the rooms the line is crossing
+		var names: Array = []
+		for r in g.world.rooms:
+			var bb: Rect2 = g.world.rooms[r].bbox
+			if wx >= bb.position.x + g.world.position.x and wx <= bb.end.x + g.world.position.x and names.size() < 3:
+				names.append(g.room_name(r))
+		if not names.is_empty():
+			_text(" · ".join(names), Vector2(cx + 10.0, bar + 54.0), 13, Pal.ink(0.7 * a), font)
+	# framed and measured
+	if ph[0] in ["out", "hold"]:
+		var a2: float = Pal.ease_out(float(ph[1])) if ph[0] == "out" else 1.0
+		a2 *= k_in
+		var p0: Vector2 = xf * Vector2(sv.x0, sv.y0)
+		var p1: Vector2 = xf * Vector2(sv.x1, sv.y1)
+		var r := Rect2(p0, p1 - p0).abs().grow(14.0)
+		var arm := minf(40.0, r.size.y * 0.3)
+		for cr in [[r.position, Vector2(1, 1)], [Vector2(r.end.x, r.position.y), Vector2(-1, 1)], [r.end, Vector2(-1, -1)], [Vector2(r.position.x, r.end.y), Vector2(1, -1)]]:
+			var q: Vector2 = cr[0]
+			var d: Vector2 = cr[1]
+			c.draw_line(q, q + Vector2(arm * d.x, 0), Pal.tint(Pal.AIR, 0.8 * a2, 1.2), 2.0)
+			c.draw_line(q, q + Vector2(0, arm * d.y), Pal.tint(Pal.AIR, 0.8 * a2, 1.2), 2.0)
+		# length, under the hull
+		var ly := r.end.y + 26.0
+		_dim(Vector2(r.position.x + 14.0, ly), Vector2(r.end.x - 14.0, ly), g.txt("sv_len") % ((float(sv.x1) - float(sv.x0)) / M), a2)
+		# height, beside it
+		var hx := r.end.x + 26.0
+		_dim(Vector2(hx, r.position.y + 14.0), Vector2(hx, r.end.y - 14.0), g.txt("sv_hgt") % ((float(sv.y1) - float(sv.y0)) / M), a2)
+		# the centre of mass
+		var cm: Vector2 = xf * (sv.com as Vector2)
+		c.draw_arc(cm, 9.0, 0.0, TAU, 20, Pal.heat(0.9 * a2, 1.3), 1.6, true)
+		c.draw_line(cm - Vector2(14, 0), cm + Vector2(14, 0), Pal.heat(0.9 * a2, 1.3), 1.2)
+		c.draw_line(cm - Vector2(0, 14), cm + Vector2(0, 14), Pal.heat(0.9 * a2, 1.3), 1.2)
+		_text(g.txt("sv_com") % ((sv.com.x - float(sv.x0)) / M), cm + Vector2(16, -12), 13, Pal.heat(0.95 * a2, 1.2), font_b)
+		# the lidar sweep across the hull, once, as it is measured
+		if ph[0] == "hold":
+			var u := clampf(float(ph[1]) * 1.6, 0.0, 1.0)
+			if u < 1.0:
+				var sx := lerpf(r.position.x, r.end.x, Pal.ease_io(u))
+				c.draw_line(Vector2(sx, r.position.y), Vector2(sx, r.end.y), Pal.tint(Pal.AIR, 0.7 * a2, 1.6), 2.0)
+				c.draw_rect(Rect2(Vector2(r.position.x, r.position.y), Vector2(sx - r.position.x, r.size.y)), Pal.tint(Pal.AIR, 0.035 * a2))
+	# the heading and what the ship is, low on the left
+	var tl := Vector2(70, s.y - bar - 96.0)
+	_text(g.txt("sv_head") + "  ·  " + g.txt("contract") + " " + str(g.ship.get("contract", "")), tl, 14, Pal.tint(Pal.AIR, 0.75 * k_in, 1.1), font_b)
+	_text(g.ship_title(), tl + Vector2(0, 34), 28, Pal.ink(0.92 * k_in), font_l)
+	_text(g.txt("sv_stats") % [_tonnes(float(sv.mass)), int(sv.n), g.world.rooms.size(), g.mandatory_items().size()], tl + Vector2(0, 60), 14, Pal.ink(0.62 * k_in), font)
+	_text(g.txt("sv_skip"), Vector2(s.x - 70, s.y - bar - 30.0), 13, Pal.ink(0.5 * k_in), font, 1)
+	c.draw_rect(Rect2(0, 0, s.x, bar), Color(0, 0, 0, 1))
+	c.draw_rect(Rect2(0, s.y - bar, s.x, bar), Color(0, 0, 0, 1))
+	# progress along the bottom bar
+	var pk := clampf(tt / float(sv.t_end), 0.0, 1.0)
+	c.draw_rect(Rect2(0, s.y - bar, s.x * pk, 2.0), hc)
+
+
+# the berth being extended: letterbox, the procedure as a checklist with the
+# step in hand live, the certificate when it is done
+func _build_overlay(s: Vector2) -> void:
+	var g = game
+	var b = g.build
+	if b == null:
+		return
+	var tt: float = b.t
+	var k_in := Pal.ease_out(clampf(tt / 0.4, 0.0, 1.0)) * clampf((b.total() - tt) / 0.35, 0.0, 1.0)
+	var bar := 70.0 * k_in
+	var cur: int = b.current()
+	var r := Rect2(48, bar + 26.0, 640, 66 + b.steps.size() * 50)
+	c.draw_rect(r, Color(0.02, 0.022, 0.026, 0.88 * k_in))
+	UI.panel(c, r, 0.9 * k_in, 0.0, Pal.HEAT, 1.0)
+	_text(g.txt("bb_head") % [b.x_a, b.x_b], r.position + Vector2(20, 32), 16, Pal.ink(0.95 * k_in), font_b)
+	for i in b.steps.size():
+		var y: float = r.position.y + 70.0 + i * 50.0
+		var done: bool = i < cur or (i == cur and b.k(i) >= 1.0)
+		var on: bool = i == cur and not done
+		var a: float = (1.0 if on else (0.75 if done else 0.32)) * k_in
+		var dc := Vector2(r.position.x + 30, y - 5)
+		if done:
+			c.draw_polyline(PackedVector2Array([dc + Vector2(-6, 0), dc + Vector2(-1, 5), dc + Vector2(7, -6)]), Pal.tint(Pal.FLUID, a, 1.3), 2.0, true)
+		elif on:
+			c.draw_arc(dc, 6.0, tt * 6.0, tt * 6.0 + PI * 1.4, 12, Pal.heat(a, 1.4), 2.0, true)
+		else:
+			c.draw_arc(dc, 5.0, 0.0, TAU, 12, Pal.ink(a), 1.2, true)
+		_text("%d  %s" % [i + 1, g.txt("bb_n_" + str(b.steps[i][0]))], Vector2(r.position.x + 48, y), 15, Pal.ink(a), font_b)
+		if on or done:
+			_text(b.detail(i), Vector2(r.position.x + 48, y + 20), 12, Pal.ink((0.7 if on else 0.45) * k_in), font, -1, r.size.x - 60)
+		if on:
+			c.draw_rect(Rect2(r.position.x + 48, y + 27, (r.size.x - 70) * b.k(i), 2), Pal.heat(0.8 * k_in, 1.3))
+	# the certificate
+	if cur == b.steps.size() - 1 and b.k(cur) > 0.55:
+		var e := Pal.back(clampf((b.k(cur) - 0.55) / 0.25, 0.0, 1.0))
+		var txt: String = g.txt("bb_done") % b.x_b
+		var w := font_l.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
+		var cr := Rect2(Vector2(s.x * 0.5 + 120.0 - w * 0.5 - 30.0, s.y * 0.5 - 40.0), Vector2(w + 60.0, 80.0))
+		c.draw_set_transform(cr.get_center(), 0.0, Vector2.ONE * lerpf(1.4, 1.0, e))
+		var lr := Rect2(-cr.size * 0.5, cr.size)
+		c.draw_rect(lr, Color(0.02, 0.022, 0.026, 0.85 * k_in))
+		c.draw_rect(lr, Pal.tint(Pal.FLUID, 0.9 * k_in, 1.3), false, 2.0)
+		c.draw_rect(lr.grow(-6.0), Pal.tint(Pal.FLUID, 0.4 * k_in, 1.1), false, 1.0)
+		_text(txt, Vector2(0, 12), 34, Pal.tint(Pal.FLUID, k_in, 1.2), font_l, 0)
+		c.draw_set_transform(Vector2.ZERO)
+	_text(g.txt("sv_skip"), Vector2(s.x - 70, s.y - bar - 30.0), 13, Pal.ink(0.5 * k_in), font, 1)
+	c.draw_rect(Rect2(0, 0, s.x, bar), Color(0, 0, 0, 1))
+	c.draw_rect(Rect2(0, s.y - bar, s.x, bar), Color(0, 0, 0, 1))
+	c.draw_rect(Rect2(0, s.y - bar, s.x * clampf(tt / b.total(), 0.0, 1.0), 2.0), Pal.heat(0.9, 1.3))
+
+
+# a measured dimension: the line, arrowheads and end ticks, the value in the middle
+func _dim(a: Vector2, b: Vector2, label: String, al: float) -> void:
+	var col := Pal.tint(Pal.AIR, 0.85 * al, 1.2)
+	c.draw_line(a, b, col, 1.4)
+	var d := (b - a).normalized()
+	var n := Vector2(-d.y, d.x)
+	for e in [[a, d], [b, -d]]:
+		var p: Vector2 = e[0]
+		var f: Vector2 = e[1]
+		c.draw_colored_polygon(PackedVector2Array([p, p + f * 10.0 + n * 4.0, p + f * 10.0 - n * 4.0]), col)
+		c.draw_line(p - n * 9.0, p + n * 9.0, col, 1.2)
+	var mid := (a + b) * 0.5
+	var w := font_b.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+	if absf(d.x) > 0.5:
+		c.draw_rect(Rect2(mid - Vector2(w * 0.5 + 8.0, 11.0), Vector2(w + 16.0, 22.0)), Color(0.02, 0.022, 0.026, 0.9 * al))
+		_text(label, mid + Vector2(0, 6), 15, col, font_b, 0)
+	else:
+		c.draw_rect(Rect2(mid + Vector2(8.0, -11.0), Vector2(w + 16.0, 22.0)), Color(0.02, 0.022, 0.026, 0.9 * al))
+		_text(label, mid + Vector2(16.0, 6.0), 15, col, font_b)
+
+
+static func _tonnes(t: float) -> String:
+	if t >= 100.0:
+		return Pal.money(t).replace("$", "")
+	return "%.1f" % t
 
 
 func _contract_panel() -> void:

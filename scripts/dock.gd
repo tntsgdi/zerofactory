@@ -1,5 +1,7 @@
 class_name Dock
 extends Node2D
+
+const Smelter = preload("res://scripts/smelter.gd")
 # The vacuum dock around the ship: girders, the four clamp arms, the three
 # recovery mouths (equipment bay, metal furnace, hazard bay), the debris net,
 # the drone bay and the hose masts. Recovery mouths pull in whatever drifts
@@ -202,6 +204,10 @@ var overlay_node: Node2D
 var t := 0.0
 var suck_glow := 0.0        # lit while the suction draws something down
 var suck_x := 0.0
+# the furnace under the floor (scripts/smelter.gd): the mouth feeds it, it melts, taps, casts
+var smelter = preload("res://scripts/smelter.gd").new()
+var furnace_node: Node2D
+var furnace_x := -INF       # m: where the furnace stands (its own rails: it moves only when the berth is rebuilt)
 
 
 func _init() -> void:
@@ -239,6 +245,10 @@ func _init() -> void:
 	clamp_node.show_behind_parent = true
 	clamp_node.draw.connect(_draw_clamps)
 	add_child(clamp_node)
+	furnace_node = Node2D.new()
+	furnace_node.show_behind_parent = true
+	furnace_node.draw.connect(_draw_furnace)
+	add_child(furnace_node)
 	overlay_node = Node2D.new()
 	overlay_node.draw.connect(_draw_overlay)
 	add_child(overlay_node)
@@ -449,6 +459,14 @@ func _process(dt: float) -> void:
 	_step_swallow(dt)
 	_step_debris(dt)
 	_step_hoses(dt)
+	if furnace_x == -INF:
+		furnace_x = metal_home
+	# the berth rebuilt longer: the furnace rolls along its foundation rails to the new middle
+	furnace_x = move_toward(furnace_x, metal_home, maxf(3.0, absf(metal_home - furnace_x) * 0.8) * dt)
+	smelter.X = furnace_x
+	smelter.step(dt)
+	if _furnace_seen():
+		furnace_node.queue_redraw()
 	suck_glow = maxf(0.0, suck_glow - dt * 2.0)
 	for g in field_glow:
 		g[1] -= dt * 2.5
@@ -622,6 +640,12 @@ func _step_swallow(dt: float) -> void:
 		if k >= 1.0:
 			done.append(s)
 			zone_state[zid].eat = 1.0
+			if kind(zid) == "metal":
+				smelter.charge(b.total_mass(), metal_x)
+				for p in b.pieces:
+					if game.sys.dest_of(p) == "hazard":
+						smelter.flare()
+						break
 			game.on_swallowed(b, zid)
 	for s in done:
 		swallowing.erase(s)
@@ -736,6 +760,7 @@ func _draw_overlay() -> void:
 	var tug := tug_pos()
 	if tug != Vector2.INF:
 		_tug(tug, overlay_node)
+	_furnace_strip(overlay_node)
 	# debris on its way to the net
 	for d in debris:
 		var tr := Transform2D(d[4], d[0])
@@ -1397,6 +1422,8 @@ func _draw_add() -> void:
 			# the furnace always breathes
 			var br := 0.08 + 0.05 * sin(t * 2.1)
 			add_node.draw_texture_rect(tex, Rect2(throat - Vector2(90, 40), Vector2(180, 80)), false, Pal.heat(br, 1.4))
+	if _furnace_seen():
+		smelter.draw_add(add_node, FLOOR_Y, tex)
 	var tug := tug_pos()
 	if tug != Vector2.INF:
 		# its burn follows its real acceleration (player 2026-10-18: speeding up
@@ -1421,3 +1448,41 @@ func _draw_add() -> void:
 		var tr: Array = d[7]
 		if tr.size() >= 2:
 			add_node.draw_polyline(PackedVector2Array(tr), Pal.ink(0.25, 1.2), 2.0, true)
+
+
+# ---------------------------------------------------------------- the furnace below the mouth
+
+# any of the furnace plant in the camera's view
+func _furnace_seen() -> bool:
+	var vp := get_viewport()
+	if vp == null:
+		return true
+	var inv := get_global_transform_with_canvas().affine_inverse()
+	var r := vp.get_visible_rect()
+	var a: Vector2 = inv * r.position
+	var b: Vector2 = inv * r.end
+	var view := Rect2(a, b - a).abs()
+	var M := Geom.M
+	return view.intersects(Rect2(Vector2(furnace_x - 8.0, FLOOR_Y) * M, Vector2(20.0, 8.6) * M))
+
+
+func _draw_furnace() -> void:
+	if not _furnace_seen():
+		return
+	var z: float = game.cam_zoom() if game != null else 1.0
+	smelter.draw(furnace_node, FLOOR_Y, metal_x, font, font_b, z, func(k: String) -> String: return Txt.t(k))
+
+
+# under the furnace mouth's sign: the melt and the bunker at a glance
+func _furnace_strip(ci: CanvasItem) -> void:
+	if not ZONES.has("metal"):
+		return
+	var M := Geom.M
+	var c: Vector2 = zpos("metal")
+	var lip: float = ZONES.metal.w * 0.5 * M + 26.0
+	var at: Vector2 = c + Vector2(lip + 40.0, -33.0) + ZONES.metal.face * 1.2 * M
+	var r := Rect2(at + Vector2(0, 70), Vector2(262, 22))
+	ci.draw_rect(r, Color(0.035, 0.037, 0.042, 0.9))
+	ci.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Smelter.glow_col(smelter.T))
+	var s := Txt.t("fu_quick") % [int(round(smelter.T)), smelter.bunker + smelter.yard, Txt.t(smelter.state_key())]
+	ci.draw_string(font, r.position + Vector2(12, 16), s, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 16, 12, Pal.ink(0.7))
