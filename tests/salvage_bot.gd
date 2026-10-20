@@ -217,6 +217,15 @@ func _prep() -> void:
 				_note("force bent gate %s" % gt)
 				_work(4.0)
 				return
+	# a reactor's control drums locked before anything near the core moves
+	if g.reactor != null and g.reactor.active():
+		for d in g.reactor.cfg.get("drums", {}):
+			var lk: String = str(g.reactor.cfg.drums[d])
+			if not s.on(lk) and not _hidden(lk) and _once("drum " + lk):
+				_w(lk)
+				_note("drum %s locked" % d)
+				_work(2.5)
+				return
 	# a sail: earthed first, then each corner's winch brake let off (the sail slack)
 	if g.sail != null and g.sail.active():
 		var gd: String = g.sail.cfg.get("ground", "")
@@ -612,6 +621,10 @@ func _unsafe() -> Array:
 		out.append_array(g.boxbeam.unsafe())
 	if g.sail != null and g.sail.active():
 		out.append_array(g.sail.unsafe())
+	if g.reactor != null and g.reactor.active():
+		for d in g.reactor.cfg.get("drums", {}):
+			if not s.on(str(g.reactor.cfg.drums[d])):
+				out.append("drum %s unlocked" % d)
 	for n in g.world.rooms:
 		if s.P(n) > 5.0:
 			out.append("room %s %.0f kPa" % [n, s.P(n)])

@@ -22,7 +22,7 @@ var GH := 100
 const K_OPEN := 8.0               # m²/s of exchange per contact cell
 const SAFE_KPA := 5.0
 # hazards that only ever go to the hazard mouth (which pays 40 % of their value)
-const HAZARD_ONLY := ["explosive", "bio", "chem"]
+const HAZARD_ONLY := ["explosive", "bio", "chem", "rad"]
 
 var _cable_index := {}
 var _cable_version := -1

@@ -25,6 +25,7 @@ var tanknet                   # a cross-connected propellant network (VT-80), sc
 var liner                     # a liner's escape pods and observation glass (PS-12), scripts/liner.gd
 var boxbeam                   # a container wall that is the ship's beam (CF-90), scripts/boxbeam.gd
 var sail                      # a light sail held flat by its stays (SA-200), scripts/sail.gd
+var reactor                   # a shut-down reactor's dose field (NR-95), scripts/reactor.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -277,6 +278,10 @@ func _ready() -> void:
 	sail.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(sail)
 	sail.setup(self, ship)
+	reactor = preload("res://scripts/reactor.gd").new()
+	reactor.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(reactor)
+	reactor.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -435,6 +440,8 @@ func _ready() -> void:
 			boxbeam.load_state(data.boxbeam)
 		if data.has("sail"):
 			sail.load_state(data.sail)
+		if data.has("reactor"):
+			reactor.load_state(data.reactor)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1629,6 +1636,8 @@ func on_body_freed(b) -> void:
 		boxbeam.on_freed(b)
 	if sail != null:
 		sail.on_freed(b)
+	if reactor != null:
+		reactor.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -1803,6 +1812,8 @@ func on_cut_into(p, pos: Vector2) -> void:
 		boxbeam.on_cut(p)
 	if sail != null:
 		sail.on_cut(p)
+	if reactor != null:
+		reactor.on_cut(p)
 	if atmos != null:
 		atmos.on_cut(p, pos)
 	if media != null:
@@ -2221,6 +2232,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return boxbeam.rod_pull(c.target), "unit": "kN"})
 					"stay":
 						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return sail.pull(c.target), "unit": "kN"})
+					"dose":
+						sys.measure(c.id, "field", c.id, "inst_dose", {"ctrl": c, "field_fn": func(): return reactor.probe(c), "unit": "mSv/h"})
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
 						if sys.dead_leg_closed(c):
@@ -2318,6 +2331,9 @@ func restore_reading(rd: Dictionary) -> void:
 				elif c.medium == "stay":
 					extra.field_fn = func(): return sail.pull(c.target)
 					extra.unit = "kN"
+				elif c.medium == "dose":
+					extra.field_fn = func(): return reactor.probe(c)
+					extra.unit = "mSv/h"
 				else:
 					extra.field_fn = func(): return mech.field(c.target)
 			"bio", "o2":
