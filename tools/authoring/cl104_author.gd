@@ -49,7 +49,9 @@ static func build(world) -> void:
 	_airlock()
 	_plant()
 	_tail()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -239,6 +241,77 @@ static func _tail() -> void:
 	K.bolt(nz, en, 102.0, 3.4)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a cold-chain carrier carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.2, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false, type := "bolt"):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1, type)
+	return p
+
+
+# equipment standing on a sloping floor (inner edge i), h tall at its high end
+static func _floor(tag: String, art: String, x0: float, x1: float, h: float, i: int, opts: Dictionary):
+	var ya := _iy(i, x0)
+	var yb := _iy(i, x1)
+	var top := minf(ya, yb) - h
+	var p = K.equip(tag, art, K.rect(x0, top, x1, maxf(ya, yb)), opts, K.mp([Vector2(x0, top), Vector2(x1, top), Vector2(x1, yb), Vector2(x0, ya)]))
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) + 0.2, ["hull"]), x, _iy(i, x))
+	return p
+
+
+# equipment bolted by its side to a wall at x
+static func _wall(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, wall, wx: float, opts: Dictionary):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	K.bolt(p, wall, wx, y0 + 0.5)
+	K.bolt(p, wall, wx, y1 - 0.5)
+	return p
+
+
+static func _fitout() -> void:
+	# each hold: two locked vaccine cold boxes under its roof, clear of the hatch
+	for i in 3:
+		var n := str(i + 1)
+		var x0: float = PODS[i]
+		var xm := x0 + PW * 0.5
+		_stand("VAX-%s1" % n, "freezer", x0 + 4.0, PTOP + WALL, x0 + 5.3, -8.0, by_tag["K%s-RF" % n], {"mass": 0.2, "value": 6500.0, "fragile": 0.45, "room": "K" + n, "name_key": "p_vaccine_box"}, true, "lock")
+		_stand("VAX-%s2" % n, "freezer", xm + 3.6, PTOP + WALL, xm + 6.6, -8.0, by_tag["K%s-RA" % n], {"mass": 0.3, "value": 8000.0, "fragile": 0.45, "room": "K" + n, "name_key": "p_vaccine_box"}, true, "lock")
+	# the cockpit: the overhead panel and the cold-chain monitor off the roof, the
+	# radio by the nav station, the air unit on the bulkhead
+	_hang("OVH-C", "overhead", 15.9, 17.6, -8.4, 2, {"mass": 0.15, "value": 3000.0, "fragile": 0.45, "room": "C", "name_key": "p_ovh"})
+	_hang("TEMP-MON", "screen", 18.0, 19.8, -8.6, 2, {"mass": 0.1, "value": 4500.0, "fragile": 0.5, "room": "C", "name_key": "p_temp_panel"})
+	_stand("RADIO", "nav", 5.9, 1.0, 7.1, CDECK, _deck(6.5), {"mass": 0.1, "value": 3500.0, "fragile": 0.5, "room": "C", "name_key": "p_comms"})
+	_wall("AHU-C", "env", 22.6, -6.0, F1, -2.0, by_tag["F1"], F1, {"mass": 0.3, "value": 4000.0, "fragile": 0.4, "room": "C", "name_key": "p_ahu"})
+	# the buffer airlock: the cold-weather gear, the heater and the dehumidifier under
+	# the deck, the electric forklift on the floor
+	_stand("FROST-GEAR", "suit", 5.0, CDECK + 0.3, 7.4, 5.6, _deck(6.0), {"mass": 0.2, "value": 2500.0, "fragile": 0.3, "room": "A", "name_key": "p_suit_locker"}, true)
+	_stand("HTR-A", "env", 18.0, CDECK + 0.3, 20.4, 4.4, _deck(19.0), {"mass": 0.3, "value": 3000.0, "fragile": 0.35, "room": "A", "name_key": "p_heater"}, true)
+	_stand("DEHUM", "pump", 20.8, CDECK + 0.3, 24.2, 5.0, _deck(22.0), {"mass": 0.4, "value": 3500.0, "fragile": 0.35, "room": "A", "name_key": "p_humidity"}, true)
+	_floor("FORK", "module", 10.0, 14.6, 1.8, 11, {"mass": 1.8, "value": 7000.0, "fragile": 0.3, "room": "A", "name_key": "p_forklift"})
+	# the plant: its control panel on the bulkhead
+	_wall("CTRL-R", "swb", F2 + 0.4, -4.8, 88.4, -2.8, by_tag["F2"], F2 + 0.4, {"mass": 0.2, "value": 4500.0, "fragile": 0.4, "room": "R", "name_key": "p_process_cabinet"})
+
+
+static func _fit_lines() -> void:
+	K.line("f1", "cable", "power", "LAMP-C", Vector2(15.2, _iy(2, 15.0) + 0.16), "OVH-C", Vector2(15.9, -8.6), [Vector2(15.2, -8.6)])
+	K.line("f2", "cable", "power", "OVH-C", Vector2(17.6, -9.0), "TEMP-MON", Vector2(18.0, -9.0))
+	K.line("f3", "cable", "power", "NAV", Vector2(5.6, 1.6), "RADIO", Vector2(5.9, 1.6))
+	K.line("f4", "cable", "power", "MANIFEST", Vector2(22.6, -0.6), "AHU-C", Vector2(23.0, -2.0), [Vector2(22.6, -1.2), Vector2(23.0, -1.2)])
+	K.line("f5", "cable", "power", "SWB", Vector2(17.0, 3.2), "HTR-A", Vector2(18.0, 3.2))
+	K.line("f6", "cable", "power", "HTR-A", Vector2(20.4, 3.2), "DEHUM", Vector2(20.8, 3.2))
+	K.line("f7", "cable", "power", "RF", Vector2(87.0, -2.4), "CTRL-R", Vector2(87.0, -2.8))
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -330,7 +403,7 @@ static func meta() -> Dictionary:
 		"title": ["CL-104「霜仓」分区冷链运输船 · 107 m", "CL-104 FROST STORE · ZONED COLD-CHAIN CARRIER · 107 m"],
 		"contract": "CL-104",
 		"length": 107.0,
-		"value": {"total": 220000.0, "metal": 34000.0},
+		"value": {"total": 299700.0, "metal": 34000.0},
 		"clamps": [[32.0, 10.2], [55.0, 10.2], [76.0, 10.2]],
 		"room_names": {"C": "room_clC", "A": "room_clA", "K1": "room_clK1", "K2": "room_clK2", "K3": "room_clK3", "R": "room_clR"},
 		"gas": {"rooms": {"C": 101.0, "A": 101.0, "K1": 98.0, "K2": 98.0, "K3": 98.0, "R": 101.0}, "vessels": {}, "valves": [], "value": 1600.0},
@@ -351,7 +424,7 @@ static func meta() -> Dictionary:
 		"labels": labels,
 		"hints": {},
 		"market": {
-			"class": "CL", "name": ["霜仓级冷链运输船", "FROST STORE-CLASS COLD-CHAIN CARRIER"], "time": 42.0,
+			"class": "CL", "name": ["霜仓级冷链运输船", "FROST STORE-CLASS COLD-CHAIN CARRIER"], "time": 48.0,
 			"rooms": {"C": [0.2, 40.0, 101.0], "A": [0.2, 40.0, 101.0], "R": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {"ref": [0.15, 0.6]}, "fill": {"ref_line": "ref"},
