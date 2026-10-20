@@ -1114,7 +1114,9 @@ func _current(r: Dictionary) -> Array:
 			return [tv, "%d °C" % int(round(tv)), 0, "temp"]
 		"field":
 			var fv2: float = r.get("field_fn").call()
-			return [fv2, "%d %s" % [int(round(fv2)), r.get("unit", "mT")], 0, "field"]
+			# small readings (a slow turn, a few kN) keep their decimals
+			var ftx: String = ("%.2f" % fv2) if absf(fv2) < 10.0 and absf(fv2 - round(fv2)) > 0.004 else "%d" % int(round(fv2))
+			return [fv2, "%s %s" % [ftx, r.get("unit", "mT")], 0, "field"]
 		"bio":
 			var bv: float = bio_index(r.get("room", ""))
 			return [bv, "%.2f" % bv, 0, "bio"]

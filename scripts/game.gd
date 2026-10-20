@@ -29,6 +29,8 @@ var reactor                   # a shut-down reactor's dose field (NR-95), script
 var softshell                 # inflatable bags on a rigid spine (IH-55), scripts/softshell.gd
 var train                     # a train of modules on couplers (MT-140), scripts/train.gd
 var flywheel                  # a mass driver still spinning (MD-160), scripts/flywheel.gd
+var tether                    # a tethered pair still turning (TB-180), scripts/tether.gd
+var sandwich                  # a cargo module clamped between two hulls (CH-110), scripts/sandwich.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -297,6 +299,14 @@ func _ready() -> void:
 	flywheel.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(flywheel)
 	flywheel.setup(self, ship)
+	tether = preload("res://scripts/tether.gd").new()
+	tether.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(tether)
+	tether.setup(self, ship)
+	sandwich = preload("res://scripts/sandwich.gd").new()
+	sandwich.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(sandwich)
+	sandwich.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -463,6 +473,10 @@ func _ready() -> void:
 			train.load_state(data.train)
 		if data.has("flywheel"):
 			flywheel.load_state(data.flywheel)
+		if data.has("tether"):
+			tether.load_state(data.tether)
+		if data.has("sandwich"):
+			sandwich.load_state(data.sandwich)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1663,6 +1677,10 @@ func on_body_freed(b) -> void:
 		softshell.on_freed(b)
 	if flywheel != null:
 		flywheel.on_freed(b)
+	if tether != null:
+		tether.on_freed(b)
+	if sandwich != null:
+		sandwich.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -1845,6 +1863,10 @@ func on_cut_into(p, pos: Vector2) -> void:
 		train.on_cut(p)
 	if flywheel != null:
 		flywheel.on_cut(p)
+	if tether != null:
+		tether.on_cut(p)
+	if sandwich != null:
+		sandwich.on_cut(p)
 	if atmos != null:
 		atmos.on_cut(p, pos)
 	if media != null:
@@ -2271,6 +2293,16 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "field", c.id, "inst_rpm", {"ctrl": c, "field_fn": func(): return float(flywheel.rpm.get(c.target, 0.0)), "unit": "rpm"})
 					"rail":
 						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return flywheel.rail_pull(c.target), "unit": "kN"})
+					"spin":
+						sys.measure(c.id, "field", c.id, "inst_rpm", {"ctrl": c, "field_fn": func(): return tether.rpm, "unit": "rpm"})
+					"tether":
+						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return tether.pull(), "unit": "kN"})
+					"heat":
+						sys.measure(c.id, "field", c.id, "inst_temp", {"ctrl": c, "field_fn": func(): return tether.temp(), "unit": "°C"})
+					"strand":
+						sys.measure(c.id, "field", c.id, "inst_strands", {"ctrl": c, "field_fn": func(): return tether.strands(), "unit": "/7"})
+					"load":
+						sys.measure(c.id, "field", c.id, "inst_load", {"ctrl": c, "field_fn": func(): return sandwich.load(c.id), "unit": "kN"})
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
 						if sys.dead_leg_closed(c):
@@ -2379,6 +2411,21 @@ func restore_reading(rd: Dictionary) -> void:
 					extra.unit = "rpm"
 				elif c.medium == "rail":
 					extra.field_fn = func(): return flywheel.rail_pull(c.target)
+					extra.unit = "kN"
+				elif c.medium == "spin":
+					extra.field_fn = func(): return tether.rpm
+					extra.unit = "rpm"
+				elif c.medium == "tether":
+					extra.field_fn = func(): return tether.pull()
+					extra.unit = "kN"
+				elif c.medium == "heat":
+					extra.field_fn = func(): return tether.temp()
+					extra.unit = "°C"
+				elif c.medium == "strand":
+					extra.field_fn = func(): return tether.strands()
+					extra.unit = "/7"
+				elif c.medium == "load":
+					extra.field_fn = func(): return sandwich.load(c.id)
 					extra.unit = "kN"
 				else:
 					extra.field_fn = func(): return mech.field(c.target)

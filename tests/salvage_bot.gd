@@ -254,6 +254,42 @@ func _prep() -> void:
 					return
 				if s.on(str(t)):
 					break
+	# a tethered pair: the brake's cooling on, then the brake; if its rollers slipped, the
+	# RCS; stopped, the tensioner off
+	if g.tether != null and g.tether.active():
+		var tc: Dictionary = g.tether.cfg
+		if g.tether.spinning():
+			var br: Dictionary = tc.get("brake", {})
+			if g.tether.slipped:
+				var rs: String = tc.get("rcs", {}).get("switch", "")
+				if rs != "" and not s.on(rs) and not _hidden(rs) and _once("rcs " + rs):
+					_w(rs)
+					_note("RCS %s on" % rs)
+					_work(2.5)
+					return
+			else:
+				for sw in [br.get("cool", ""), br.get("switch", "")]:
+					if sw != "" and not s.on(sw) and not _hidden(sw) and _once("tb " + sw):
+						_w(sw)
+						_note("%s on" % sw)
+						_work(2.5)
+						return
+		else:
+			var rl: String = tc.get("release", "")
+			if rl != "" and s.on(rl) and not _hidden(rl) and _once("tb " + rl):
+				_w(rl)
+				_note("tensioner %s off" % rl)
+				_work(2.5)
+				return
+	# a clamped cargo: once it is vented, its clamps let go in the given (crosswise) order
+	if g.sandwich != null and g.sandwich.active():
+		if g.sandwich.cargo_kpa() < float(g.sandwich.cfg.get("spring_kpa", 20.0)) * 0.5:
+			for t in g.sandwich.cfg.get("order", []):
+				if s.on(str(t)) and not _hidden(str(t)) and _once("cl " + str(t)):
+					_w(str(t))
+					_note("clamp %s off" % t)
+					_work(2.0)
+					return
 	# a reactor's control drums locked before anything near the core moves
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
@@ -660,6 +696,10 @@ func _unsafe() -> Array:
 		out.append_array(g.sail.unsafe())
 	if g.flywheel != null and g.flywheel.active():
 		out.append_array(g.flywheel.unsafe())
+	if g.tether != null and g.tether.active():
+		out.append_array(g.tether.unsafe())
+	if g.sandwich != null and g.sandwich.active():
+		out.append_array(g.sandwich.unsafe())
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
 			if not s.on(str(g.reactor.cfg.drums[d])):
