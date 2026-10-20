@@ -119,6 +119,12 @@ func _run() -> void:
 	ev.physical_keycode = KEY_RIGHT
 	term._unhandled_input(ev)
 	check(tn[term.sel].kind == "ship", "back on the ships and along the line: %s" % tn[term.sel].key)
+	# along to a ship not reached or pinned yet (how far depends on how many there are)
+	ev.physical_keycode = KEY_RIGHT
+	var hops := 0
+	while (tn[term.sel].done or Route.pinned(tn[term.sel].key)) and hops < 30:
+		term._unhandled_input(ev)
+		hops += 1
 	# Enter pins the chosen ship and pushes the oldest pin out
 	var chosen: String = tn[term.sel].key
 	term.act()

@@ -383,6 +383,10 @@ func _prep() -> void:
 					_work(2.5)
 					return
 				continue
+			# a box let go earlier still in this one's way out (slowed, held by the
+			# tractor): it would run into it
+			if _rail_blocked(rs):
+				continue
 			if _once("rail " + e.lock):
 				_w(e.lock)
 				_note("rail %s released" % rs)
@@ -641,14 +645,7 @@ func _strip() -> void:
 		for b in w.bodies:
 			if not is_instance_valid(b) or b.capture != null or sent.has(b):
 				continue
-			var zone := zone_for(b)
-			sent[b] = zone
-			var mouth: Vector2 = Dock.zpos(zone)
-			var com_off: Vector2 = b.global_transform.basis_xform(b.center_of_mass)
-			b.global_position = mouth - com_off
-			b.linear_velocity = Vector2.ZERO
-			b.angular_velocity = 0.0
-			b.reset_physics_interpolation()
+			_send(b)
 			break
 	if phase_t % 2 != 0:
 		return
@@ -841,3 +838,79 @@ func summary() -> Dictionary:
 	return {"rate": g.recovery_rate(), "net": g.net(), "earned": g.earned(), "losses": g.losses, "grade": g.hud.grade(),
 		"incidents": g.incidents.size(), "time": g.playtime, "ended": g.state == "ending", "forced": forced,
 		"work": work, "hauls": hauls, "scrap_hauls": scrap_hauls, "arm": g.arm.carried if g.arm != null else 0, "hauler": g.hauler.carried if g.hauler != null else 0, "scrapped": scrapped, "snapped": snapped, "crane": crane_hauls}
+
+
+# a box of a set already released, still loose inside the doors, in the lane the
+# boxes of set rs will slide along
+func _rail_blocked(rs: String) -> bool:
+	var w = g.world
+	var e: Dictionary = g.rails.cfg[rs]
+	var out: Array = e.get("out", [0.0, 0.0])
+	var dir := Vector2(float(out[0]), float(out[1])).normalized()
+	if dir == Vector2.ZERO:
+		return false
+	var side := Vector2(-dir.y, dir.x)
+	var lane := Vector2(INF, -INF)
+	for t in e.get("boxes", []):
+		var bx = w.tag(str(t))
+		if bx == null or bx.gone:
+			continue
+		for q in w.frame(bx) * bx.poly:
+			lane = Vector2(minf(lane.x, q.dot(side)), maxf(lane.y, q.dot(side)))
+	var far := -INF
+	for dr in e.get("doors", []):
+		var dp = w.tag(str(dr))
+		if dp != null and not dp.gone:
+			for q in w.frame(dp) * dp.poly:
+				far = maxf(far, q.dot(dir))
+	var front := -INF
+	for t in e.get("boxes", []):
+		var bx = w.tag(str(t))
+		if bx != null and not bx.gone:
+			for q in w.frame(bx) * bx.poly:
+				front = maxf(front, q.dot(dir))
+	for os in g.rails.cfg:
+		if os == rs:
+			continue
+		# a box still locked on ahead in the same lane: that set goes first
+		if not g.rails.released.has(os):
+			for t in g.rails.cfg[os].get("boxes", []):
+				var ob = w.tag(str(t))
+				if ob == null or ob.gone or ob.body != null:
+					continue
+				var ob_back := INF
+				var osl := Vector2(INF, -INF)
+				for q in w.frame(ob) * ob.poly:
+					ob_back = minf(ob_back, q.dot(dir))
+					osl = Vector2(minf(osl.x, q.dot(side)), maxf(osl.y, q.dot(side)))
+				if ob_back >= front - 0.1 * M and osl.x < lane.y and osl.y > lane.x:
+					return true
+			continue
+		for t in g.rails.cfg[os].get("boxes", []):
+			var bx = w.tag(str(t))
+			if bx == null or bx.gone or bx.body == null or not is_instance_valid(bx.body) or bx.body.capture != null:
+				continue
+			var back := INF
+			var sl := Vector2(INF, -INF)
+			for q in bx.body.global_transform * bx.poly:
+				back = minf(back, q.dot(dir))
+				sl = Vector2(minf(sl.x, q.dot(side)), maxf(sl.y, q.dot(side)))
+			if back < far and sl.x < lane.y and sl.y > lane.x:
+				# come to rest in the way: haul it off first
+				if bx.body.linear_velocity.length() < 0.6 * M and not sent.has(bx.body):
+					_send(bx.body)
+				return true
+	return false
+
+
+# a loose body straight to the mouth that takes it
+func _send(b) -> void:
+	var zone := zone_for(b)
+	sent[b] = zone
+	var mouth: Vector2 = Dock.zpos(zone)
+	var com_off: Vector2 = b.global_transform.basis_xform(b.center_of_mass)
+	b.global_position = mouth - com_off
+	b.linear_velocity = Vector2.ZERO
+	b.angular_velocity = 0.0
+	b.reset_physics_interpolation()
+

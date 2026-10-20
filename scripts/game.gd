@@ -20,6 +20,7 @@ var coldchain                 # cold holds that have to stay cold (CL-104), scri
 var vault                     # vault doors on two lock circuits and a release (ES-112), scripts/vault.gd
 var media                     # look-alike media in crossed branches (FL-116), scripts/media.gd
 var furnace                   # a furnace core shut down but not cool (MF-126), scripts/furnace.gd
+var drones                    # drones parked live on their own packs (CV-138), scripts/drones.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -252,6 +253,10 @@ func _ready() -> void:
 	furnace.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(furnace)
 	furnace.setup(self, ship)
+	drones = preload("res://scripts/drones.gd").new()
+	drones.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(drones)
+	drones.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -400,6 +405,8 @@ func _ready() -> void:
 			media.load_state(data.media)
 		if data.has("furnace"):
 			furnace.load_state(data.furnace)
+		if data.has("drones"):
+			drones.load_state(data.drones)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1586,6 +1593,8 @@ func on_body_freed(b) -> void:
 		rails.on_freed(b)
 	if furnace != null:
 		furnace.on_freed(b)
+	if drones != null:
+		drones.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):

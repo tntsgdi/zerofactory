@@ -8,7 +8,8 @@ extends Node
 #   The fixings between a box and its rails are the rail's locks, not bolts: the
 #   wrench can't undo them. Turning the set's lock control off releases every box
 #   on it at once and sends them off along the rails ("out"): through the open
-#   doors, or into a shut one, which dents them as any knock does.
+#   doors, or into a shut one (or a box still locked on ahead of it), which
+#   dents them as any knock does. Past its rail's end a box rolls on slowly.
 #   Cutting a rail that still carries a box: the box is wrenched with it (dented).
 #   "hangs": [tags] (SV-122's instrument cradle, hung from the main beam): one of
 #   those cut into or freed while the set's boxes are still locked on, and the
@@ -19,6 +20,7 @@ extends Node
 const CUT_DENT := 0.45
 const LIFT := 0.03            # m a released box rises off its rail
 const DROP_DENT := 0.55
+const RUN_OUT := 0.4          # m/s a box rolls on at once past its rail's end
 
 var game
 var world
@@ -194,6 +196,9 @@ func _physics_process(_dt: float) -> void:
 			var back := INF
 			for q in bx.body.global_transform * bx.poly:
 				back = minf(back, q.dot(dir))
+			# taken in hand (the tractor, a recovery zone): the rail lets it go
+			if bx.body.tethered or bx.body.capture != null:
+				continue
 			# stopped by something (a shut door): it no longer slides
 			var blocked: bool = e.size() > 4 and bx.body.linear_velocity.dot(dir) < (e[1] as Vector2).length() * 0.4
 			if back < _rail_end(_set_of(e[0], "boxes"), dir) and int(e[2]) > 0 and not blocked:
@@ -203,6 +208,18 @@ func _physics_process(_dt: float) -> void:
 				bx.body.angular_velocity = 0.0
 				e[2] = int(e[2]) - 1
 				left.append(e)
+			elif not blocked and int(e[2]) > 0:
+				# off the end of its rail: the run-out brake leaves it rolling slowly on
+				bx.body.linear_velocity = dir * RUN_OUT * Geom.M
+			elif blocked and back < _rail_end(_set_of(e[0], "boxes"), dir) and not bx.body.get_colliding_bodies().is_empty():
+				# it ran into whatever stopped it at the speed the rail sent it:
+				# a knock, whether or not the solver's contact counted it
+				var front := -INF
+				for q in bx.body.global_transform * bx.poly:
+					if q.dot(dir) > front:
+						front = q.dot(dir)
+						bx.body.hit_pos = q
+				game._impact(bx.body, (e[1] as Vector2).length())
 			continue
 		e[2] = int(e[2]) - 1
 		if int(e[2]) > 0:

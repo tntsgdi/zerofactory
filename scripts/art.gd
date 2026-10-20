@@ -412,3 +412,23 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			ci.draw_string(font, Vector2(w * 0.4, h * 0.66), "-163°C", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(8, int(h * 0.07)), Pal.ink(0.4))
 		"guard":
 			L(ci, Vector2(w * 0.5, 3), Vector2(w * 0.45, h - 3), 0.3)
+		"uav":
+			# a maintenance drone parked in its bay: the body ring, four rotor wells, the sensor eye
+			var c := Vector2(w * 0.5, h * 0.5)
+			ci.draw_arc(c, minf(w, h) * 0.34, PI / 8.0, TAU + PI / 8.0, 9, Pal.ink(0.6), 1.2, true)
+			ring(ci, c, minf(w, h) * 0.12, 0.5)
+			for q in [Vector2(0.14, 0.24), Vector2(0.86, 0.24), Vector2(0.14, 0.76), Vector2(0.86, 0.76)]:
+				var rc := Vector2(w * q.x, h * q.y)
+				ring(ci, rc, minf(w * 0.11, h * 0.2), 0.4)
+				L(ci, rc, c + (rc - c) * 0.45, 0.3)
+			ci.draw_string(font, Vector2(w * 0.38, h * 0.95), p.label if p != null else "", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.45))
+		"lift":
+			# a scissor lift: its deck along the top, the crossed legs, the base frame
+			L(ci, Vector2(2, h * 0.12), Vector2(w - 2, h * 0.12), 0.55, 1.4)
+			L(ci, Vector2(2, h * 0.9), Vector2(w - 2, h * 0.9), 0.5)
+			var n := maxi(2, int(w / 40.0))
+			for i in n:
+				var x0 := w * (0.04 + 0.92 * i / n)
+				var x1 := w * (0.04 + 0.92 * (i + 1) / n)
+				L(ci, Vector2(x0, h * 0.15), Vector2(x1, h * 0.87), 0.4)
+				L(ci, Vector2(x0, h * 0.87), Vector2(x1, h * 0.15), 0.4)
