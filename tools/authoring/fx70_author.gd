@@ -131,7 +131,7 @@ static func _inner() -> void:
 # ---------------------------------------------------------------- the machine
 
 static func _fx(tag: String, x0: float, y0: float, x1: float, y1: float):
-	return K.plate(tag, K.R(x0, y0, x1, y1), {"density": 2.2, "barrier": false, "cut_speed": 150.0, "name_key": "p_fx_coil_support"}, "fixture")
+	return K.plate(tag, K.R(x0, y0, x1, y1), {"density": 2.2, "barrier": false, "cut_speed": 150.0, "art": "grav_support", "name_key": "p_fx_coil_support"}, "fixture")
 
 
 # a coil pack and its supports: "top" hung from the roof on two hangers, "bottom" on
@@ -141,21 +141,21 @@ static func _coil(tag: String, kind: String, x0: float, x1: float, nxt: Array) -
 	var fix: Array = []
 	match kind:
 		"top":
-			c = E(tag, "module", x0, -6.2, x1, -5.0, "V", {"mass": 2.8, "value": 70000.0, "fragile": 0.4, "name_key": "p_fx_tf_coil", "cut_speed": 120.0})
+			c = E(tag, "tf_coil", x0, -6.2, x1, -5.0, "V", {"mass": 2.8, "value": 70000.0, "fragile": 0.4, "name_key": "p_fx_tf_coil", "cut_speed": 120.0})
 			for hx in [x0 + 1.0, x1 - 1.4]:
 				var hg = _fx("%s-H%d" % [tag, fix.size() + 1], hx, -IN, hx + 0.4, -6.2)
 				K.bolt(hg, K.at(hx + 0.2, -IN - 0.25, ["hull"]), hx + 0.2, -IN, "weld")
 				K.bolt(c, hg, hx + 0.2, -6.2)
 				fix.append(hg.tag)
 		"bottom":
-			c = E(tag, "module", x0, 5.0, x1, 6.2, "V", {"mass": 2.8, "value": 70000.0, "fragile": 0.4, "name_key": "p_fx_tf_coil", "cut_speed": 120.0})
+			c = E(tag, "tf_coil", x0, 5.0, x1, 6.2, "V", {"mass": 2.8, "value": 70000.0, "fragile": 0.4, "name_key": "p_fx_tf_coil", "cut_speed": 120.0})
 			for hx in [x0 + 1.0, x1 - 1.4]:
 				var ft = _fx("%s-F%d" % [tag, fix.size() + 1], hx, 6.2, hx + 0.4, IN)
 				K.bolt(ft, K.at(hx + 0.2, IN + 0.25, ["hull"]), hx + 0.2, IN, "weld")
 				K.bolt(c, ft, hx + 0.2, 6.2)
 				fix.append(ft.tag)
 		"leg":
-			c = E(tag, "module", x0, -3.8, x1, 3.8, "V", {"mass": 2.8, "value": 70000.0, "fragile": 0.4, "name_key": "p_fx_tf_coil", "cut_speed": 120.0})
+			c = E(tag, "tf_coil", x0, -3.8, x1, 3.8, "V", {"mass": 2.8, "value": 70000.0, "fragile": 0.4, "name_key": "p_fx_tf_coil", "cut_speed": 120.0})
 			var pd = _fx(tag + "-P", x0 + 0.3, 3.8, x1 - 0.3, IN)
 			K.bolt(pd, K.at((x0 + x1) * 0.5, IN + 0.25, ["hull"]), (x0 + x1) * 0.5, IN, "weld")
 			K.bolt(c, pd, x0 + 0.5, 3.8)
@@ -167,7 +167,7 @@ static func _coil(tag: String, kind: String, x0: float, x1: float, nxt: Array) -
 # one D of the vacuum vessel (x0 its outer wall's outside, in its inner wall's inside),
 # its blanket modules and its divertor cassette
 static func _vessel(h: String, x0: float, x1: float, outer_left: bool) -> void:
-	var W := {"density": 1.8, "barrier": false, "cut_speed": 160.0, "name_key": "p_fx_vessel"}
+	var W := {"density": 1.8, "barrier": false, "cut_speed": 160.0, "art": "vv_wall", "name_key": "p_fx_vessel"}
 	var top = K.plate("VW-%s-T" % h, K.R(x0 + 0.6, -4.6, x1 - 0.6, -4.1), W, "beam")
 	var bot = K.plate("VW-%s-B" % h, K.R(x0 + 0.6, 4.1, x1 - 0.6, 4.6), W, "beam")
 	var wa = K.plate("VW-%s-%s" % [h, "O" if outer_left else "I"], K.R(x0, -4.6, x0 + 0.6, 4.6), W, "beam")
@@ -185,19 +185,19 @@ static func _vessel(h: String, x0: float, x1: float, outer_left: bool) -> void:
 	var B := {"mass": 0.4, "value": 9000.0, "fragile": 0.4, "name_key": "p_fx_blanket"}
 	for i in 3:
 		var bx: float = x0 + 1.0 + i * 2.6
-		var bk = E("BLK-%s%d" % [h, i + 1], "armor", bx, -4.1, bx + 2.2, -3.6, "V", B)
+		var bk = E("BLK-%s%d" % [h, i + 1], "fw_d", bx, -4.1, bx + 2.2, -3.6, "V", B)
 		K.bolt(bk, top, bx + 0.4, -4.1)
 		K.bolt(bk, top, bx + 1.8, -4.1)
 	var n := 4
 	for side in [x0 + 0.6, x1 - 1.1]:
 		for y0 in [-2.6, 0.4]:
-			var bk = E("BLK-%s%d" % [h, n], "armor", side, y0, side + 0.5, y0 + 2.2, "V", B)
+			var bk = E("BLK-%s%d" % [h, n], "fw_r" if side < (x0 + x1) * 0.5 else "fw_l", side, y0, side + 0.5, y0 + 2.2, "V", B)
 			var wall = wa if side < (x0 + x1) * 0.5 else wb
 			var wx: float = side if side < (x0 + x1) * 0.5 else side + 0.5
 			K.bolt(bk, wall, wx, y0 + 0.4)
 			K.bolt(bk, wall, wx, y0 + 1.8)
 			n += 1
-	var dv = E("DIV-" + h, "module", x0 + 1.2, 3.0, x1 - 1.2, 4.05, "V", {"mass": 1.8, "value": 48000.0, "fragile": 0.4, "name_key": "p_fx_divertor"})
+	var dv = E("DIV-" + h, "divertor", x0 + 1.2, 2.6, x1 - 1.2, 4.05, "V", {"mass": 1.8, "value": 48000.0, "fragile": 0.4, "name_key": "p_fx_divertor"})
 	K.bolt(dv, bot, x0 + 2.0, 4.1)
 	K.bolt(dv, bot, x1 - 2.0, 4.1)
 
@@ -215,13 +215,24 @@ static func _machine() -> void:
 	_coil("TF-6", "top", 35.4, 44.0, ["TF-5", "TF-7"])
 	_coil("TF-7", "leg", 44.7, 46.0, ["TF-6", "TF-8"])
 	_coil("TF-8", "bottom", 35.4, 44.0, ["TF-5", "TF-7"])
+	# the outer poloidal field coils in the two top corners, each hung on its support
+	for pf in [["PF-1", 18.0, 19.8], ["PF-2", 44.2, 46.0]]:
+		var hs = _fx(pf[0] + "-H", float(pf[1]) + 0.6, -IN, float(pf[1]) + 1.2, -6.2)
+		K.bolt(hs, K.at(float(pf[1]) + 0.9, -IN - 0.25, ["hull"]), float(pf[1]) + 0.9, -IN, "weld")
+		var pc = E(pf[0], "tf_coil", pf[1], -6.2, pf[2], -4.6, "V", {"mass": 1.6, "value": 45000.0, "fragile": 0.4, "name_key": "p_fx_pf_coil", "cut_speed": 120.0})
+		K.bolt(pc, hs, float(pf[1]) + 0.9, -6.2)
+	# the equatorial port plugs through each outer wall
+	for pp in [["PP-L", 19.35, 19.95, "VW-L-O", 20.0], ["PP-R", 44.05, 44.65, "VW-R-O", 44.0]]:
+		var pl = E(pp[0], "port_plug", pp[1], -1.2, pp[2], 1.2, "V", {"mass": 1.2, "value": 28000.0, "fragile": 0.4, "name_key": "p_fx_port_plug"})
+		K.bolt(pl, by_tag[pp[3]], pp[4], -0.6)
+		K.bolt(pl, by_tag[pp[3]], pp[4], 0.6)
 	# the central solenoid, two modules stacked, hung and stood
 	var ch = _fx("CS-H", 31.6, -IN, 32.4, -5.6)
 	K.bolt(ch, K.at(32.0, -IN - 0.25, ["hull"]), 32.0, -IN, "weld")
 	var cp = _fx("CS-P", 31.6, 5.6, 32.4, IN)
 	K.bolt(cp, K.at(32.0, IN + 0.25, ["hull"]), 32.0, IN, "weld")
-	var c1 = E("CS-1", "module", 31.0, -5.6, 33.0, -0.1, "V", {"mass": 2.5, "value": 60000.0, "fragile": 0.4, "name_key": "p_fx_solenoid"})
-	var c2 = E("CS-2", "module", 31.0, 0.1, 33.0, 5.6, "V", {"mass": 2.5, "value": 60000.0, "fragile": 0.4, "name_key": "p_fx_solenoid"})
+	var c1 = E("CS-1", "cs_stack", 31.0, -5.6, 33.0, -0.1, "V", {"mass": 2.5, "value": 60000.0, "fragile": 0.4, "name_key": "p_fx_solenoid"})
+	var c2 = E("CS-2", "cs_stack", 31.0, 0.1, 33.0, 5.6, "V", {"mass": 2.5, "value": 60000.0, "fragile": 0.4, "name_key": "p_fx_solenoid"})
 	K.bolt(c1, ch, 32.0, -5.6)
 	K.bolt(c2, cp, 32.0, 5.6)
 
@@ -229,21 +240,25 @@ static func _machine() -> void:
 # the cryostat's two ends: the turbopump, a camera, the heating launcher forward; the
 # helium distribution box aft
 static func _vcorners() -> void:
-	_row("V", IN, -1.0, 14.5, 17.8, [["VAC", "pump", 1.4, 1.4, {"mass": 0.5, "value": 14000.0, "name_key": "p_fx_turbopump"}],
+	_row("V", IN, -1.0, 14.5, 17.8, [["VAC", "turbo", 1.4, 1.4, {"mass": 0.5, "value": 14000.0, "name_key": "p_fx_turbopump"}],
 		["CAM-1", "insp", 1.0, 1.2, {"mass": 0.1, "value": 22000.0, "fragile": 0.6, "name_key": "p_fx_camera"}]])
-	_row("V", -IN, 1.0, 14.5, 17.8, [["ECH", "aux", 1.8, 0.8, {"mass": 0.25, "value": 32000.0, "fragile": 0.5, "name_key": "p_fx_launcher"}],
+	_row("V", -IN, 1.0, 14.5, 17.8, [["ECH", "ech", 1.8, 0.8, {"mass": 0.25, "value": 32000.0, "fragile": 0.5, "name_key": "p_fx_launcher"}],
 		["", "sensor", 0.5, 0.4, {"mass": 0.02, "value": 3500.0, "name_key": "p_fx_bolometer"}]])
 	_row("V", IN, -1.0, 46.2, 47.7, [["CDB", "cabinet", 1.3, 2.2, {"mass": 0.5, "value": 18000.0, "name_key": "p_fx_cdb"}]])
 	_row("V", -IN, 1.0, 46.2, 47.7, [["", "sensor", 0.5, 0.4, {"mass": 0.02, "value": 3500.0, "name_key": "p_fx_bolometer"}], ["", "junction", 0.6, 0.4, {"mass": 0.03, "value": 600.0, "name_key": "p_junction"}]])
 	# the diagnostics on the bulkheads at either end, at mid height
 	for it in [["MAGD", "nav_rack", 14.3, -3.4, 14.9, -1.6, 14.25, "p_fx_mag_rack", 12000.0], ["IRC", "insp", 14.3, -0.9, 15.1, 0.0, 14.25, "p_fx_ir_camera", 18000.0],
 			["NEUT", "sensor", 14.3, 0.6, 14.8, 1.1, 14.25, "p_fx_neutron", 9000.0], ["GINJ", "aux", 46.9, -3.2, 47.7, -2.4, 47.75, "p_fx_gas_injector", 7000.0],
-			["PELL", "module", 46.5, -1.8, 47.7, -0.4, 47.75, "p_fx_pellet", 21000.0], ["", "sensor", 47.2, 0.4, 47.7, 0.9, 47.75, "p_fx_bolometer", 3500.0]]:
+			["PELL", "pellet", 46.5, -1.8, 47.7, -0.4, 47.75, "p_fx_pellet", 21000.0], ["", "sensor", 47.2, 0.4, 47.7, 0.9, 47.75, "p_fx_bolometer", 3500.0]]:
 		var dg = E(it[0], it[1], it[2], it[3], it[4], it[5], "V", {"mass": 0.1, "value": it[8], "fragile": 0.5, "name_key": it[7]})
 		var wx: float = it[6]
 		var my: float = (it[3] + it[5]) * 0.5
 		K.bolt(dg, K.at(wx + (-0.1 if wx < 30.0 else 0.1), my, ["hull"]), wx, my - 0.15)
 		K.bolt(dg, K.at(wx + (-0.1 if wx < 30.0 else 0.1), my, ["hull"]), wx, my + 0.15)
+	# the neutral beam injector on the roof, its duct down to the torus
+	var nb = E("NBI", "nbi", 21.0, -9.65, 31.0, -7.05, "", {"mass": 2.8, "value": 90000.0, "fragile": 0.4, "name_key": "p_fx_nbi"})
+	for bx in [22.0, 30.0]:
+		K.bolt(nb, K.at(bx, -6.75, ["hull"]), bx, -7.0)
 	# its lamp on the aft bulkhead, over the distribution box
 	var lv = E("LAMP-V", "lamp", 47.19, -5.38, 47.75, -5.22, "V", {"cls": "metal", "dest": "metal", "mass": 0.04, "cut_speed": 260.0, "name_key": "p_lamp"})
 	K.bolt(lv, K.at(47.95, -5.3, ["hull"]), 47.75, -5.3)
@@ -271,14 +286,14 @@ static func _control() -> void:
 # ---------------------------------------------------------------- R, the cryoplant
 
 static func _cryo() -> void:
-	_row("R", 0.0, -1.0, 48.7, 55.0, [["COLDBOX", "module", 2.2, 2.8, {"mass": 2.2, "value": 80000.0, "fragile": 0.4, "name_key": "p_fx_coldbox"}],
+	_row("R", 0.0, -1.0, 48.7, 55.0, [["COLDBOX", "coldbox", 2.2, 2.8, {"mass": 2.2, "value": 80000.0, "fragile": 0.4, "name_key": "p_fx_coldbox"}],
 		["HE-DEW", "sphere_tank", 1.8, 1.8, {"mass": 0.8, "value": 15000.0, "name_key": "p_fx_dewar"}], ["", "panel", 0.8, 1.2, {"mass": 0.05, "value": 4800.0, "name_key": "p_fx_cryo_panel"}]])
 	_row("R", -IN, 1.0, 48.7, 57.5, [["", "pipe", 2.0, 0.4, {"mass": 0.06, "value": 2600.0, "name_key": "p_fx_he_line"}], 0.6, ["", "junction", 0.6, 0.4, {"mass": 0.03, "value": 600.0, "name_key": "p_junction"}],
 		0.6, ["", "pipe", 2.0, 0.4, {"mass": 0.06, "value": 2600.0, "name_key": "p_fx_he_line"}], 0.6, ["", "sensor", 0.5, 0.4, {"mass": 0.02, "value": 1800.0, "name_key": "p_fx_o2_monitor"}]])
 	_lamp("LAMP-R", 52.0, -IN, "R")
 	_row("R", IN, -1.0, 48.6, 57.6, [["HEC-1", "pump", 1.5, 1.4, {"mass": 0.9, "value": 18000.0, "name_key": "p_fx_he_compressor"}], ["HEC-2", "pump", 1.5, 1.4, {"mass": 0.9, "value": 18000.0, "name_key": "p_fx_he_compressor"}],
 		["", "filter", 0.9, 1.6, {"mass": 0.15, "value": 6000.0, "name_key": "p_fx_he_purifier"}], ["QPS", "swb", 1.0, 2.4, {"mass": 0.4, "value": 16000.0, "name_key": "p_fx_qps"}],
-		["DUMP-R", "module", 1.6, 1.6, {"mass": 1.4, "value": 12000.0, "name_key": "p_fx_dump_res"}],
+		["DUMP-R", "dump_res", 1.6, 1.6, {"mass": 1.4, "value": 12000.0, "name_key": "p_fx_dump_res"}],
 		["", "cabinet", 0.8, 1.6, {"mass": 0.12, "value": 5200.0, "name_key": "p_fx_cryo_spares"}]])
 	_row("R", 0.25, 1.0, 48.7, 55.0, [["", "pipe", 2.0, 0.4, {"mass": 0.06, "value": 2600.0, "name_key": "p_fx_he_line"}], 0.6, ["", "junction", 0.6, 0.4, {"mass": 0.03, "value": 600.0, "name_key": "p_junction"}],
 		0.6, ["", "gastank", 0.6, 1.6, {"mass": 0.1, "value": 3000.0, "hazard": "gas_tank", "name_key": "p_fx_he_buffer"}]])
@@ -294,7 +309,7 @@ static func _power() -> void:
 	_row("P", -IN, 1.0, 58.7, 67.6, [["", "panel", 0.8, 0.8, {"mass": 0.05, "value": 3200.0, "name_key": "p_ev_dcdc"}], 0.6, ["", "junction", 0.6, 0.4, {"mass": 0.03, "value": 600.0, "name_key": "p_junction"}],
 		0.6, ["", "overhead", 1.6, 0.4, {"mass": 0.04, "value": 1600.0, "name_key": "p_ark_overhead"}], 0.6, ["", "panel", 0.8, 0.8, {"mass": 0.05, "value": 3200.0, "name_key": "p_ev_dcdc"}]])
 	_lamp("LAMP-P", 66.0, -IN, "P")
-	_row("P", IN, -1.0, 58.6, 69.3, [["GYR-1", "module", 1.4, 2.6, {"mass": 1.2, "value": 55000.0, "fragile": 0.5, "name_key": "p_fx_gyrotron"}], ["GYR-2", "module", 1.4, 2.6, {"mass": 1.2, "value": 55000.0, "fragile": 0.5, "name_key": "p_fx_gyrotron"}],
+	_row("P", IN, -1.0, 58.6, 69.3, [["GYR-1", "gyrotron", 1.4, 2.6, {"mass": 1.2, "value": 55000.0, "fragile": 0.5, "name_key": "p_fx_gyrotron"}], ["GYR-2", "gyrotron", 1.4, 2.6, {"mass": 1.2, "value": 55000.0, "fragile": 0.5, "name_key": "p_fx_gyrotron"}],
 		["FC-P", "gen", 1.5, 1.8, {"mass": 1.2, "value": 20000.0, "name_key": "p_fuel_cell"}], ["FUEL-P", "fueltank", 1.0, 1.6, {"mass": 0.5, "value": 3000.0, "name_key": "p_svc_prop"}],
 		["MCP-1", "pump", 1.4, 1.4, {"mass": 0.6, "value": 9000.0, "name_key": "p_coolant_pump"}],
 		["", "cabinet", 1.0, 1.6, {"mass": 0.15, "value": 6400.0, "name_key": "p_fx_spare_leads"}]])
@@ -456,6 +471,6 @@ static func meta() -> Dictionary:
 	}
 
 
-const VALUE := 1687800.0
+const VALUE := 1923800.0
 const FIRE_X := 68.0
 const FIRE_BASE := "HF5-0"
