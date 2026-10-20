@@ -26,12 +26,14 @@ class_name Traps
 #   jacket_loss     a tank's vacuum jacket has let air in: heat leaks in fast, the cargo is warmer
 #   valve_leak      a propellant tank's cross valve leaks while it reads shut: its tank keeps feeding
 #                   its branch, so the branch cut "isolated" still leaks propellant
+#   pod_armed       an escape pod's firing circuit is still charged: its launch clamp undone (or its
+#                   charge unbolted) before its arming switch is opened fires the bolts
 
 const ALL := ["wrong_valve", "fake_stop", "hidden_tank", "live_cargo", "welded_hatch",
 	"rerouted_line", "second_source", "hidden_damage", "explosive_cargo", "fire_system"]
-const EXTRA := ["bio_breach", "gate_jam", "psv_stuck", "heater_live", "jacket_loss", "valve_leak"]
+const EXTRA := ["bio_breach", "gate_jam", "psv_stuck", "heater_live", "jacket_loss", "valve_leak", "pod_armed"]
 const TIER := {
-	"gate_jam": 0, "heater_live": 0, "jacket_loss": 0, "psv_stuck": 1, "valve_leak": 1,
+	"gate_jam": 0, "heater_live": 0, "jacket_loss": 0, "psv_stuck": 1, "valve_leak": 1, "pod_armed": 0,
 	"bio_breach": 0,
 	"wrong_valve": 0, "fake_stop": 0, "hidden_tank": 0, "live_cargo": 0, "welded_hatch": 0,
 	"explosive_cargo": 0, "fire_system": 0, "rerouted_line": 1, "second_source": 1, "hidden_damage": 1,
@@ -108,6 +110,10 @@ static func evidence(d: Dictionary, trap: String) -> Array:
 				# its level probe still falling with the valve shut, its branch refilling at the drain
 				var n3: String = tg.trim_prefix("T-")
 				return [["ctrl", "L-" + n3], ["ctrl", "XV-" + n3], ["ctrl", "LD-" + n3]]
+			"pod_armed":
+				# the charge reads live; its arming switch
+				var n4: String = tg.trim_prefix("POD-")
+				return [["piece", "FCAP-" + n4], ["ctrl", "ARM-" + n4], ["line", "fc" + n4]]
 	match trap:
 		"wrong_valve":
 			return [["ctrl", "P-C01"], ["ctrl", "V-C01"]]
@@ -156,6 +162,8 @@ static func intel(d: Dictionary, trap: String) -> Array:
 			return ["in_jacket_loss", [tg, int(float(gas.rooms.get("J" + tg.trim_prefix("T-"), 0.0)))]]
 		"valve_leak":
 			return ["in_valve_leak", ["XV-" + tg.trim_prefix("T-"), tg]]
+		"pod_armed":
+			return ["in_pod_armed", [tg]]
 		"live_cargo", "explosive_cargo":
 			return ["in_" + trap, [tg]]
 		"hidden_damage":
@@ -200,6 +208,9 @@ static func bit(trap: String, incidents: Array) -> bool:
 					return true
 			"valve_leak":
 				if k == "leak" and det in ["b1", "b2", "b3"]:
+					return true
+			"pod_armed":
+				if k == "pod_fired":
 					return true
 	return false
 
@@ -352,6 +363,14 @@ static func _apply_slot(d: Dictionary, trap: String, sl: Dictionary, rng: Random
 				if c.id == sw:
 					c.state = true
 			_warm(d, d.cryo.heater.tank, rng.randf_range(2.0, 4.0))
+		"pod_armed":
+			# one pod's firing circuit was never discharged
+			var pod: String = sl.pods[rng.randi_range(0, sl.pods.size() - 1)]
+			_target(d, trap, pod)
+			var chg: String = d.liner.pods[pod].circuit
+			for e in d.power.isolated:
+				if e.piece == chg:
+					e.charge = 1.0
 		"valve_leak":
 			# its cross valve leaks shut: the propellant network passes a little through it,
 			# and its branch keeps being fed from the tank
@@ -418,15 +437,20 @@ static func _apply_slot(d: Dictionary, trap: String, sl: Dictionary, rng: Random
 			d.power.sources.append({"cable": "ce", "kind": "gen", "piece": "EG-01", "running": true, "switch": "K-EG", "volts": float(sl.get("volts", 120.0))})
 			d.labels["EG-01"] = "EG"
 			d.blueprint.get("hide", []).append("EG-01")
-			# the safe way to the named item isolates the second supply first
+			# the safe way to the named item isolates the second supply first (once the
+			# room it stands in is open, where the slot says so)
+			var after: String = sl.get("open_first", "")
 			_patch_proc(d, sl.proc, func(steps: Array) -> Array:
 				var out: Array = []
 				var done := false
 				for st in steps:
-					if not done and st.do == "operate":
+					if not done and after == "" and st.do == "operate":
 						out.append({"ctrl": "K-EG", "do": "operate"})
 						done = true
 					out.append(st)
+					if not done and after != "" and st.do == "wait" and (st.get("until", {}).get("open", []) as Array).has(after):
+						out.append({"ctrl": "K-EG", "do": "operate"})
+						done = true
 				return out)
 		"hidden_damage":
 			# a plate with nothing of value hung from it (else what drops with it is wrecked before anyone could know)

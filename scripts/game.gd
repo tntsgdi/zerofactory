@@ -22,6 +22,7 @@ var media                     # look-alike media in crossed branches (FL-116), s
 var furnace                   # a furnace core shut down but not cool (MF-126), scripts/furnace.gd
 var drones                    # drones parked live on their own packs (CV-138), scripts/drones.gd
 var tanknet                   # a cross-connected propellant network (VT-80), scripts/tanknet.gd
+var liner                     # a liner's escape pods and observation glass (PS-12), scripts/liner.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -262,6 +263,10 @@ func _ready() -> void:
 	tanknet.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(tanknet)
 	tanknet.setup(self, ship)
+	liner = preload("res://scripts/liner.gd").new()
+	liner.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(liner)
+	liner.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -414,6 +419,8 @@ func _ready() -> void:
 			drones.load_state(data.drones)
 		if data.has("tanknet"):
 			tanknet.load_state(data.tanknet)
+		if data.has("liner"):
+			liner.load_state(data.liner)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1602,6 +1609,8 @@ func on_body_freed(b) -> void:
 		furnace.on_freed(b)
 	if drones != null:
 		drones.on_freed(b)
+	if liner != null:
+		liner.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
