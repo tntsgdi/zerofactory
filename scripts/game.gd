@@ -26,6 +26,8 @@ var liner                     # a liner's escape pods and observation glass (PS-
 var boxbeam                   # a container wall that is the ship's beam (CF-90), scripts/boxbeam.gd
 var sail                      # a light sail held flat by its stays (SA-200), scripts/sail.gd
 var reactor                   # a shut-down reactor's dose field (NR-95), scripts/reactor.gd
+var softshell                 # inflatable bags on a rigid spine (IH-55), scripts/softshell.gd
+var train                     # a train of modules on couplers (MT-140), scripts/train.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -282,6 +284,14 @@ func _ready() -> void:
 	reactor.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(reactor)
 	reactor.setup(self, ship)
+	softshell = preload("res://scripts/softshell.gd").new()
+	softshell.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(softshell)
+	softshell.setup(self, ship)
+	train = preload("res://scripts/train.gd").new()
+	train.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(train)
+	train.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -442,6 +452,10 @@ func _ready() -> void:
 			sail.load_state(data.sail)
 		if data.has("reactor"):
 			reactor.load_state(data.reactor)
+		if data.has("softshell"):
+			softshell.load_state(data.softshell)
+		if data.has("train"):
+			train.load_state(data.train)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1638,6 +1652,8 @@ func on_body_freed(b) -> void:
 		sail.on_freed(b)
 	if reactor != null:
 		reactor.on_freed(b)
+	if softshell != null:
+		softshell.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -1814,6 +1830,10 @@ func on_cut_into(p, pos: Vector2) -> void:
 		sail.on_cut(p)
 	if reactor != null:
 		reactor.on_cut(p)
+	if softshell != null:
+		softshell.on_cut(p)
+	if train != null:
+		train.on_cut(p)
 	if atmos != null:
 		atmos.on_cut(p, pos)
 	if media != null:

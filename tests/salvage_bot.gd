@@ -217,6 +217,23 @@ func _prep() -> void:
 				_note("force bent gate %s" % gt)
 				_work(4.0)
 				return
+	# inflatable bags: each let down at its port, then its straps' tensioner slackened
+	if g.softshell != null and g.softshell.active():
+		for b in g.softshell.cfg.bags:
+			var e: Dictionary = g.softshell.cfg.bags[b]
+			var port: String = e.get("port", "")
+			if g.softshell.inflated(b) and port != "" and not s.hoses.has(port) and not _hidden(port) and _once("bag " + port):
+				done_ops["hose " + port] = true
+				_h(port)
+				_note("let down %s at %s" % [b, port])
+				_work(2.5)
+				return
+			var tn: String = e.get("tensioner", "")
+			if not g.softshell.inflated(b) and g.softshell.taut(b) and not _hidden(tn) and _once("tn " + tn):
+				_w(tn)
+				_note("tensioner %s slack" % tn)
+				_work(2.5)
+				return
 	# a reactor's control drums locked before anything near the core moves
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
@@ -366,7 +383,7 @@ func _prep() -> void:
 			return
 	# a hot furnace core: its heat exchange keeps running on the bus until it is cool;
 	# a propellant network's pump runs on the bus until the propellant is drawn
-	var core_hot: bool = (g.furnace != null and g.furnace.hot()) or (g.tanknet != null and g.tanknet.active() and g.tanknet.fuel_left() > 0.02)
+	var core_hot: bool = (g.furnace != null and g.furnace.hot()) or (g.tanknet != null and g.tanknet.active() and g.tanknet.fuel_left() > 0.02) 		or (g.train != null and g.train.active() and g.train.fluid_left() > 0.02)
 	# power: open every source switch, send remote stops, then bleed capacitors
 	for tg in s.src_order:
 		if core_hot:
@@ -625,6 +642,12 @@ func _unsafe() -> Array:
 		for d in g.reactor.cfg.get("drums", {}):
 			if not s.on(str(g.reactor.cfg.drums[d])):
 				out.append("drum %s unlocked" % d)
+	if g.softshell != null and g.softshell.active():
+		for b in g.softshell.cfg.bags:
+			if g.softshell.inflated(b):
+				out.append("bag %s inflated" % b)
+			if g.softshell.taut(b):
+				out.append("bag %s straps taut" % b)
 	for n in g.world.rooms:
 		if s.P(n) > 5.0:
 			out.append("room %s %.0f kPa" % [n, s.P(n)])

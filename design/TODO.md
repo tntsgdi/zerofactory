@@ -124,4 +124,5 @@
   - [ ] 交审时问用户：PS-12 救生舱电路做事故变体（Jev C 置信度 0.52）、观景玻璃做固定特化（Jev A 置信度 0.31）
   - [x] CF-90「蜂巢」（scripts/boxbeam.gd 货柜承力梁）、SA-200「纸鸢」（scripts/sail.gd 帆张力网；新件类型 film；气体格子 0.4 m 档）
   - [x] NR-95「灶王」（scripts/reactor.gd 剂量场与可移动屏蔽，衰变热复用 furnace.gd；新危险品类别 rad）
-  - [ ] 下一步：IH-55 → MT-140 → MD-160 → TB-180 → CH-110 → MY-48 → IC-120 → ARK-01 → 新设计 10 艘
+  - [x] IH-55「河豚」（scripts/softshell.gd 软气囊、束缚带、补片）
+  - [ ] 下一步：MT-140 → MD-160 → TB-180 → CH-110 → MY-48 → IC-120 → ARK-01 → 新设计 10 艘
