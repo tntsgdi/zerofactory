@@ -20,7 +20,7 @@ const TRIES := 30                 # draws per offer before the market gives up o
 
 static var stats := {"made": 0, "discarded": 0, "reasons": {}}   # what the contract validator threw away
 # the ship types on the market and how often each comes up ([type, weight, reputation needed])
-const POOL := [["gr7", 4, 0], ["s09", 3, 0], ["pod", 3, 0], ["tug", 1, 0], ["h22", 3, 6], ["m14", 3, 8], ["med47", 3, 10], ["fr26", 3, 12], ["pt34", 3, 16], ["jd38", 3, 2], ["tw64", 3, 7], ["hb86", 3, 11], ["cl104", 3, 13], ["es112", 3, 15]]
+const POOL := [["gr7", 4, 0], ["s09", 3, 0], ["pod", 3, 0], ["tug", 1, 0], ["h22", 3, 6], ["m14", 3, 8], ["med47", 3, 10], ["fr26", 3, 12], ["pt34", 3, 16], ["jd38", 3, 2], ["tw64", 3, 7], ["hb86", 3, 11], ["cl104", 3, 13], ["es112", 3, 15], ["fl116", 3, 17]]
 
 
 # a type's card data: class letters, name, length, value (the Heron's here, the rest from their files)
@@ -171,7 +171,8 @@ static func offer(rng: RandomNumberGenerator, career: Dictionary, stars: int, us
 		o.time = snappedf(float(o.time) * FAST_TIME, 60.0)
 	var d := Variant.make(base, o)
 	# the estimate is the broker's, not the truth: within 8% either way
-	var value: float = float(d.value.total) * rng.randf_range(0.92, 1.08)
+	# a riskier contract pays a little more for the same ship (and takes a smaller share in fees)
+	var value: float = float(d.value.total) * rng.randf_range(0.92, 1.08) * (1.0 + 0.05 * (stars - 1))
 	o.value = snappedf(value, 100.0)
 	# riskier ships come cheaper: 12% of the value at one star, 8% at three
 	o.fee = snappedf(value * (0.12 - 0.02 * (stars - 1)), 500.0)

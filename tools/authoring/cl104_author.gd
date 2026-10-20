@@ -358,7 +358,7 @@ static func meta() -> Dictionary:
 			"knockable": ["NAV", "CON", "SWB"],
 			"drift": [],
 			"section_x": 64.0,
-			"slots": {"hidden_damage": {"plates": ["HL10-1", "HL10-2", "HL10-4", "HL10-6"]}},
+			"slots": {"hidden_damage": {"plates": ["HL10-1", "HL10-2", "HL10-4", "HL10-6"]}, "fire_system": {"x": 89.6, "y0": 6.5, "y1": 8.2, "base": ["HL9-0", 8.2], "room": "R", "port": [90.0, 6.57]}},
 			"mechanisms": true,
 		},
 		"procedures": {

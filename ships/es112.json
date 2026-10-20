@@ -48,7 +48,8 @@
 		"drift": [],
 		"section_x": 66.0,
 		"slots": {
-			"hidden_damage": {"plates":["HL7-2","HL7-4","HL7-6","HL2-5"]}
+			"hidden_damage": {"plates":["HL7-2","HL7-4","HL7-6","HL2-5"]},
+			"fire_system": {"base":["SD-2",3.6],"port":[37.8,2.07],"room":"S","x":37.4,"y0":2.0,"y1":3.6}
 		},
 		"mechanisms": true
 	},

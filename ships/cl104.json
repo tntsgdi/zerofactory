@@ -60,7 +60,8 @@
 		"drift": [],
 		"section_x": 64.0,
 		"slots": {
-			"hidden_damage": {"plates":["HL10-1","HL10-2","HL10-4","HL10-6"]}
+			"hidden_damage": {"plates":["HL10-1","HL10-2","HL10-4","HL10-6"]},
+			"fire_system": {"base":["HL9-0",8.2],"port":[90.0,6.57],"room":"R","x":89.6,"y0":6.5,"y1":8.2}
 		},
 		"mechanisms": true
 	},

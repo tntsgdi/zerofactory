@@ -235,10 +235,48 @@ func _prep() -> void:
 			_note("seal %s" % id)
 			_work(2.5)
 			return
+	# look-alike media: one branch at a time, the other branches' valves shut, its port drawn dry
+	if g.media != null and g.media.active():
+		var br: Dictionary = g.media.branches()
+		for b in br.keys():
+			var e: Dictionary = br[b]
+			if s.fluid(e.vol) <= 0.015:
+				continue
+			# the last branch's hose off before its valve closes and this one's opens
+			var stale := ""
+			for o in br.keys():
+				if o != b and s.hoses.has(br[o].port):
+					stale = br[o].port
+			if stale != "":
+				_h(stale)
+				_note("hose %s off" % stale)
+				_work(1.5)
+				return
+			var wrong := ""
+			for o in br.keys():
+				var vc: String = br[o].valve
+				if w.ctrls.has(vc) and w.ctrls[vc].state != (o == b):
+					wrong = vc
+					break
+			if wrong != "":
+				if _hidden(wrong):
+					break
+				_w(wrong)
+				_note("valve %s for branch %s" % [wrong, b])
+				_work(2.5)
+				return
+			if not s.hoses.has(e.port) and not _hidden(e.port):
+				_h(e.port)
+				_note("hose %s (branch %s)" % [e.port, b])
+				_work(2.5)
+				return
+			break
 	# every gas port on something under pressure gets a hose
 	for id in w.ctrls:
 		var c = w.ctrls[id]
 		if c.kind != "port" or s.hoses.has(id) or _hidden(id) or done_ops.has("hose " + id):
+			continue
+		if g.media != null and g.media.active() and g.media.branch_of_port(id) != "":
 			continue
 		if not w.ctrl_alive(c) or g.tools._ctrl_blocked(c) != "":
 			continue
@@ -365,7 +403,7 @@ func _prep() -> void:
 	# a room with things inside that need a hose or a switch opens once it is empty
 	for id in w.ctrls:
 		var c = w.ctrls[id]
-		if c.kind in ["port", "switch", "seal", "discharge"] and c.hidden_room != "" and w.room_hidden(c.hidden_room) and not s.hoses.has(id):
+		if c.kind in ["port", "switch", "seal", "discharge", "valve"] and c.hidden_room != "" and w.room_hidden(c.hidden_room) and not s.hoses.has(id):
 			if s.P(c.hidden_room) < 5.0 and _once("open " + c.hidden_room):
 				_open_room(c.hidden_room, "")
 				return

@@ -55,7 +55,8 @@
 		"drift": [],
 		"section_x": 14.0,
 		"slots": {
-			"hidden_damage": {"plates":["ROOF-1","ROOF-2","BELLY-2","BELLY-3"]}
+			"hidden_damage": {"plates":["ROOF-1","ROOF-2","BELLY-2","BELLY-3"]},
+			"fire_system": {"base":["BELLY-3",5.65],"port":[16.4,3.97],"room":"H","x":16.0,"y0":3.9,"y1":5.65}
 		},
 		"mechanisms": true
 	},

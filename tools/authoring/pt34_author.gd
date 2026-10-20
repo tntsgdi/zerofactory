@@ -791,6 +791,7 @@ static func meta() -> Dictionary:
 			"section_x": 96.0,
 			"slots": {
 				"hidden_damage": {"plates": plates},
+				"fire_system": {"x": 81.0, "y0": 4.6, "y1": IN_B, "base": ["PHB-2", IN_B], "room": "LOW", "port": [81.4, 4.67]},
 			},
 			"mechanisms": true,
 		},

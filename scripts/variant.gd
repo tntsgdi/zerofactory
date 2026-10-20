@@ -348,9 +348,15 @@ static func _scope(d: Dictionary, job: Dictionary) -> void:
 				if _cx(pd) > sx:
 					keep[pd.key] = true
 		"rescue":
+			# not a tank that still holds its fluid (it could only go to the hazard bay)
+			var holds := {}
+			var fv: Dictionary = d.get("fluids", {}).get("volumes", {})
+			for k in fv:
+				if str(fv[k].get("piece", "")) != "":
+					holds[str(fv[k].piece)] = true
 			var pool: Array = []
 			for pd in d.pieces:
-				if pd.get("cls", "") == "equip" and float(pd.get("value", 0.0)) >= 2000.0 and pd.get("tag", "") != "" and pd.get("hazard", "") == "":
+				if pd.get("cls", "") == "equip" and float(pd.get("value", 0.0)) >= 2000.0 and pd.get("tag", "") != "" and pd.get("hazard", "") == "" and not holds.has(pd.get("tag", "")):
 					pool.append(pd)
 			for i in mini(3, pool.size()):
 				var pd = pool.pop_at(rng.randi_range(0, pool.size() - 1))

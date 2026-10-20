@@ -18,6 +18,7 @@ var rails: Rails              # cargo held on lock rails (JD-38, RO-128)
 var atmos                     # air that isn't plain air: oxygen-rich halls (HB-86), scripts/atmos.gd
 var coldchain                 # cold holds that have to stay cold (CL-104), scripts/coldchain.gd
 var vault                     # vault doors on two lock circuits and a release (ES-112), scripts/vault.gd
+var media                     # look-alike media in crossed branches (FL-116), scripts/media.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -242,6 +243,10 @@ func _ready() -> void:
 	vault = preload("res://scripts/vault.gd").new()
 	add_child(vault)
 	vault.setup(self, ship)
+	media = preload("res://scripts/media.gd").new()
+	media.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(media)
+	media.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -386,6 +391,8 @@ func _ready() -> void:
 			atmos.load_state(data.atmos)
 		if data.has("cold"):
 			coldchain.load_state(data.cold)
+		if data.has("media"):
+			media.load_state(data.media)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1565,6 +1572,9 @@ func _check_done() -> void:
 func on_body_freed(b) -> void:
 	if bio != null:
 		bio.on_freed(b)
+	if media != null:
+		for q in b.pieces:
+			media.on_manifold(q)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -1737,6 +1747,8 @@ func on_cut_into(p, pos: Vector2) -> void:
 		rails.on_cut(p)
 	if atmos != null:
 		atmos.on_cut(p, pos)
+	if media != null:
+		media.on_manifold(p)
 	if p.cls != "equip":
 		return
 	var was_value: float = p.value * p.cond
@@ -2133,6 +2145,8 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "o2", c.id, "inst_o2", {"ctrl": c, "room": c.target})
 					"cold":
 						sys.measure(c.id, "temp", c.id, "inst_hold_temp", {"ctrl": c, "temp_fn": func(): return coldchain.room_temp(c.target)})
+					"sample":
+						sys.measure(c.id, "sample", c.id, "inst_sample", {"ctrl": c, "sample_fn": func(): return media.sample(c.id)})
 					"mag":
 						sys.measure(c.id, "field", c.id, "inst_field", {"ctrl": c, "field_fn": func(): return mech.field(c.target)})
 					"heat":
@@ -2231,6 +2245,8 @@ func restore_reading(rd: Dictionary) -> void:
 					extra.field_fn = func(): return mech.field(c.target)
 			"bio", "o2":
 				extra.room = c.target
+			"sample":
+				extra.sample_fn = func(): return media.sample(c.id)
 	var r := {"key": key, "kind": rd.kind, "at": rd.at, "inst": rd.inst, "t": rd.t, "val": rd.val, "text": rd.text, "ver": int(rd.ver), "vk": ""}
 	r.merge(extra, true)
 	sys.readings[key] = r

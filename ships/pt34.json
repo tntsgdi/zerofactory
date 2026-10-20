@@ -85,7 +85,8 @@
 		"drift": ["STORE-1","STORE-2","LOCKER-1","LOCKER-2"],
 		"section_x": 96.0,
 		"slots": {
-			"hidden_damage": {"plates":["AR3-2","AR3-4","AR3-6","AR3-8","AR3-10","AR3-12"]}
+			"hidden_damage": {"plates":["AR3-2","AR3-4","AR3-6","AR3-8","AR3-10","AR3-12"]},
+			"fire_system": {"base":["PHB-2",6.3],"port":[81.4,4.67],"room":"LOW","x":81.0,"y0":4.6,"y1":6.3}
 		},
 		"mechanisms": true
 	},

@@ -36,7 +36,8 @@ func _initialize() -> void:
 			var e: Dictionary = by.get(s, {"n": 0, "time": 0.0, "value": 0.0, "fee": 0.0, "per_min": 0.0, "full": 0})
 			e.n += 1
 			var pm: float = (float(o.value) - float(o.fee)) / (float(o.time) / 60.0)
-			if o.scope == "full" and int(o.stars) == 1:
+			# a "fast" job is meant to be shorter than the type's standard time: not one of these
+			if o.scope == "full" and int(o.stars) == 1 and o.get("goal", "") != "fast":
 				e.full += 1
 				e.time += float(o.time)
 				e.value += float(o.value)

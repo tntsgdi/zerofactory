@@ -158,6 +158,7 @@ static func save(g) -> void:
 		"rails": g.rails.save_state() if g.rails != null and g.rails.active() else {},
 		"atmos": g.atmos.save_state() if g.atmos != null and g.atmos.active() else {},
 		"cold": g.coldchain.save_state() if g.coldchain != null and g.coldchain.active() else {},
+		"media": g.media.save_state() if g.media != null and g.media.active() else {},
 		"bio": g.bio.save_state() if g.bio != null else {},
 		"ore": g.ore.save_state() if g.ore != null else {},
 		"cryo": g.cryo.save_state() if g.cryo != null else {},

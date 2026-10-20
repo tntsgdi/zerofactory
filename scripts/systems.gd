@@ -1107,6 +1107,9 @@ func _current(r: Dictionary) -> Array:
 		"o2":
 			var ov: float = o2_frac(r.get("room", ""))
 			return [ov, "%d %% O₂" % int(round(ov * 100.0)), 0, "gas"]
+		"sample":
+			var sv: Array = r.get("sample_fn").call()
+			return [sv[0], sv[1], 0, "fluid"]
 	return [0.0, "", 0, ""]
 
 
@@ -1126,5 +1129,7 @@ func stale(r: Dictionary) -> bool:
 		"bio":
 			return absf(cur[0] - r.val) > maxf(0.05, absf(r.val) * 0.25)
 		"o2":
+			return absf(cur[0] - r.val) > 0.03
+		"sample":
 			return absf(cur[0] - r.val) > 0.03
 	return false
