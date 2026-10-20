@@ -50,7 +50,9 @@ static func build(world) -> void:
 	_bridge()
 	_lift()
 	_engines()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -256,6 +258,101 @@ static func _engines() -> void:
 		K.bolt(nz, en, 133.0, y1 - 1.4)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a drone carrier carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.2, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1)
+	return p
+
+
+# equipment standing on a sloping floor (inner edge i), h tall at its high end
+static func _floor(tag: String, art: String, x0: float, x1: float, h: float, i: int, opts: Dictionary):
+	var ya := _iy(i, x0)
+	var yb := _iy(i, x1)
+	var top := minf(ya, yb) - h
+	var p = K.equip(tag, art, K.rect(x0, top, x1, maxf(ya, yb)), opts, K.mp([Vector2(x0, top), Vector2(x1, top), Vector2(x1, yb), Vector2(x0, ya)]))
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) + 0.2, ["hull"]), x, _iy(i, x))
+	return p
+
+
+# equipment bolted by its side to a wall at x
+static func _wall(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, wall, wx: float, opts: Dictionary):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	K.bolt(p, wall, wx, y0 + 0.5)
+	K.bolt(p, wall, wx, y1 - 0.5)
+	return p
+
+
+const DIAG_AT := [3.0, 5.2, 3.0]   # each upper bay's diagnostic unit (bay two's clear of the roof hatch)
+
+
+static func _fitout() -> void:
+	# the forward bay: the drone control electronics and the air under the roof, the
+	# rotor blade rack, a spare drone and a parts rack on the floor
+	_hang("DRONE-CTL", "nav_rack", 11.0, 14.6, -4.4, 1, {"mass": 0.4, "value": 8000.0, "fragile": 0.5, "room": "F", "name_key": "p_data_link"})
+	_hang("AHU-F", "env", 18.2, 21.6, -6.0, 1, {"mass": 0.4, "value": 4500.0, "fragile": 0.4, "room": "F", "name_key": "p_ahu"})
+	_hang("BLADES", "locker", 22.6, 25.4, -7.0, 2, {"mass": 0.3, "value": 3500.0, "fragile": 0.35, "room": "F", "name_key": "p_rotor_spares"})
+	_floor("DR-SPARE", "uav", 12.6, 20.6, 4.4, 10, {"mass": 2.0, "value": 9000.0, "fragile": 0.35, "room": "F", "name_key": "p_spare_drone"})
+	_floor("PARTS-F", "locker", 21.2, 25.6, 2.6, 10, {"mass": 0.6, "value": 3000.0, "fragile": 0.3, "room": "F", "name_key": "p_parts_rack"})
+	# the workshop: over each upper bay a tool balancer and a diagnostic unit off the
+	# roof; between the bays tool carts on the deck and parts bins on the shelf
+	for c in 3:
+		var x0: float = BAYS[c]
+		var dx: float = DIAG_AT[c]
+		_hang("TOOL-%d" % (c + 1), "arm", x0 + 0.6, x0 + 2.6, -8.4, 2, {"mass": 0.2, "value": 3000.0, "fragile": 0.4, "room": "W", "name_key": "p_hoist"})
+		_hang("DIAG-%d" % (c + 1), "screen", x0 + dx, x0 + dx + 2.4, -8.0, 2, {"mass": 0.15, "value": 5000.0, "fragile": 0.5, "room": "W", "name_key": "p_diag"})
+	for e in [["CART-1", 44.6, 46.4], ["CART-2", 58.2, 59.9]]:
+		_stand(e[0], "cabinet", e[1], 7.6, e[2], WDECK, by_tag["WDECK"], {"mass": 0.3, "value": 2500.0, "fragile": 0.3, "room": "W", "name_key": "p_tool_cart"})
+	for e in [["BINS-1", 44.6, 46.4], ["BINS-2", 58.2, 59.9]]:
+		_stand(e[0], "locker", e[1], -2.2, e[2], SHELF, by_tag["SHELF"], {"mass": 0.25, "value": 2000.0, "fragile": 0.3, "room": "W", "name_key": "p_parts_rack"})
+	# the hangar: the launch console on the bulkhead, the recovery arm and a camera off
+	# the roof, the service cart on the floor, the spare pack rack on the stern wall
+	_wall("LAUNCH-CTL", "console", A3 + 0.4, -2.0, 94.6, 2.0, by_tag["A3"], A3 + 0.4, {"mass": 0.3, "value": 6000.0, "fragile": 0.5, "room": "H", "name_key": "p_launch_ctl"})
+	_hang("ARM-H", "arm", 104.4, 107.2, -6.0, 5, {"mass": 0.9, "value": 8000.0, "fragile": 0.35, "room": "H", "name_key": "p_arm_base"})
+	_hang("CAM-H", "insp", 95.6, 97.4, -7.6, 4, {"mass": 0.05, "value": 2500.0, "fragile": 0.6, "room": "H", "name_key": "p_cargo_mon"})
+	_hang("VENT-H", "env", 116.6, 120.0, -5.0, 6, {"mass": 0.5, "value": 4000.0, "fragile": 0.4, "room": "H", "name_key": "p_hvac"})
+	_hang("TOOLS-H", "locker", 100.6, 103.6, -6.0, 4, {"mass": 0.4, "value": 2500.0, "fragile": 0.3, "room": "H", "name_key": "p_locker"})
+	_wall("RESCUE-L", "suit", A3 + 0.4, 4.0, 94.0, 10.0, by_tag["A3"], A3 + 0.4, {"mass": 0.3, "value": 3000.0, "fragile": 0.3, "room": "H", "name_key": "p_suit_locker"})
+	_hang("HOIST-F", "arm", 26.4, 28.8, -3.0, 2, {"mass": 0.4, "value": 3000.0, "fragile": 0.35, "room": "F", "name_key": "p_hoist"})
+	_floor("SVC-CART", "pump", 116.6, 120.6, 2.0, 8, {"mass": 0.6, "value": 3500.0, "fragile": 0.35, "room": "H", "name_key": "p_svc_pump"})
+	_wall("PACKS", "cabinet", 120.6, -2.0, 123.55, 3.0, K.at(123.8, 0.5, ["hull"]), 123.55, {"mass": 0.8, "value": 4800.0, "fragile": 0.4, "room": "H", "name_key": "p_pack_rack"})
+	# the bridge: the drone situation screen off the roof, comms and air on the floor
+	_stand("DRONE-MAP", "screen", 32.2, -17.2, 35.0, -16.0, by_tag["BR-R2"], {"mass": 0.1, "value": 4500.0, "fragile": 0.5, "room": "B", "name_key": "p_chart_display"}, true)
+	_stand("COMMS-B", "nav", 40.0, -12.4, 42.4, -10.2, K.at(41.2, -9.95, ["hull"]), {"mass": 0.15, "value": 4500.0, "fragile": 0.5, "room": "B", "name_key": "p_comms"})
+	_stand("AHU-B", "env", 43.0, -11.4, 45.0, -10.2, K.at(44.0, -9.95, ["hull"]), {"mass": 0.15, "value": 3000.0, "fragile": 0.4, "room": "B", "name_key": "p_ahu"})
+
+
+static func _fit_lines() -> void:
+	K.line("f1", "cable", "power", "LAMP-F", Vector2(26.2, _iy(2, 26.0) + 0.16), "AHU-F", Vector2(21.6, -6.6), [Vector2(26.2, -6.6)])
+	K.line("f2", "cable", "power", "AHU-F", Vector2(18.2, -6.4), "DRONE-CTL", Vector2(14.6, -6.4))
+	K.line("f3", "cable", "power", "LAMP-W1", Vector2(43.8, _iy(2, 44.0) + 0.16), "DIAG-1", Vector2(BAYS[0] + DIAG_AT[0] + 2.4, -9.0), [Vector2(43.8, -9.0)])
+	K.line("f4", "cable", "power", "DIAG-1", Vector2(BAYS[0] + DIAG_AT[0] + 2.4, -8.2), "DIAG-2", Vector2(BAYS[1] + DIAG_AT[1], -8.2))
+	K.line("f5", "cable", "power", "DIAG-2", Vector2(BAYS[1] + DIAG_AT[1] + 2.4, -8.2), "DIAG-3", Vector2(BAYS[2] + DIAG_AT[2], -8.2))
+	for c in 3:
+		var x0: float = BAYS[c]
+		K.line("ft%d" % (c + 1), "cable", "power", "DIAG-%d" % (c + 1), Vector2(x0 + DIAG_AT[c], -9.2), "TOOL-%d" % (c + 1), Vector2(x0 + 2.6, -9.2))
+	K.line("f6", "cable", "power", "LAMP-H", Vector2(99.8, _iy(4, 100.0) + 0.16), "CAM-H", Vector2(97.4, -8.0), [Vector2(99.8, -8.0)])
+	K.line("f7", "cable", "power", "CAM-H", Vector2(95.6, -8.0), "LAUNCH-CTL", Vector2(93.6, -2.0), [Vector2(93.6, -8.0)])
+	K.line("f8", "cable", "power", "LAMP-H", Vector2(100.2, _iy(4, 100.0) + 0.16), "ARM-H", Vector2(104.4, -7.0), [Vector2(100.2, -7.0)])
+	K.line("f12", "cable", "power", "ARM-H", Vector2(107.2, -6.4), "VENT-H", Vector2(116.6, -6.4))
+	K.line("f13", "cable", "power", "LAMP-F", Vector2(25.6, _iy(2, 26.0) + 0.16), "HOIST-F", Vector2(26.4, -5.0), [Vector2(25.6, -5.0)])
+	K.line("f9", "cable", "power", "LAMP-B", Vector2(28.2, -17.04), "DRONE-MAP", Vector2(32.2, -16.6), [Vector2(28.2, -16.6)])
+	K.line("f10", "cable", "power", "DISPATCH", Vector2(39.4, -11.4), "COMMS-B", Vector2(40.0, -11.4))
+	K.line("f11", "cable", "power", "COMMS-B", Vector2(42.4, -11.0), "AHU-B", Vector2(43.0, -11.0))
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -343,7 +440,7 @@ static func meta() -> Dictionary:
 		"title": ["CV-138「行舟」无人机维护母船 · 138 m", "CV-138 WAYFARER · DRONE TENDER · 138 m"],
 		"contract": "CV-138",
 		"length": 138.0,
-		"value": {"total": 248700.0, "metal": 52000.0},
+		"value": {"total": 359000.0, "metal": 52000.0},
 		"clamps": [[40.0, 13.0], [70.0, 13.0], [100.0, 13.0]],
 		"room_names": {"F": "room_cvF", "W": "room_cvW", "P": "room_cvP", "H": "room_cvH", "B": "room_cvB"},
 		"gas": {"rooms": {"F": 101.0, "W": 101.0, "P": 101.0, "H": 101.0, "B": 101.0},
@@ -371,7 +468,7 @@ static func meta() -> Dictionary:
 			"CHG-1": "CHG 1", "CHG-2": "CHG 2", "CHG-3": "CHG 3", "CHG-4": "CHG 4", "CHG-5": "CHG 5", "CHG-6": "CHG 6", "CHG-7": "CHG 7"},
 		"hints": {},
 		"market": {
-			"class": "CV", "name": ["行舟级无人机维护母船", "WAYFARER-CLASS DRONE TENDER"], "time": 55.0,
+			"class": "CV", "name": ["行舟级无人机维护母船", "WAYFARER-CLASS DRONE TENDER"], "time": 63.0,
 			"rooms": {"F": [0.2, 40.0, 101.0], "W": [0.2, 40.0, 101.0], "P": [0.2, 40.0, 101.0], "H": [0.2, 40.0, 101.0], "B": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {"lift_hyd": [0.15, 0.3]}, "fill": {"lift_line": "lift_hyd"},
