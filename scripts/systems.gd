@@ -45,6 +45,7 @@ var link_sig := {}                # room -> signature of its openings
 var vol_ver := {}                 # volume id -> version (bumped when its openings change)
 var topology_dirty := true
 var job_id := -1
+var job_t0 := 0
 var job_result = null
 var job_mutex := Mutex.new()
 var gas0 := 0.0
@@ -196,8 +197,10 @@ func _fit_grid(ship: Dictionary) -> void:
 		var bot := maxf(GY0 + GH * CELL, ceilf(y1) + 1.0)
 		GY0 = top
 		GH = roundi((bot - top) / CELL)
-	# a big ship goes to 0.2 m cells, a very big one (a sail) to 0.4 m
-	while GW * GH > BIG_CELLS and CELL < 0.4:
+	# a big ship goes to 0.2 m cells, a very big one (a sail) to 0.4 m; a ship file may
+	# allow coarser still ("gas_cell_max": a station-sized hull whose plates are thick enough)
+	var cmax: float = float(ship.get("gas_cell_max", 0.4))
+	while GW * GH > BIG_CELLS and CELL < cmax:
 		CELL *= 2.0
 		GW = ceili(GW / 2.0)
 		GH = ceili(GH / 2.0)
@@ -356,16 +359,23 @@ func _physics_process(dt: float) -> void:
 	time += dt
 	if topology_dirty and job_id < 0:
 		topology_dirty = false
-		job_id = WorkerThreadPool.add_task(_grid_job.bind(_barrier_polys()))
+		var tb := Time.get_ticks_usec()
+		var polys := _barrier_polys()
+		World._p("barrier_polys", tb)
+		job_t0 = Time.get_ticks_usec()
+		job_id = WorkerThreadPool.add_task(_grid_job.bind(polys))
 	if job_id >= 0 and WorkerThreadPool.is_task_completed(job_id):
 		WorkerThreadPool.wait_for_task_completion(job_id)
 		job_id = -1
+		World._p("grid_job", job_t0)
 		job_mutex.lock()
 		var r = job_result
 		job_result = null
 		job_mutex.unlock()
 		if r != null:
+			var ta := Time.get_ticks_usec()
 			_apply_links(r)
+			World._p("apply_links", ta)
 	_step_gas(dt)
 	_step_elec(dt)
 	_step_fluids(dt)

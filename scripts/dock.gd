@@ -20,8 +20,8 @@ const BAY := Vector2(-5.0, -6.0)
 const STANDARD := 50.0
 const EXTENDED := 88.0
 # the berth's lengths a career can buy, each needing the one before
-# (fleet expansion 2026-10-19: PT-34 and the R2 fleet are 96-138 m)
-const TIERS := [[50.0, ""], [88.0, "berth88"], [120.0, "berth120"], [200.0, "berth200"]]
+# (fleet expansion 2026-10-19: PT-34 and the R2 fleet are 96-138 m; ARK-01, roadmap 6.1, ~600 m)
+const TIERS := [[50.0, ""], [88.0, "berth88"], [120.0, "berth120"], [200.0, "berth200"], [620.0, "berth620"]]
 
 
 # the longest berth a career has paid for (m)
@@ -192,6 +192,9 @@ var static_node: Node2D
 var clamp_node: Node2D
 var _zh := Txt.zh
 var _clamp_drawn: Array = []
+var _clamp_n := -1
+var _clamp_last = null
+var _clamp_js: Array = []
 var _was_busy := true
 var mouth_nodes := {}
 var _mouth_drawn := {}
@@ -450,10 +453,17 @@ func _process(dt: float) -> void:
 	for g in field_glow:
 		g[1] -= dt * 2.5
 	field_glow = field_glow.filter(func(g): return g[1] > 0.0)
+	# the clamp joints picked out once (a ship's joints only ever die, or come back whole
+	# with a load): scanning every joint each frame cost a big ship milliseconds
+	var jlast = world.joints.back() if not world.joints.is_empty() else null
+	if world.joints.size() != _clamp_n or jlast != _clamp_last:
+		_clamp_n = world.joints.size()
+		_clamp_last = jlast
+		_clamp_js = world.joints.filter(func(j): return j.type == "clamp")
 	for i in clamps.size():
 		var alive := false
-		for j in world.joints:
-			if j.alive and j.type == "clamp" and absf(j.pos.x / Geom.M - clamps[i].x) < 0.3:
+		for j in _clamp_js:
+			if j.alive and absf(j.pos.x / Geom.M - clamps[i].x) < 0.3:
 				alive = true
 		clamp_t[i] = move_toward(clamp_t[i], 0.0 if alive else 1.0, dt / 0.8)
 	if Txt.zh != _zh:
@@ -1165,11 +1175,12 @@ func _trough_live() -> void:
 		draw_texture_rect(game.fx.glow_tex, Rect2(Vector2(suck_x - 1.6 * M, y0 - sh * 0.8), Vector2(3.2 * M, sh)), false, Pal.heat(0.22 * suck_glow, 1.5))
 	# chevrons, belt slats and rail arrows: one batched call each (they were
 	# ~200 calls a frame)
+	var vis := _vis_x()
 	var fall := fposmod(t * 0.9, 1.0)
 	var chev := PackedVector2Array()
 	var chev_c := PackedColorArray()
-	var cx := x0 + 2.25 * M
-	while cx < x1 - 1.0 * M:
+	var cx := x0 + 2.25 * M + maxf(0.0, floorf((vis.x - x0) / (3.0 * M))) * 3.0 * M
+	while cx < minf(x1 - 1.0 * M, vis.y):
 		if absf(cx - mx) > 2.6 * M:
 			for j in 2:
 				var u := fposmod(fall + j * 0.5, 1.0)
@@ -1182,8 +1193,8 @@ func _trough_live() -> void:
 		draw_multiline_colors(chev, chev_c, 1.4, true)
 	var ph := fposmod(t * CONVEY * M, 24.0)
 	var slats := PackedVector2Array()
-	var x := x0 + 6.0
-	while x < x1 - 6.0:
+	var x := x0 + 6.0 + maxf(0.0, floorf((vis.x - x0) / 24.0) - 1.0) * 24.0
+	while x < minf(x1 - 6.0, vis.y + 24.0):
 		var px := x + (ph if x < mx else -ph)
 		if px > x0 + 2.0 and px < x1 - 2.0 and absf(px - mx) > 1.4 * M:
 			slats.append_array([Vector2(px, y0 + 8), Vector2(px, y1 - 6)])
@@ -1192,8 +1203,8 @@ func _trough_live() -> void:
 		draw_multiline(slats, Pal.ink(0.16), 2.0)
 	# arrows on the rail, every few metres, pointing to the furnace
 	var arrows := PackedVector2Array()
-	var ax := x0 + 1.5 * M
-	while ax < x1 - 1.0 * M:
+	var ax := x0 + 1.5 * M + maxf(0.0, floorf((vis.x - x0) / (3.0 * M))) * 3.0 * M
+	while ax < minf(x1 - 1.0 * M, vis.y):
 		if absf(ax - mx) > 2.6 * M:
 			var d := 1.0 if ax < mx else -1.0
 			var ay := y0 + 4.0
@@ -1311,6 +1322,19 @@ func _draw_trough(ci: CanvasItem) -> void:
 		x += 40.0
 
 
+# the strip of the berth the camera sees (canvas pixels, with a margin): the lamps,
+# belt slats and arrows along a 620 m berth were ~600 calls a frame drawn whole
+func _vis_x() -> Vector2:
+	var vp := get_viewport()
+	if vp == null:
+		return Vector2(-INF, INF)
+	var inv := get_global_transform_with_canvas().affine_inverse()
+	var r := vp.get_visible_rect()
+	var a: Vector2 = inv * r.position
+	var b: Vector2 = inv * r.end
+	return Vector2(minf(a.x, b.x) - 80.0, maxf(a.x, b.x) + 80.0)
+
+
 const FLOODS := [9.5, 19.0]      # m along the boom: lamps that light the ship from above
 
 
@@ -1328,14 +1352,15 @@ func _draw_lights() -> void:
 		add_node.draw_circle(hp, 3.0, Pal.ink(0.95, 2.0))
 	# marker lights along the deck edge and under the boom, chasing slowly toward the furnace
 	var mx: float = zpos("metal").x / M
-	var x := TOWER_X + 1.0
-	while x < FLOOR_X1 - 0.5:
+	var vis := _vis_x() / M
+	var x := maxf(TOWER_X + 1.0, TOWER_X + 1.0 + floorf((vis.x - TOWER_X - 1.0) / 2.0) * 2.0)
+	while x < minf(FLOOR_X1 - 0.5, vis.y):
 		var ph := fposmod(t * 0.8 - absf(x - mx) * 0.08, 1.0)
 		var a := 0.15 + 0.55 * pow(1.0 - ph, 6.0)
 		add_node.draw_circle(Vector2(x, FLOOR_Y) * M + Vector2(0, -2), 2.2, Pal.heat(a, 1.6))
 		x += 2.0
-	x = TOWER_X + 1.0
-	while x < ARM_X1 - 0.5:
+	x = maxf(TOWER_X + 1.0, TOWER_X + 1.0 + floorf((vis.x - TOWER_X - 1.0) / 3.0) * 3.0)
+	while x < minf(ARM_X1 - 0.5, vis.y):
 		var a2 := 0.12 + 0.12 * sin(t * 1.5 + x)
 		add_node.draw_circle(Vector2(x, RAIL_Y) * M + Vector2(0, 2), 1.8, Pal.ink(a2, 1.6))
 		x += 3.0

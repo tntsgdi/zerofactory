@@ -41,6 +41,10 @@ const PASSES := ["fill", "line", "art", "joint"]
 const ART_FADE := Vector2(0.6, 0.75)    # zoom: gone below .x, whole above .y
 var _pass_roots := {}
 var _chunk_lists := {}          # strip index -> its pieces
+var _chunk_joints := {}         # strip index -> the live joints its pieces draw
+var _chunk_sig := {}            # strip index -> a hash of what its pieces show (spoilt, fouled)
+var _full_redraw := true        # every strip redraws at the next sync
+var _dirty_near: Array = []     # areas (px) whose strips redraw at the next sync
 var cover_layer: Node2D
 var heat_layer: Node2D
 var light_layer: Node2D
@@ -68,6 +72,11 @@ static func acc(key: String, t0: int) -> void:
 static func _p(key: String, t0: int) -> void:
 	var d := Time.get_ticks_usec() - t0
 	prof[key] = maxi(prof.get(key, 0), d)
+
+
+# a running total (for what's spread over many calls a frame, like the chunks' draws)
+static func _ps(key: String, t0: int) -> void:
+	prof[key] = prof.get(key, 0) + Time.get_ticks_usec() - t0
 
 
 func _init() -> void:
@@ -174,8 +183,9 @@ func finalize(metal_value: float = 12000.0) -> void:
 	metal_price = metal_value / maxf(1.0, structural_mass)
 	for id in order:
 		rebuild_cols(pieces[id])
+	var shells := _room_shells()
 	for n in rooms:
-		rooms[n].shell0 = _room_shell(rooms[n])
+		rooms[n].shell0 = shells[n]
 	relink()
 	redraw_all(true)
 
@@ -192,6 +202,25 @@ func _room_shell(r) -> float:
 		if pb.intersects(bb):
 			s += Geom.area(p.poly)
 	return s
+
+
+# every room's at once: each piece's box and area worked out once, not once a room
+func _room_shells() -> Dictionary:
+	var boxes := []
+	for id in order:
+		var p = pieces[id]
+		if p.gone or p.body != null or not p.barrier:
+			continue
+		boxes.append([Geom.bbox(p.poly), Geom.area(p.poly)])
+	var out := {}
+	for n in rooms:
+		var bb: Rect2 = rooms[n].bbox.grow(30.0)
+		var sum := 0.0
+		for b in boxes:
+			if (b[0] as Rect2).intersects(bb):
+				sum += b[1]
+		out[n] = sum
+	return out
 
 
 func tag(t: String):
@@ -520,7 +549,7 @@ func make_body(group: Array, from_body):
 	# a wall that floats away leaves a hole, however it came loose
 	if group.any(func(q): return q.barrier) and game != null and game.sys != null:
 		game.sys.topology_dirty = true
-	redraw_all(true)
+	redraw_near(group, true)
 	piece_freed.emit(b)
 	return b
 
@@ -642,7 +671,7 @@ func remove_piece(p) -> void:
 	dirty_links = true
 	if p.barrier and game != null and game.sys != null:
 		game.sys.topology_dirty = true
-	redraw_all(true)
+	redraw_near([p], true)
 
 
 func remove_body(b) -> void:
@@ -656,7 +685,7 @@ func kill_joint(j) -> void:
 		return
 	j.alive = false
 	dirty_links = true
-	redraw_all()
+	redraw_near([pieces.get(j.a), pieces.get(j.b)])
 
 
 func kill_line(l, at: Vector2 = Vector2.INF) -> void:
@@ -665,7 +694,7 @@ func kill_line(l, at: Vector2 = Vector2.INF) -> void:
 	l.alive = false
 	l.cut_at = at
 	dirty_links = true
-	redraw_all()
+	redraw_near([pieces.get(l.a), pieces.get(l.b)])
 
 
 # ---------------------------------------------------------------- collision
@@ -724,6 +753,7 @@ func _process(dt: float) -> void:
 			var was: float = p.open_t
 			p.open_t = move_toward(p.open_t, tgt, dt / 0.55)
 			moving = true
+			_dirty_near.append(Geom.bbox(p.poly).grow(Geom.M * 2.0))
 			if (was <= 0.5) != (p.open_t <= 0.5):
 				dirty_cols[p.id] = true
 				if game != null and game.sys != null:
@@ -772,8 +802,22 @@ func redraw_all(back: bool = false) -> void:
 	# Structural edits may reassign cable endpoints to newly cut fragments.
 	electrical_links_version += 1
 	dirty_draw = true
+	_full_redraw = true
 	if back:
 		dirty_back = true
+
+
+# A change in one place: only the strips with something there redraw (a full redraw
+# of a 600 m ship is ~50 ms; one cut shouldn't hitch the frame). A strip whose set
+# of pieces changed redraws anyway.
+func redraw_near(pcs: Array, back: bool = false) -> void:
+	electrical_links_version += 1
+	dirty_draw = true
+	if back:
+		dirty_back = true
+	for q in pcs:
+		if q != null and q.poly.size() > 2:
+			_dirty_near.append(Geom.bbox(q.poly).grow(Geom.M))
 
 
 func reveal(room: String, from: Vector2) -> void:
@@ -966,7 +1010,7 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 	dirty_links = true
 	if p.barrier and game != null and game.sys != null:
 		game.sys.topology_dirty = true
-	redraw_all()
+	redraw_near(all_parts)
 	return res
 
 
@@ -1174,7 +1218,7 @@ func _scars(ci: CanvasItem, poly: PackedVector2Array) -> void:
 	ci.draw_circle(c, 1.5, Pal.ink(0.25))
 
 
-func draw_joints_of(ci: CanvasItem, list: Array) -> void:
+func draw_joints_of(ci: CanvasItem, list: Array, js = null) -> void:
 	var ids := {}
 	for p in list:
 		ids[p.id] = p
@@ -1183,7 +1227,7 @@ func draw_joints_of(ci: CanvasItem, list: Array) -> void:
 	var welds := PackedVector2Array()
 	var seams := PackedVector2Array()
 	var cracks := PackedVector2Array()
-	for j in joints:
+	for j in (joints if js == null else js):
 		if not j.alive or not ids.has(j.a):
 			continue
 		var pa = ids[j.a]
@@ -1266,12 +1310,16 @@ func _draw_pieces() -> void:
 
 func _draw_pieces_inner() -> void:
 	# the layer itself draws nothing: its strips do
+	_full_redraw = true
 	_sync_chunks()
 
 
 # sort the attached pieces into their strips and have every strip redraw
 func _sync_chunks() -> void:
 	var lists := {}
+	var strip := {}
+	var near := {}
+	var sig := {}
 	for id in order:
 		var p = pieces[id]
 		if p.gone or p.body != null:
@@ -1279,11 +1327,35 @@ func _sync_chunks() -> void:
 		# a closed room is under an opaque cover: what's in it isn't drawn until it opens
 		if p.room != "" and rooms.has(p.room) and not rooms[p.room].revealed:
 			continue
-		var i := int(floor(Geom.bbox(p.poly).get_center().x / CHUNK))
+		var bb := Geom.bbox(p.poly)
+		var i := int(floor(bb.get_center().x / CHUNK))
 		if not lists.has(i):
 			lists[i] = []
 		lists[i].append(p)
+		strip[p.id] = i
+		sig[i] = (int(sig.get(i, 7)) * 31 + p.id * 4 + (2 if p.intact else 0) + (1 if p.contam else 0)) & 0x3fffffff
+		if not _full_redraw and not near.has(i):
+			for r in _dirty_near:
+				if r.intersects(bb):
+					near[i] = true
+					break
+	# each strip's joints gathered once (drawing them used to walk every joint in
+	# the ship for every strip)
+	var js := {}
+	for j in joints:
+		if j.alive and strip.has(j.a):
+			var i: int = strip[j.a]
+			if not js.has(i):
+				js[i] = []
+			js[i].append(j)
+	var old := _chunk_lists
+	var old_sig := _chunk_sig
 	_chunk_lists = lists
+	_chunk_sig = sig
+	_chunk_joints = js
+	var full := _full_redraw
+	_full_redraw = false
+	_dirty_near.clear()
 	if _pass_roots.is_empty():
 		for part in PASSES:
 			var root := Node2D.new()
@@ -1298,27 +1370,38 @@ func _sync_chunks() -> void:
 				_pass_roots[part].add_child(n)
 				_chunks[key] = n
 	for key in _chunks:
-		_chunks[key].queue_redraw()
+		var i: int = key[1]
+		if full or near.has(i) or old_sig.get(i, -1) != sig.get(i, -1) or old.get(i, []) != lists.get(i, []):
+			_chunks[key].queue_redraw()
 
 
 func _draw_chunk(part: String, i: int) -> void:
 	var list: Array = _chunk_lists.get(i, [])
 	if list.is_empty():
 		return
+	var t0 := Time.get_ticks_usec()
 	var ci: CanvasItem = _chunks[[part, i]]
 	if part == "joint":
-		draw_joints_of(ci, list)
+		draw_joints_of(ci, list, _chunk_joints.get(i, []))
 	else:
 		draw_pieces(ci, list, part)
+	_ps("chunks", t0)
 
 
 func _draw_back() -> void:
+	var t0 := Time.get_ticks_usec()
+	_draw_back_rooms()
+	_ps("back", t0)
+
+
+func _draw_back_rooms() -> void:
+	var shells := _room_shells()
 	for n in rooms:
 		var r = rooms[n]
 		var poly: PackedVector2Array = r.poly
 		var k := 1.0
 		if r.has("shell0") and r.shell0 > 0.0:
-			k = clampf(_room_shell(r) / r.shell0, 0.0, 1.0)
+			k = clampf(shells[n] / r.shell0, 0.0, 1.0)
 			k = pow(k, 0.6)
 		if k < 0.02:
 			continue
