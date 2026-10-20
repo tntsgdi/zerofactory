@@ -93,6 +93,13 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				L(ci, Vector2(w * 0.75, 1), Vector2(w * 0.75, h - 1), 0.2)
 				for i in int(h / 14.0):
 					L(ci, Vector2(w * 0.25, 7 + i * 14), Vector2(w * 0.75, 14 + i * 14), 0.15)
+		"vault":
+			# a radial vault door seen edge-on: its locking bolts down both faces, the hinge
+			for i in 5:
+				var y := h * (0.1 + i * 0.2)
+				L(ci, Vector2(0, y), Vector2(w * 0.3, y), 0.5, 2.0)
+				L(ci, Vector2(w * 0.7, y), Vector2(w, y), 0.5, 2.0)
+			L(ci, Vector2(w * 0.5, h * 0.04), Vector2(w * 0.5, h * 0.96), 0.3)
 		"glass":
 			# a pane of precision glazing: two glints across it, its frame
 			L(ci, Vector2(w * 0.12, h * 0.85), Vector2(w * 0.3, h * 0.15), 0.35)

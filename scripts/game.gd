@@ -17,6 +17,7 @@ var munitions: Munitions      # rounds that cook off, knock off and set each oth
 var rails: Rails              # cargo held on lock rails (JD-38, RO-128)
 var atmos                     # air that isn't plain air: oxygen-rich halls (HB-86), scripts/atmos.gd
 var coldchain                 # cold holds that have to stay cold (CL-104), scripts/coldchain.gd
+var vault                     # vault doors on two lock circuits and a release (ES-112), scripts/vault.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -238,6 +239,9 @@ func _ready() -> void:
 	coldchain.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(coldchain)
 	coldchain.setup(self, ship)
+	vault = preload("res://scripts/vault.gd").new()
+	add_child(vault)
+	vault.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -2575,6 +2579,8 @@ func _operate(c, at: Vector2) -> void:
 				say("mag_flooded", at, c.id)
 				log_op("flood")
 		"switch":
+			if vault != null and vault.blocks_switch(c, at):
+				return
 			c.state = not c.state
 			sys.set_switch(c.id, c.state)
 			say("sw_on" if c.state else "sw_off", at, c.id)
@@ -2617,6 +2623,8 @@ func _operate(c, at: Vector2) -> void:
 			say("discharge_on" if c.state else "discharge_off", at)
 			sfx.play("plug")
 		"door":
+			if vault != null and vault.operate(c, at):
+				return
 			if Ship.ctrl_cfg(ship, c.id).get("stuck", false):
 				say("door_stuck", at, c.id)
 				sfx.play("deny")
