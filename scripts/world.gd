@@ -96,6 +96,43 @@ func _init() -> void:
 	heat_layer = _layer(4, true, _draw_heat_static)
 
 
+# the cut-up equipment still on the ship: piece id -> a node whose own drawing (the
+# part's outline, filled) only clips its child, the equipment's old art
+var _ghost_ids := {}
+var _ghosts := {}
+
+
+func _sync_ghosts() -> void:
+	for id in _ghost_ids.keys():
+		var p = pieces.get(id)
+		var keep: bool = p != null and not p.gone and p.body == null and p.art == "" and p.has_meta("ghost")
+		if not keep:
+			if _ghosts.has(id):
+				_ghosts[id].queue_free()
+				_ghosts.erase(id)
+			if p == null or p.gone or not p.has_meta("ghost"):
+				_ghost_ids.erase(id)
+			continue
+		if _ghosts.has(id):
+			continue
+		var mask := Node2D.new()
+		mask.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
+		mask.draw.connect(func():
+			var off := door_offset(p)
+			var poly: PackedVector2Array = p.poly if off == Vector2.ZERO else Transform2D(0.0, off) * p.poly
+			if poly.size() >= 3 and not Geometry2D.triangulate_polygon(poly).is_empty():
+				mask.draw_colored_polygon(poly, Color.WHITE))
+		var art := Node2D.new()
+		art.draw.connect(func():
+			var gh: Array = p.get_meta("ghost", [])
+			if gh.size() == 3:
+				art.draw_set_transform_matrix(Transform2D(0.0, door_offset(p)) * gh[1])
+				Art.draw(art, str(gh[0]), gh[2], p, font))
+		mask.add_child(art)
+		piece_layer.add_child(mask)
+		_ghosts[id] = mask
+
+
 func _layer(z: int, additive: bool, fn: Callable) -> Node2D:
 	var n := Node2D.new()
 	n.z_index = z
@@ -690,6 +727,14 @@ func _reframe(p, t: Transform2D) -> void:
 	# entry, and moving one half's copy dragged the other half's glow along
 	# into the wrong frame (a long red line from the piece across the berth)
 	p.heat = p.heat.map(func(h): return [t * (h[0] as PackedVector2Array), h[1]])
+	# its kerf edges and its old art go with it (new copies: the parts of a cut share them)
+	if p.has_meta("cuts"):
+		p.set_meta("cuts", t * (p.get_meta("cuts") as PackedVector2Array))
+		if p.has_meta("cuts_draw"):
+			p.remove_meta("cuts_draw")
+	if p.has_meta("ghost"):
+		var gh: Array = p.get_meta("ghost")
+		p.set_meta("ghost", [gh[0], t * (gh[1] as Transform2D), gh[2]])
 	for j in joints:
 		if j.a == p.id:
 			j.pos = t * j.pos
@@ -796,6 +841,8 @@ func rebuild_cols(p) -> void:
 
 func _physics_process(_dt: float) -> void:
 	var t0 := Time.get_ticks_usec()
+	if not _ghost_ids.is_empty():
+		_sync_ghosts()
 	if not dirty_cols.is_empty():
 		for id in dirty_cols:
 			var p = pieces.get(id)
@@ -986,6 +1033,13 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 		return res
 	var old_area := Geom.area(p.poly)
 	var old_mass: float = p.mass
+	var old_poly: PackedVector2Array = p.poly
+	var old_cuts: PackedVector2Array = p.get_meta("cuts", PackedVector2Array())
+	# what the equipment looked like before it was cut up: each part keeps it, drawn
+	# clipped to what is left of it (free_body.gd)
+	var ghost = p.get_meta("ghost", null)
+	if ghost == null and p.art != "" and p.cls == "equip":
+		ghost = [p.art, p.art_xf, p.art_size]
 	p.poly = parts[0]
 	var keep_heat: Array = p.heat.duplicate()
 	keep_heat.append([pl, now])
@@ -1019,6 +1073,12 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 		res.new.append(q)
 	if parts.size() > 1:
 		p.art = ""
+		if ghost != null:
+			for q in all_parts:
+				q.set_meta("ghost", ghost)
+				_ghost_ids[q.id] = true
+				if _ghosts.has(q.id):
+					_ghosts[q.id].queue_redraw()
 		res.split = parts.size()
 		if whole:
 			p.value = value0 * SEGMENT_KEEP * Geom.area(parts[0]) / old_area
@@ -1031,6 +1091,7 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 						left.append(sgm)
 				q.set_meta("segments", left)
 	for q in all_parts:
+		_mark_cut_edges(q, old_poly, old_cuts)
 		var a := Geom.area(q.poly)
 		if q.cls == "metal":
 			q.mass = a / (Geom.M * Geom.M) * q.density
@@ -1250,23 +1311,24 @@ func draw_pieces(ci: CanvasItem, list: Array, part: String = "all") -> void:
 			segs.append(poly[i])
 			segs.append(poly[(i + 1) % n])
 			sc.append(st[1])
-		if p.art != "" or (p.cls == "equip" and not p.intact):
+		if p.art != "" or p.has_meta("cuts"):
 			arts.append([p, poly, off])
 	if not fi.is_empty() and part in ["all", "fill"]:
 		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), fi, fp, fc)
 	if not segs.is_empty() and part in ["all", "line"]:
 		ci.draw_multiline_colors(segs, sc, 1.3)
-	if not part in ["all", "art"]:
+	if not part in ["all", "art"] or arts.is_empty():
 		return
+	Art.EQ.batch_begin()
 	for a in arts:
 		var p = a[0]
 		if p.art != "":
-			var xf: Transform2D = Transform2D(0.0, a[2]) * p.art_xf
-			ci.draw_set_transform_matrix(xf)
+			Art.EQ.bxf = Transform2D(0.0, a[2]) * p.art_xf
 			Art.draw(ci, p.art, p.art_size, p, font)
-			ci.draw_set_transform_matrix(Transform2D.IDENTITY)
-		else:
-			_scars(ci, a[1])
+		if p.has_meta("cuts"):
+			_cut_edges(ci, p, a[2])
+	Art.EQ.bxf = Transform2D.IDENTITY
+	Art.EQ.batch_end(ci)
 
 
 # triangulating every outline on every redraw is the expensive part: remember
@@ -1279,6 +1341,99 @@ func _tri_cached(p) -> PackedInt32Array:
 	p.tri_sig = sig
 	p.tri = Geometry2D.triangulate_polygon(p.poly) if p.poly.size() >= 3 else PackedInt32Array()
 	return p.tri
+
+
+# a part's edges that a kerf made (not on the outline it was cut from, or on an
+# earlier cut that is still its edge), as segment pairs in its own frame
+func _mark_cut_edges(q, old_poly: PackedVector2Array, old_cuts: PackedVector2Array) -> void:
+	var out := PackedVector2Array()
+	var n: int = q.poly.size()
+	for i in n:
+		var a: Vector2 = q.poly[i]
+		var b: Vector2 = q.poly[(i + 1) % n]
+		if a.distance_to(b) < 1.0:
+			continue
+		var mid := (a + b) * 0.5
+		var on_old: bool = Geom.dist_to_boundary(mid, old_poly) < 1.5
+		var was_cut := false
+		for k in range(0, old_cuts.size(), 2):
+			if Geom.dist_to_polyline(mid, PackedVector2Array([old_cuts[k], old_cuts[k + 1]])) < 1.5:
+				was_cut = true
+				break
+		if not on_old or was_cut:
+			out.append(a)
+			out.append(b)
+	if out.is_empty():
+		if q.has_meta("cuts"):
+			q.remove_meta("cuts")
+	else:
+		q.set_meta("cuts", out)
+	if q.has_meta("cuts_draw"):
+		q.remove_meta("cuts_draw")
+
+
+# a kerf's edge as cut metal looks: not ruler-straight but wandering a little, a
+# band of scorched metal along it on the inside, beads of dross along the outside
+func _cut_edges(ci: CanvasItem, p, off: Vector2) -> void:
+	var cache = p.get_meta("cuts_draw", null)
+	if cache == null:
+		var cuts: PackedVector2Array = p.get_meta("cuts")
+		var edge := PackedVector2Array()
+		var scorch := PackedVector2Array()
+		var beads := PackedVector2Array()
+		for k in range(0, cuts.size(), 2):
+			var a: Vector2 = cuts[k]
+			var b: Vector2 = cuts[k + 1]
+			var d: Vector2 = (b - a)
+			var ln: float = d.length()
+			if ln < 1.0:
+				continue
+			var t: Vector2 = d / ln
+			var nrm := Vector2(-t.y, t.x)
+			# which side is the metal
+			if not Geometry2D.is_point_in_polygon((a + b) * 0.5 + nrm * 2.0, p.poly):
+				nrm = -nrm
+			var steps := maxi(2, int(ln / 4.0))
+			var prev := a
+			for i in range(1, steps + 1):
+				var f: float = float(i) / steps
+				var j: float = 0.0 if i == steps else (fposmod(sin((a.x + i * 7.3) * 12.9898 + a.y * 78.233) * 43758.5453, 1.0) - 0.5) * 1.6
+				var q2: Vector2 = a.lerp(b, f) + nrm * j
+				edge.append(prev)
+				edge.append(q2)
+				prev = q2
+			scorch.append(a + nrm * 2.4)
+			scorch.append(b + nrm * 2.4)
+			var nb := int(ln / 11.0)
+			for i in nb:
+				var h: float = fposmod(sin((a.x + i * 3.1) * 4.898 + a.y * 7.233) * 4375.85, 1.0)
+				var bc: Vector2 = a.lerp(b, (i + 0.3 + h * 0.4) / maxf(1.0, nb)) - nrm * (0.8 + h)
+				# a bead: a little hexagon, as four triangles
+				for kk in 4:
+					beads.append(bc + Vector2.from_angle(0.0) * 1.1)
+					beads.append(bc + Vector2.from_angle(TAU * (kk + 1) / 6.0) * 1.1)
+					beads.append(bc + Vector2.from_angle(TAU * (kk + 2) / 6.0) * 1.1)
+		# all of it one list of triangles (art_equip.gd): the scorch, the edge, the beads
+		var t1: Array = Art.EQ.seg_tris(scorch, PackedColorArray([Pal.ink(0.08)]), 3.0)
+		var t2: Array = Art.EQ.seg_tris(edge, PackedColorArray([Pal.ink(0.62)]), 1.1)
+		var tp: PackedVector2Array = t1[0]
+		var tc: PackedColorArray = t1[1]
+		tp.append_array(t2[0])
+		tc.append_array(t2[1])
+		tp.append_array(beads)
+		var bcs := PackedColorArray()
+		bcs.resize(beads.size())
+		bcs.fill(Pal.ink(0.42))
+		tc.append_array(bcs)
+		cache = [tp, tc]
+		p.set_meta("cuts_draw", cache)
+	if cache[0].is_empty():
+		return
+	var pts: PackedVector2Array = Transform2D(0.0, off) * (cache[0] as PackedVector2Array)
+	if Art.EQ._batch != null:
+		Art.EQ.batch_tris(pts, cache[1])
+	else:
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), PackedInt32Array(), pts, cache[1])
 
 
 func _scars(ci: CanvasItem, poly: PackedVector2Array) -> void:

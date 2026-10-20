@@ -7,15 +7,15 @@ const EQ = preload("res://scripts/art_equip.gd")
 const SH = preload("res://scripts/art_ships.gd")
 
 static func L(ci: CanvasItem, a: Vector2, b: Vector2, al: float = 0.5, wd: float = 1.0) -> void:
-	ci.draw_line(a, b, Pal.ink(al), wd, true)
+	EQ.L(ci, a, b, al, wd)
 
 
 static func box(ci: CanvasItem, r: Rect2, al: float = 0.5, wd: float = 1.0) -> void:
-	ci.draw_rect(r, Pal.ink(al), false, wd)
+	EQ.R(ci, r, al, wd)
 
 
 static func ring(ci: CanvasItem, c: Vector2, r: float, al: float = 0.5, wd: float = 1.0) -> void:
-	ci.draw_arc(c, r, 0.0, TAU, 28, Pal.ink(al), wd, true)
+	EQ.A(ci, c, r, 0.0, TAU, al, wd)
 
 
 static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void:
@@ -25,6 +25,18 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 		EQ.ext = SH
 	if EQ.draw(ci, art, w, h, p, font):
 		return
+	if art == "" or art == "window":
+		return
+	# recorded like the rest: what each drawing below reads off the piece is in the key
+	var key := "old|%s|%d|%d" % [art, roundi(w * 2.0), roundi(h * 2.0)]
+	if p != null:
+		key += "|%s|%s|%s|%d|%d" % [p.name_key, p.tag, p.label, int(p.cond * 24.0), 1 if p.has_meta("wet") else 0]
+		if art == "armor":
+			key += "|%d" % hash(p.poly)
+	EQ.draw_cached(ci, key, func(): _draw_old(ci, art, w, h, p, font))
+
+
+static func _draw_old(ci: CanvasItem, art: String, w: float, h: float, p, font: Font) -> void:
 	match art:
 		"window":
 			pass
@@ -32,12 +44,12 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			# the piece itself is the couch's outline; here only its seams, the harness and the side stick
 			L(ci, Vector2(w * 0.83, h * 0.17), Vector2(w * 0.97, h * 0.2), 0.4)
 			L(ci, Vector2(w * 0.06, h * 0.69), Vector2(w * 0.62, h * 0.68), 0.3)
-			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.88, h * 0.24), Vector2(w * 0.42, h * 0.5), Vector2(w * 0.2, h * 0.64)]), Pal.ink(0.35), 1.0, true)
+			EQ.P(ci, PackedVector2Array([Vector2(w * 0.88, h * 0.24), Vector2(w * 0.42, h * 0.5), Vector2(w * 0.2, h * 0.64)]), 0.35, 1.0)
 			L(ci, Vector2(w * 0.12, h * 0.64), Vector2(w * 0.1, h * 0.5), 0.5, 1.2)
-			ci.draw_circle(Vector2(w * 0.1, h * 0.49), 1.6, Pal.ink(0.5))
+			EQ.D(ci, Vector2(w * 0.1, h * 0.49), 1.6, 0.5)
 		"cover":
 			L(ci, Vector2(w * 0.2, h * 0.5), Vector2(w * 0.8, h * 0.5), 0.3)
-			ci.draw_string(font, Vector2(w * 0.12, h * 0.3), "SERVICE", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.35))
+			EQ.T(ci, font, Vector2(w * 0.12, h * 0.3), "SERVICE", -1, 7, 0.35)
 		"armor":
 			# a ring quad (outer a b, inner c d): a seam line inset from the outside, rivets down the middle
 			if p != null and p.poly.size() == 4:
@@ -48,12 +60,12 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				var m1: Vector2 = (q[1] + q[2]) * 0.5 - o
 				var n := clampi(int(m0.distance_to(m1) / 34.0), 1, 24)
 				for i in n:
-					ci.draw_circle(m0.lerp(m1, (i + 0.5) / n), 1.4, Pal.ink(0.45))
+					EQ.D(ci, m0.lerp(m1, (i + 0.5) / n), 1.4, 0.45)
 			else:
 				var hz := w >= h
 				for i in 6:
 					var t := (i + 0.5) / 6.0
-					ci.draw_circle(Vector2(w * t, h * 0.5) if hz else Vector2(w * 0.5, h * t), 1.4, Pal.ink(0.45))
+					EQ.D(ci, Vector2(w * t, h * 0.5) if hz else Vector2(w * 0.5, h * t), 1.4, 0.45)
 		"insul":
 			# an insulated wall: its foam core between two skins, quilted
 			var hz := w >= h
@@ -98,7 +110,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				for iy in ny:
 					var c0: Vector2 = wp.position + Vector2(ix * cw, iy * chh)
 					box(ci, Rect2(c0 + Vector2(1, 1), Vector2(cw - 2, chh - 2)), 0.18)
-					ci.draw_rect(Rect2(c0 + Vector2(cw * 0.5 - 0.7, chh * 0.5 - 0.7), Vector2(1.4, 1.4)), Pal.ink(0.35))
+					EQ.F(ci, Rect2(c0 + Vector2(cw * 0.5 - 0.7, chh * 0.5 - 0.7), Vector2(1.4, 1.4)), 0.35)
 			var vert: bool = h >= w
 			for k in range(2, (ny if vert else nx), 4):
 				if vert:
@@ -180,7 +192,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 					var q: Vector2 = a.lerp(b, (k + 0.5) / 8.0)
 					var nrm: Vector2 = (b - a).normalized().orthogonal() * (4.0 if side == 0 else -4.0)
 					L(ci, q, q + nrm, 0.4)
-			ci.draw_arc(Vector2(w * 0.5, h * 0.58), w * 0.14, PI, TAU, 16, Pal.ink(0.55), 1.4, true)
+			EQ.A(ci, Vector2(w * 0.5, h * 0.58), w * 0.14, PI, TAU, 0.55, 1.4)
 			L(ci, Vector2(w * 0.32, h * 0.58), Vector2(w * 0.32, h * 0.66), 0.3)
 			L(ci, Vector2(w * 0.68, h * 0.58), Vector2(w * 0.68, h * 0.66), 0.3)
 		"vv_wall":
@@ -223,14 +235,14 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			# cavity up the middle inside its superconducting magnet, the output window on
 			# the side, the finned collector on top
 			var cx: float = w * 0.5
-			ci.draw_polyline(PackedVector2Array([Vector2(cx - w * 0.2, h * 0.97), Vector2(cx, h * 0.8), Vector2(cx + w * 0.2, h * 0.97)]), Pal.ink(0.55), 1.2, true)
+			EQ.P(ci, PackedVector2Array([Vector2(cx - w * 0.2, h * 0.97), Vector2(cx, h * 0.8), Vector2(cx + w * 0.2, h * 0.97)]), 0.55, 1.2)
 			box(ci, Rect2(w * 0.12, h * 0.38, w * 0.76, h * 0.36), 0.55)
 			box(ci, Rect2(w * 0.2, h * 0.42, w * 0.6, h * 0.28), 0.25)
 			L(ci, Vector2(cx - 2, h * 0.8), Vector2(cx - 2, h * 0.3), 0.45)
 			L(ci, Vector2(cx + 2, h * 0.8), Vector2(cx + 2, h * 0.3), 0.45)
 			box(ci, Rect2(cx - 4, h * 0.52, 8, h * 0.06), 0.6)
 			var wnd := Vector2(w * 0.86, h * 0.28)
-			ci.draw_polyline(PackedVector2Array([wnd + Vector2(-4, 0), wnd + Vector2(0, -4), wnd + Vector2(4, 0), wnd + Vector2(0, 4), wnd + Vector2(-4, 0)]), Pal.ink(0.6), 1.0, true)
+			EQ.P(ci, PackedVector2Array([wnd + Vector2(-4, 0), wnd + Vector2(0, -4), wnd + Vector2(4, 0), wnd + Vector2(0, 4), wnd + Vector2(-4, 0)]), 0.6, 1.0)
 			L(ci, Vector2(cx, h * 0.28), wnd, 0.3)
 			box(ci, Rect2(w * 0.22, h * 0.03, w * 0.56, h * 0.24), 0.55)
 			for i in 6:
@@ -247,7 +259,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				var zz := PackedVector2Array()
 				for k in 12:
 					zz.append(Vector2(r.position.x + (2.0 if k % 2 == 0 else r.size.x - 2.0), r.position.y + 3.0 + k * (r.size.y - 6.0) / 11.0))
-				ci.draw_polyline(zz, Pal.ink(0.22), 1.0, true)
+				EQ.P(ci, zz, 0.22, 1.0)
 				var tc := Vector2(r.get_center().x, h * 0.76)
 				ring(ci, tc, w * 0.07, 0.55)
 				L(ci, tc + Vector2(-w * 0.05, 0), tc + Vector2(w * 0.05, 0), 0.4)
@@ -277,7 +289,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				L(ci, Vector2(0, y), Vector2(w * 0.55, y), 0.35)
 				for k in int(w * 0.5 / 5.0):
 					L(ci, Vector2(k * 5.0 + 2.0, y - 1.5), Vector2(k * 5.0 + 2.0, y + 1.5), 0.15)
-			ci.draw_arc(Vector2(w * 0.62, h * 0.5), h * 0.42, -1.1, 1.1, 12, Pal.ink(0.55), 1.4, true)
+			EQ.A(ci, Vector2(w * 0.62, h * 0.5), h * 0.42, -1.1, 1.1, 0.55, 1.4)
 			L(ci, Vector2(w * 0.78, h * 0.15), Vector2(w * 0.9, h * 0.85), 0.6, 1.6)
 			box(ci, Rect2(w * 0.94, 0, w * 0.06, h), 0.5)
 		"pellet":
@@ -288,7 +300,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			var zz := PackedVector2Array()
 			for k in 10:
 				zz.append(Vector2(w * (0.25 if k % 2 == 0 else 0.45), h * (0.25 + k * 0.055)))
-			ci.draw_polyline(zz, Pal.ink(0.3), 1.0, true)
+			EQ.P(ci, zz, 0.3, 1.0)
 			box(ci, Rect2(w * 0.48, h * 0.7, w * 0.12, h * 0.1), 0.5)
 			L(ci, Vector2(w * 0.6, h * 0.73), Vector2(w, h * 0.73), 0.55, 1.6)
 			L(ci, Vector2(w * 0.6, h * 0.77), Vector2(w, h * 0.77), 0.55, 1.6)
@@ -303,7 +315,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				var zz := PackedVector2Array()
 				for k in 14:
 					zz.append(Vector2(x0 + (0.0 if k % 2 == 0 else w * 0.14), h * (0.1 + k * 0.06)))
-				ci.draw_polyline(zz, Pal.ink(0.35), 1.0, true)
+				EQ.P(ci, zz, 0.35, 1.0)
 		"port_plug":
 			# a diagnostic port plug: the shielding block that fills the port, the mirror
 			# labyrinth the light threads through, the closure plate on the outer end
@@ -312,7 +324,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			if vert:
 				box(ci, Rect2(0, 0, w * 0.18, h), 0.6)
 				var pts := PackedVector2Array([Vector2(w, h * 0.3), Vector2(w * 0.6, h * 0.3), Vector2(w * 0.6, h * 0.55), Vector2(w * 0.3, h * 0.55), Vector2(w * 0.3, h * 0.75), Vector2(w * 0.18, h * 0.75)])
-				ci.draw_polyline(pts, Pal.ink(0.4), 1.0, true)
+				EQ.P(ci, pts, 0.4, 1.0)
 				for q in [Vector2(w * 0.6, h * 0.3), Vector2(w * 0.6, h * 0.55), Vector2(w * 0.3, h * 0.55), Vector2(w * 0.3, h * 0.75)]:
 					L(ci, q + Vector2(-3, -3), q + Vector2(3, 3), 0.6, 1.4)
 				for i in int(h / 9.0):
@@ -372,7 +384,7 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			var ln := w if hz else h
 			var br := h if hz else w
 			var at := func(u: float, v: float) -> Vector2: return Vector2(u, v) if hz else Vector2(v, u)
-			ci.draw_polyline(PackedVector2Array([at.call(ln * 0.12, 1.0), at.call(1.0, br * 0.5), at.call(ln * 0.12, br - 1.0)]), Pal.ink(0.5), 1.0, true)
+			EQ.P(ci, PackedVector2Array([at.call(ln * 0.12, 1.0), at.call(1.0, br * 0.5), at.call(ln * 0.12, br - 1.0)]), 0.5, 1.0)
 			if art == "missile":
 				for u in [0.3, 0.62]:
 					L(ci, at.call(ln * u, 1.0), at.call(ln * u, br - 1.0), 0.35)
@@ -382,18 +394,18 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				L(ci, at.call(ln * 0.7, 1.0), at.call(ln * 0.7, br - 1.0), 0.5)
 				L(ci, at.call(ln * 0.76, 1.0), at.call(ln * 0.76, br - 1.0), 0.5)
 			if p != null and p.has_meta("wet"):
-				ci.draw_string(font, at.call(ln * 0.36, br * 0.5) + Vector2(-8, 3), "WET", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Pal.ink(0.55))
+				EQ.T(ci, font, at.call(ln * 0.36, br * 0.5) + Vector2(-8, 3), "WET", -1, 7, 0.55)
 		"reactor":
 			var c := Vector2(w * 0.5, h * 0.5)
 			for k in 3:
 				ring(ci, c, minf(w, h) * (0.18 + k * 0.1), 0.45 - k * 0.1)
 			for i in 5:
 				L(ci, Vector2(w * (0.3 + i * 0.1), h * 0.04), Vector2(w * (0.3 + i * 0.1), c.y - minf(w, h) * 0.2), 0.3)
-			ci.draw_string(font, Vector2(w * 0.32, h * 0.92), (p.tag + "  " + p.label).strip_edges() if p != null else "", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.5))
+			EQ.T(ci, font, Vector2(w * 0.32, h * 0.92), (p.tag + "  " + p.label).strip_edges() if p != null else "", -1, 9, 0.5)
 		"glove":
 			ring(ci, Vector2(w * 0.5, h * 0.3), w * 0.32, 0.6)
 			for gx in [0.32, 0.68]:
-				ci.draw_polyline(PackedVector2Array([Vector2(w * gx, h * 0.45), Vector2(w * (gx + 0.06), h * 0.68), Vector2(w * gx, h * 0.9)]), Pal.ink(0.5), 1.0, true)
+				EQ.P(ci, PackedVector2Array([Vector2(w * gx, h * 0.45), Vector2(w * (gx + 0.06), h * 0.68), Vector2(w * gx, h * 0.9)]), 0.5, 1.0)
 		"ladder":
 			L(ci, Vector2(w * 0.15, 0), Vector2(w * 0.15, h), 0.55)
 			L(ci, Vector2(w * 0.85, 0), Vector2(w * 0.85, h), 0.55)
@@ -402,9 +414,9 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 				L(ci, Vector2(w * 0.15, k), Vector2(w * 0.85, k), 0.4)
 				k += 0.3 * Geom.M
 		"suit":
-			ci.draw_arc(Vector2(w * 0.5, h * 0.09), w * 0.36, 0.0, TAU, 20, Pal.ink(0.7), 1.0, true)
-			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.1, h * 0.22), Vector2(w * 0.9, h * 0.22), Vector2(w * 0.8, h * 0.62), Vector2(w * 0.62, h), Vector2(w * 0.38, h), Vector2(w * 0.2, h * 0.62), Vector2(w * 0.1, h * 0.22)]), Pal.ink(0.6), 1.0, true)
-			ci.draw_rect(Rect2(w * 0.25, h * 0.28, w * 0.5, h * 0.17), Pal.tint(Pal.AIR, 0.7, 1.0), false, 1.0)
+			EQ.A(ci, Vector2(w * 0.5, h * 0.09), w * 0.36, 0.0, TAU, 0.7, 1.0)
+			EQ.P(ci, PackedVector2Array([Vector2(w * 0.1, h * 0.22), Vector2(w * 0.9, h * 0.22), Vector2(w * 0.8, h * 0.62), Vector2(w * 0.62, h), Vector2(w * 0.38, h), Vector2(w * 0.2, h * 0.62), Vector2(w * 0.1, h * 0.22)]), 0.6, 1.0)
+			EQ.Rc(ci, Rect2(w * 0.25, h * 0.28, w * 0.5, h * 0.17), Pal.tint(Pal.AIR, 0.7, 1.0), 1.0)
 		"grating":
 			var n := maxi(3, int(w / 9.0))
 			for i in range(1, n):
@@ -425,23 +437,23 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			L(ci, Vector2(w * 0.1, h * 0.56), Vector2(w * 0.1, h * 0.96), 0.4)
 			L(ci, Vector2(w * 0.68, h * 0.56), Vector2(w * 0.68, h * 0.96), 0.4)
 			box(ci, Rect2(w * 0.78, h * 0.06, w * 0.2, h * 0.3), 0.5)
-			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.8, h * 0.22), Vector2(w * 0.85, h * 0.22), Vector2(w * 0.88, h * 0.12), Vector2(w * 0.91, h * 0.3), Vector2(w * 0.96, h * 0.22)]), Pal.ink(0.55), 1.0)
+			EQ.P(ci, PackedVector2Array([Vector2(w * 0.8, h * 0.22), Vector2(w * 0.85, h * 0.22), Vector2(w * 0.88, h * 0.12), Vector2(w * 0.91, h * 0.3), Vector2(w * 0.96, h * 0.22)]), 0.55, 1.0)
 			L(ci, Vector2(w * 0.88, h * 0.36), Vector2(w * 0.88, h * 0.96), 0.3)
 		"op_table":
 			box(ci, Rect2(w * 0.08, h * 0.5, w * 0.84, h * 0.1), 0.5)
 			L(ci, Vector2(w * 0.5, h * 0.6), Vector2(w * 0.5, h * 0.96), 0.45, 1.4)
 			L(ci, Vector2(w * 0.3, h * 0.96), Vector2(w * 0.7, h * 0.96), 0.45)
-			ci.draw_arc(Vector2(w * 0.5, h * 0.18), w * 0.2, PI, TAU, 16, Pal.ink(0.5), 1.0, true)
+			EQ.A(ci, Vector2(w * 0.5, h * 0.18), w * 0.2, PI, TAU, 0.5, 1.0)
 			L(ci, Vector2(w * 0.3, h * 0.18), Vector2(w * 0.7, h * 0.18), 0.5)
 			L(ci, Vector2(w * 0.5, h * 0.18 - w * 0.2), Vector2(w * 0.5, 0), 0.3)
 		"biobox":
 			box(ci, Rect2(w * 0.06, h * 0.12, w * 0.88, h * 0.82), 0.6, 1.2)
 			L(ci, Vector2(w * 0.02, h * 0.12), Vector2(w * 0.98, h * 0.12), 0.6, 1.6)
 			ring(ci, Vector2(w * 0.5, h * 0.54), minf(w, h) * 0.2, 0.55)
-			ci.draw_string(font, Vector2(w * 0.24, h * 0.92), "BIO", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Pal.ink(0.55))
+			EQ.T(ci, font, Vector2(w * 0.24, h * 0.92), "BIO", -1, 8, 0.55)
 		"monitor":
 			box(ci, Rect2(w * 0.06, h * 0.06, w * 0.88, h * 0.62), 0.5)
-			ci.draw_polyline(PackedVector2Array([Vector2(w * 0.12, h * 0.4), Vector2(w * 0.4, h * 0.4), Vector2(w * 0.48, h * 0.16), Vector2(w * 0.56, h * 0.6), Vector2(w * 0.62, h * 0.4), Vector2(w * 0.88, h * 0.4)]), Pal.ink(0.5), 1.0)
+			EQ.P(ci, PackedVector2Array([Vector2(w * 0.12, h * 0.4), Vector2(w * 0.4, h * 0.4), Vector2(w * 0.48, h * 0.16), Vector2(w * 0.56, h * 0.6), Vector2(w * 0.62, h * 0.4), Vector2(w * 0.88, h * 0.4)]), 0.5, 1.0)
 			L(ci, Vector2(w * 0.5, h * 0.68), Vector2(w * 0.5, h * 0.96), 0.35)
 		"cryotank":
 			# the inner tank: its long walls, the pump tower down one end, the spray ring along the top, the level gauge's well
@@ -451,25 +463,25 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			L(ci, Vector2(w * 0.14, h * 0.08), Vector2(w * 0.14, h * 0.9), 0.3)
 			box(ci, Rect2(w * 0.1, h * 0.84, w * 0.06, h * 0.08), 0.5)
 			for k in 9:
-				ci.draw_circle(Vector2(w * (0.2 + k * 0.075), h * 0.12), 1.3, Pal.ink(0.4))
+				EQ.D(ci, Vector2(w * (0.2 + k * 0.075), h * 0.12), 1.3, 0.4)
 			L(ci, Vector2(w * 0.88, h * 0.1), Vector2(w * 0.88, h * 0.9), 0.3)
 			for k in 6:
 				L(ci, Vector2(w * 0.86, h * (0.2 + k * 0.12)), Vector2(w * 0.9, h * (0.2 + k * 0.12)), 0.35)
 			L(ci, Vector2(w * 0.2, h * 0.55), Vector2(w * 0.8, h * 0.55), 0.18)
-			ci.draw_string(font, Vector2(w * 0.4, h * 0.48), p.label, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, int(h * 0.1)), Pal.ink(0.5))
-			ci.draw_string(font, Vector2(w * 0.4, h * 0.66), "-253°C" if p != null and p.name_key == "p_lh2_tank" else "-163°C", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(8, int(h * 0.07)), Pal.ink(0.4))
+			EQ.T(ci, font, Vector2(w * 0.4, h * 0.48), p.label, -1, maxi(9, int(h * 0.1)), 0.5)
+			EQ.T(ci, font, Vector2(w * 0.4, h * 0.66), "-253°C" if p != null and p.name_key == "p_lh2_tank" else "-163°C", -1, maxi(8, int(h * 0.07)), 0.4)
 		"guard":
 			L(ci, Vector2(w * 0.5, 3), Vector2(w * 0.45, h - 3), 0.3)
 		"uav":
 			# a maintenance drone parked in its bay: the body ring, four rotor wells, the sensor eye
 			var c := Vector2(w * 0.5, h * 0.5)
-			ci.draw_arc(c, minf(w, h) * 0.34, PI / 8.0, TAU + PI / 8.0, 9, Pal.ink(0.6), 1.2, true)
+			EQ.A(ci, c, minf(w, h) * 0.34, PI / 8.0, TAU + PI / 8.0, 0.6, 1.2)
 			ring(ci, c, minf(w, h) * 0.12, 0.5)
 			for q in [Vector2(0.14, 0.24), Vector2(0.86, 0.24), Vector2(0.14, 0.76), Vector2(0.86, 0.76)]:
 				var rc := Vector2(w * q.x, h * q.y)
 				ring(ci, rc, minf(w * 0.11, h * 0.2), 0.4)
 				L(ci, rc, c + (rc - c) * 0.45, 0.3)
-			ci.draw_string(font, Vector2(w * 0.38, h * 0.95), p.label if p != null else "", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Pal.ink(0.45))
+			EQ.T(ci, font, Vector2(w * 0.38, h * 0.95), p.label if p != null else "", -1, 9, 0.45)
 		"lift":
 			# a scissor lift: its deck along the top, the crossed legs, the base frame
 			L(ci, Vector2(2, h * 0.12), Vector2(w - 2, h * 0.12), 0.55, 1.4)

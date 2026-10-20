@@ -110,6 +110,15 @@ static func R(ci: CanvasItem, r: Rect2, al: float = 0.5, wd: float = 1.0) -> voi
 		ci.draw_rect(r, Pal.ink(al), false, wd)
 
 
+static func Rc(ci: CanvasItem, r: Rect2, col: Color, wd: float = 1.0) -> void:
+	if _rec:
+		var q := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+		for i in 4:
+			_seg(q[i], q[(i + 1) % 4], col, wd)
+	else:
+		ci.draw_rect(r, col, false, wd)
+
+
 static func F(ci: CanvasItem, r: Rect2, al: float = 0.08) -> void:
 	if _rec:
 		_tri_fan(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), Pal.ink(al))
@@ -172,18 +181,35 @@ static func T(ci: CanvasItem, font: Font, at: Vector2, text: String, width: floa
 
 
 static func _record(ci: CanvasItem, art: String, r: Rect2, p, font: Font) -> Array:
+	return _record_fn(func(): _draw_art(ci, art, r, p, font))
+
+
+# Everything ends up as one list of triangles, unindexed so that many pieces' can be
+# joined by appending: a stroke is a thin quad. (A wide antialiased line is redone
+# segment by segment every frame by the renderer, a triangle list is uploaded once;
+# the edges are smoothed by the 2D MSAA instead.)
+static func _record_fn(fn: Callable) -> Array:
 	_rec = true
 	_lines = {}
 	_tp = []
 	_tc = []
 	_ti = []
 	_texts = []
-	_draw_art(ci, art, r, p, font)
+	fn.call()
 	_rec = false
-	var lines: Array = []
+	var tp := PackedVector2Array()
+	var tc := PackedColorArray()
 	for k in _lines:
-		lines.append([k, PackedVector2Array(_lines[k][0]), PackedColorArray(_lines[k][1])])
-	var out := [lines, PackedVector2Array(_tp), PackedColorArray(_tc), PackedInt32Array(_ti), _texts]
+		var t := seg_tris(PackedVector2Array(_lines[k][0]), PackedColorArray(_lines[k][1]), k)
+		tp.append_array(t[0])
+		tc.append_array(t[1])
+	var n0 := tp.size()
+	tp.resize(n0 + _ti.size())
+	tc.resize(n0 + _ti.size())
+	for i in _ti.size():
+		tp[n0 + i] = _tp[_ti[i]]
+		tc[n0 + i] = _tc[_ti[i]]
+	var out := [tp, tc, _texts]
 	_lines = {}
 	_tp = []
 	_tc = []
@@ -192,12 +218,96 @@ static func _record(ci: CanvasItem, art: String, r: Rect2, p, font: Font) -> Arr
 	return out
 
 
+# any drawing made of these primitives, recorded once under key and replayed after
+static func draw_cached(ci: CanvasItem, key: String, fn: Callable) -> void:
+	var rec = _cache.get(key)
+	if rec == null:
+		if _cache.size() >= CACHE_MAX:
+			_cache.clear()
+		rec = _record_fn(fn)
+		_cache[key] = rec
+	_replay(ci, rec)
+
+
+# While a whole strip of a ship is drawn, every piece's replay is gathered here in
+# the strip's own frame (bxf: the piece's art transform) and drawn at the end in a
+# call per line width: a polygon is a draw call of its own, and a strip of a big
+# ship is hundreds of pieces.
+static var _batch = null
+static var bxf := Transform2D.IDENTITY
+
+
+# segments (pairs of points, a colour each) as quads wd wide, squared off past their
+# ends by half that so the corners of a polyline close
+static func seg_tris(pts: PackedVector2Array, cols: PackedColorArray, wd: float) -> Array:
+	var tp := PackedVector2Array()
+	var tc := PackedColorArray()
+	var ns := pts.size() / 2
+	tp.resize(ns * 6)
+	tc.resize(ns * 6)
+	var hw := wd * 0.5
+	for i in ns:
+		var a: Vector2 = pts[i * 2]
+		var b: Vector2 = pts[i * 2 + 1]
+		var d: Vector2 = b - a
+		var ln := d.length()
+		d = d / ln * hw if ln > 0.0001 else Vector2(hw, 0.0)
+		var n := Vector2(-d.y, d.x)
+		a -= d
+		b += d
+		var j := i * 6
+		tp[j] = a - n
+		tp[j + 1] = a + n
+		tp[j + 2] = b + n
+		tp[j + 3] = a - n
+		tp[j + 4] = b + n
+		tp[j + 5] = b - n
+		var c: Color = cols[i] if i < cols.size() else cols[0]
+		for k in 6:
+			tc[j + k] = c
+	return [tp, tc]
+
+
+static func batch_begin() -> void:
+	_batch = [PackedVector2Array(), PackedColorArray(), []]
+
+
+static func batch_tris(pts: PackedVector2Array, cols: PackedColorArray) -> void:
+	# taken out of the array first, so appending doesn't copy it
+	var bp: PackedVector2Array = _batch[0]
+	var bc: PackedColorArray = _batch[1]
+	_batch[0] = PackedVector2Array()
+	_batch[1] = PackedColorArray()
+	bp.append_array(pts)
+	bc.append_array(cols)
+	_batch[0] = bp
+	_batch[1] = bc
+
+
+static func batch_end(ci: CanvasItem) -> void:
+	var b = _batch
+	_batch = null
+	if b == null:
+		return
+	if not b[0].is_empty():
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), PackedInt32Array(), b[0], b[1])
+	for t in b[2]:
+		ci.draw_set_transform_matrix(t[6])
+		ci.draw_string(t[0], t[1], t[2], HORIZONTAL_ALIGNMENT_LEFT, t[3], t[4], t[5])
+	if not b[2].is_empty():
+		ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
 static func _replay(ci: CanvasItem, rec: Array) -> void:
-	for e in rec[0]:
-		ci.draw_multiline_colors(e[1], e[2], e[0], true)
-	if not rec[3].is_empty():
-		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), rec[3], rec[1], rec[2])
-	for t in rec[4]:
+	if _batch != null:
+		if not rec[0].is_empty():
+			batch_tris(bxf * (rec[0] as PackedVector2Array), rec[1])
+		for t in rec[2]:
+			_batch[2].append([t[0], t[1], t[2], t[3], t[4], t[5], bxf])
+		return
+	if not rec[0].is_empty():
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), PackedInt32Array(), rec[0], rec[1])
+	for t in rec[2]:
 		ci.draw_string(t[0], t[1], t[2], HORIZONTAL_ALIGNMENT_LEFT, t[3], t[4], t[5])
 
 

@@ -7,6 +7,8 @@ extends RigidBody2D
 var world: World
 var pieces: Array = []
 var view: Node2D
+var ghost_view: Node2D
+var ghost_mask: Node2D
 var heat_view: Node2D
 var hit_imp := 0.0
 var hit_pos := Vector2.ZERO
@@ -73,6 +75,16 @@ func _init() -> void:
 	view = Node2D.new()
 	view.draw.connect(_draw_view)
 	add_child(view)
+	# a cut-up piece of equipment still shows what it was, but only inside what is
+	# left of it: its old art drawn as a child the view's own fill clips
+	ghost_mask = Node2D.new()
+	ghost_mask.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
+	ghost_mask.draw.connect(_draw_ghost_mask)
+	ghost_mask.visible = false
+	view.add_child(ghost_mask)
+	ghost_view = Node2D.new()
+	ghost_view.draw.connect(_draw_ghost)
+	ghost_mask.add_child(ghost_view)
 	heat_view = Node2D.new()
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -102,6 +114,11 @@ func refresh() -> void:
 	center_of_mass = com / m
 	inertia = 0.0
 	view.queue_redraw()
+	var ghosts: bool = pieces.any(func(q): return q.has_meta("ghost") and q.art == "")
+	ghost_mask.visible = ghosts
+	if ghosts:
+		ghost_mask.queue_redraw()
+		ghost_view.queue_redraw()
 
 
 func rebuild_cols(p) -> void:
@@ -248,6 +265,31 @@ func _process(_dt: float) -> void:
 func _draw_view() -> void:
 	world.draw_pieces(view, pieces)
 	world.draw_joints_of(view, pieces)
+
+
+# the mask: what is left of the cut-up pieces, filled (only clips, never shows)
+func _draw_ghost_mask() -> void:
+	for q in pieces:
+		if q.gone or q.art != "" or not q.has_meta("ghost") or q.poly.size() < 3:
+			continue
+		if not Geometry2D.triangulate_polygon(q.poly).is_empty():
+			ghost_mask.draw_colored_polygon(q.poly, Color.WHITE)
+
+
+func _draw_ghost() -> void:
+	var seen := {}
+	for q in pieces:
+		if q.gone or q.art != "" or not q.has_meta("ghost"):
+			continue
+		var gh: Array = q.get_meta("ghost")
+		# the parts of one piece share one ghost: draw it once
+		var key: String = "%s|%s" % [gh[0], gh[1]]
+		if seen.has(key):
+			continue
+		seen[key] = true
+		ghost_view.draw_set_transform_matrix(gh[1])
+		Art.draw(ghost_view, str(gh[0]), gh[2], q, world.font)
+	ghost_view.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
 func _draw_heat() -> void:
