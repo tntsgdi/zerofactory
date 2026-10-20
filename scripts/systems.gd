@@ -8,7 +8,11 @@ extends Node
 # taken, and goes stale once the system it describes has changed.
 
 const SPACE := 0
-const CELL := 0.1                 # metres per gas cell
+# metres per gas cell: 0.1, or 0.2 for a ship whose grid would pass BIG_CELLS at 0.1
+# (a tall warship or survey ship: recomputing its gas topology on every door would
+# otherwise take most of a second); contact counts are scaled so flows don't change
+var CELL := 0.1
+const BIG_CELLS := 250000
 # the gas grid: x -1..43 m, y -5..5 m, grown (on the same cells) for a ship that reaches further
 var GX0 := -1.0
 var GY0 := -5.0
@@ -191,6 +195,10 @@ func _fit_grid(ship: Dictionary) -> void:
 		var bot := maxf(GY0 + GH * CELL, ceilf(y1) + 1.0)
 		GY0 = top
 		GH = roundi((bot - top) / CELL)
+	if GW * GH > BIG_CELLS:
+		CELL = 0.2
+		GW = ceili(GW / 2.0)
+		GH = ceili(GH / 2.0)
 
 
 func _cell_px(gx: int, gy: int) -> Vector2:
@@ -295,13 +303,13 @@ func _grid_job_calc(polys: Array) -> Array:
 		if border:
 			for r in ks:
 				var cc: Array = contact[r]
-				out.append([room_names[r], "space", float(cc[0]), cc[1] / cc[0], (cc[2] as Vector2).normalized()])
+				out.append([room_names[r], "space", float(cc[0]) * CELL / 0.1, cc[1] / cc[0], (cc[2] as Vector2).normalized()])
 		else:
 			for i in ks.size():
 				for k in range(i + 1, ks.size()):
 					var a: Array = contact[ks[i]]
 					var b: Array = contact[ks[k]]
-					out.append([room_names[ks[i]], room_names[ks[k]], float(mini(a[0], b[0])), (a[1] / a[0] + b[1] / b[0]) * 0.5, Vector2.ZERO])
+					out.append([room_names[ks[i]], room_names[ks[k]], float(mini(a[0], b[0])) * CELL / 0.1, (a[1] / a[0] + b[1] / b[0]) * 0.5, Vector2.ZERO])
 	return out
 
 

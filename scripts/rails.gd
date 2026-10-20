@@ -10,10 +10,15 @@ extends Node
 #   on it at once and sends them off along the rails ("out"): through the open
 #   doors, or into a shut one, which dents them as any knock does.
 #   Cutting a rail that still carries a box: the box is wrenched with it (dented).
+#   "hangs": [tags] (SV-122's instrument cradle, hung from the main beam): one of
+#   those cut into or freed while the set's boxes are still locked on, and the
+#   whole set drops and bangs (badly dented). "say": a prefix for what is said
+#   ("rail" unless given: <say>_locked / _released / _cut / _drop).
 # Saved: which sets have been released.
 
 const CUT_DENT := 0.45
 const LIFT := 0.03            # m a released box rises off its rail
+const DROP_DENT := 0.55
 
 var game
 var world
@@ -45,6 +50,24 @@ func load_state(d: Dictionary) -> void:
 func _set_of(tag: String, key: String) -> String:
 	for s in cfg:
 		if (cfg[s].get(key, []) as Array).has(tag):
+			return s
+	return ""
+
+
+# what is said when the wrench meets a locked fixing
+func locked_msg(j) -> String:
+	var s := _set_holding(j)
+	return str(cfg[s].get("say", "rail")) + "_locked" if s != "" else "rail_locked"
+
+
+func _set_holding(j) -> String:
+	var a = world.pieces.get(j.a)
+	var b = world.pieces.get(j.b)
+	if a == null or b == null:
+		return ""
+	for pr in [[a, b], [b, a]]:
+		var s := _set_of(pr[0].tag, "boxes")
+		if s != "" and not released.has(s) and (cfg[s].get("rails", []) as Array).has(pr[1].tag):
 			return s
 	return ""
 
@@ -86,7 +109,7 @@ func _release(s: String) -> void:
 			if o != null and (e.get("rails", []) as Array).has(o.tag):
 				world.kill_joint(j)
 		_push.append([str(t), Vector2(float(out[0]), float(out[1])) * Geom.M, 60 * 30, false])
-	game.say("rail_released", world.ctrl_world(world.ctrls[e.lock]), e.lock)
+	game.say(str(e.get("say", "rail")) + "_released", world.ctrl_world(world.ctrls[e.lock]), e.lock)
 	game.log_op("rail")
 
 
@@ -94,6 +117,7 @@ func _release(s: String) -> void:
 func on_cut(p) -> void:
 	if not active() or p.cls == "equip":
 		return
+	_hung(p)
 	var s := _set_of(p.tag, "rails")
 	if s == "":
 		return
@@ -112,7 +136,33 @@ func on_cut(p) -> void:
 			hit += (before - bx.cond) * bx.value
 	if hit > 0.0:
 		game.incident("rail_cut", p.tag)
-		game.say("rail_cut_cargo", world.frame(p) * Geom.centroid(p.poly), p.tag)
+		game.say(str(cfg[s].get("say", "rail")) + "_cut", world.frame(p) * Geom.centroid(p.poly), p.tag)
+
+
+# a piece some set hangs from, cut into or come loose: the locked set drops with it
+func _hung(p) -> void:
+	for s in cfg:
+		if released.has(s) or not (cfg[s].get("hangs", []) as Array).has(p.tag):
+			continue
+		released[s] = true
+		var lost := 0.0
+		for t in cfg[s].get("boxes", []):
+			var bx = world.tag(str(t))
+			if bx == null or bx.gone or not bx.intact:
+				continue
+			var before: float = bx.cond
+			game._dent(bx, maxf(0.0, bx.cond - DROP_DENT), "dv_drop")
+			lost += (before - bx.cond) * bx.value
+		game.incident("cradle_drop", s)
+		game.say(str(cfg[s].get("say", "rail")) + "_drop", world.frame(p) * Geom.centroid(p.poly), p.tag)
+		game.shake(0.5)
+
+
+func on_freed(b) -> void:
+	if not active():
+		return
+	for q in b.pieces:
+		_hung(q)
 
 
 # how far along "out" the set's rails reach (px): a box rides them until it is past that

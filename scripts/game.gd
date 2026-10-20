@@ -1575,6 +1575,8 @@ func on_body_freed(b) -> void:
 	if media != null:
 		for q in b.pieces:
 			media.on_manifold(q)
+	if rails != null:
+		rails.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -2537,7 +2539,7 @@ func do_wrench(tg: Dictionary) -> void:
 			var j = tg.joint
 			# a box on a locked rail: the rail's lock holds it, not a bolt
 			if rails != null and rails.holds(j):
-				say("rail_locked", world.joint_world(j))
+				say(rails.locked_msg(j), world.joint_world(j))
 				sfx.play("deny")
 				return
 			log_op("unfix")
