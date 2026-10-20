@@ -217,6 +217,30 @@ func _prep() -> void:
 				_note("force bent gate %s" % gt)
 				_work(4.0)
 				return
+	# a sail: earthed first, then each corner's winch brake let off (the sail slack)
+	if g.sail != null and g.sail.active():
+		var gd: String = g.sail.cfg.get("ground", "")
+		if not g.sail.grounded() and not _hidden(gd) and _once("ground " + gd):
+			_w(gd)
+			_note("sail earthed at %s" % gd)
+			_work(2.5)
+			return
+		for q in g.sail.cfg.get("quads", {}):
+			var wc: String = g.sail.cfg.quads[q]
+			if g.sail.taut(q) and not _hidden(wc) and _once("winch " + wc):
+				_w(wc)
+				_note("winch %s let off" % wc)
+				_work(2.5)
+				return
+	# a container wall's pretension rods: their turnbuckles slackened before anything is cut
+	if g.boxbeam != null and g.boxbeam.active():
+		for r in g.boxbeam.cfg.get("rods", {}):
+			var tb: String = g.boxbeam.cfg.rods[r].get("turnbuckle", "")
+			if g.boxbeam.rod_tight(r) and not _hidden(tb) and _once("tb " + tb):
+				_w(tb)
+				_note("turnbuckle %s slack" % tb)
+				_work(2.5)
+				return
 	# anything held under load: its locking pins out first (the tension let off)
 	if g.mech != null:
 		for l in g.mech.loads:
@@ -584,6 +608,10 @@ func _once_done(k: String) -> bool:
 func _unsafe() -> Array:
 	var s = g.sys
 	var out: Array = []
+	if g.boxbeam != null and g.boxbeam.active():
+		out.append_array(g.boxbeam.unsafe())
+	if g.sail != null and g.sail.active():
+		out.append_array(g.sail.unsafe())
 	for n in g.world.rooms:
 		if s.P(n) > 5.0:
 			out.append("room %s %.0f kPa" % [n, s.P(n)])
@@ -652,6 +680,14 @@ func _go_strip() -> void:
 			return -1
 		return rank.get(p.kind, 5)
 	order.sort_custom(func(a, b): return rk.call(a) < rk.call(b))
+	# a container wall comes down from the ends inwards, each bay from the top
+	if g.boxbeam != null and g.boxbeam.active():
+		var seq: Array = []
+		for t in g.boxbeam.unload_order():
+			var p = g.world.tag(t)
+			if p != null:
+				seq.append(p.id)
+		order = seq + order.filter(func(id): return not seq.has(id))
 	if g.scope() != "full":
 		# a part-ship contract: only what it pays for, and the roof plates over it to get in
 		var lo := INF

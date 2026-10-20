@@ -373,6 +373,9 @@ static func _reachable(w, pos: Vector2, hidden_room: String) -> bool:
 			var blocked := false
 			for id in w.order:
 				var p = w.pieces[id]
+				# a sail's film is no wall to fly into
+				if p.kind == "film":
+					continue
 				if Geom.bbox(p.poly).grow(2.0).has_point(q) and Geometry2D.is_point_in_polygon(q, p.poly):
 					blocked = true
 					break

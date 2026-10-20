@@ -9,6 +9,7 @@ extends Node
 
 const SPACE := 0
 # metres per gas cell: 0.1, or 0.2 for a ship whose grid would pass BIG_CELLS at 0.1
+# (0.4 if it still would)
 # (a tall warship or survey ship: recomputing its gas topology on every door would
 # otherwise take most of a second); contact counts are scaled so flows don't change
 var CELL := 0.1
@@ -195,8 +196,9 @@ func _fit_grid(ship: Dictionary) -> void:
 		var bot := maxf(GY0 + GH * CELL, ceilf(y1) + 1.0)
 		GY0 = top
 		GH = roundi((bot - top) / CELL)
-	if GW * GH > BIG_CELLS:
-		CELL = 0.2
+	# a big ship goes to 0.2 m cells, a very big one (a sail) to 0.4 m
+	while GW * GH > BIG_CELLS and CELL < 0.4:
+		CELL *= 2.0
 		GW = ceili(GW / 2.0)
 		GH = ceili(GH / 2.0)
 

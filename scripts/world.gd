@@ -680,6 +680,9 @@ func rebuild_cols(p) -> void:
 	static_cols.erase(p.id)
 	if p.gone or (p.door and p.open_t > 0.5):
 		return
+	# a membrane stretched in its frame is no wall to fly into
+	if p.kind == "film":
+		return
 	var poly := Geom.simplify(p.poly, 1.4)
 	if not Geom.valid(poly):
 		poly = p.poly

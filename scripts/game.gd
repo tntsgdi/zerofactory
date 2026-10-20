@@ -23,6 +23,8 @@ var furnace                   # a furnace core shut down but not cool (MF-126), 
 var drones                    # drones parked live on their own packs (CV-138), scripts/drones.gd
 var tanknet                   # a cross-connected propellant network (VT-80), scripts/tanknet.gd
 var liner                     # a liner's escape pods and observation glass (PS-12), scripts/liner.gd
+var boxbeam                   # a container wall that is the ship's beam (CF-90), scripts/boxbeam.gd
+var sail                      # a light sail held flat by its stays (SA-200), scripts/sail.gd
 var bio: Bio                  # biological contamination some ship types carry
 var ore: Ore                  # a hopper of loose ore some ship types carry
 var cryo: Cryo                # cryogenic tanks some ship types carry
@@ -267,6 +269,14 @@ func _ready() -> void:
 	liner.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(liner)
 	liner.setup(self, ship)
+	boxbeam = preload("res://scripts/boxbeam.gd").new()
+	boxbeam.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(boxbeam)
+	boxbeam.setup(self, ship)
+	sail = preload("res://scripts/sail.gd").new()
+	sail.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(sail)
+	sail.setup(self, ship)
 	mech = Mech.new()
 	add_child(mech)
 	mech.setup(self, ship)
@@ -421,6 +431,10 @@ func _ready() -> void:
 			tanknet.load_state(data.tanknet)
 		if data.has("liner"):
 			liner.load_state(data.liner)
+		if data.has("boxbeam"):
+			boxbeam.load_state(data.boxbeam)
+		if data.has("sail"):
+			sail.load_state(data.sail)
 		if data.has("mech"):
 			mech.load_state(data.mech)
 		if data.has("bio"):
@@ -1611,6 +1625,10 @@ func on_body_freed(b) -> void:
 		drones.on_freed(b)
 	if liner != null:
 		liner.on_freed(b)
+	if boxbeam != null:
+		boxbeam.on_freed(b)
+	if sail != null:
+		sail.on_freed(b)
 	var m: float = b.total_mass()
 	for p in b.pieces:
 		if p.has_meta("snap_kick"):
@@ -1781,6 +1799,10 @@ func on_cut_into(p, pos: Vector2) -> void:
 	breach(p, true, pos)
 	if rails != null:
 		rails.on_cut(p)
+	if boxbeam != null:
+		boxbeam.on_cut(p)
+	if sail != null:
+		sail.on_cut(p)
 	if atmos != null:
 		atmos.on_cut(p, pos)
 	if media != null:
@@ -2193,6 +2215,12 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "temp", c.id, "inst_cryo", {"ctrl": c, "temp_fn": func(): return cryo.temp(c.target)})
 					"tension":
 						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return mech.tension(c.target), "unit": "kN"})
+					"strain":
+						sys.measure(c.id, "field", c.id, "inst_strain", {"ctrl": c, "field_fn": func(): return boxbeam.strain(c.id), "unit": "%"})
+					"rod":
+						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return boxbeam.rod_pull(c.target), "unit": "kN"})
+					"stay":
+						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return sail.pull(c.target), "unit": "kN"})
 					"gas":
 						sys.measure(c.id, "pressure", c.id, "inst_pressure", {"ctrl": c, "vol": c.target})
 						if sys.dead_leg_closed(c):
@@ -2280,6 +2308,15 @@ func restore_reading(rd: Dictionary) -> void:
 			"field":
 				if c.medium == "tension":
 					extra.field_fn = func(): return mech.tension(c.target)
+					extra.unit = "kN"
+				elif c.medium == "strain":
+					extra.field_fn = func(): return boxbeam.strain(c.id)
+					extra.unit = "%"
+				elif c.medium == "rod":
+					extra.field_fn = func(): return boxbeam.rod_pull(c.target)
+					extra.unit = "kN"
+				elif c.medium == "stay":
+					extra.field_fn = func(): return sail.pull(c.target)
 					extra.unit = "kN"
 				else:
 					extra.field_fn = func(): return mech.field(c.target)

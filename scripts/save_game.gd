@@ -163,6 +163,8 @@ static func save(g) -> void:
 		"drones": g.drones.save_state() if g.drones != null and g.drones.active() else {},
 		"tanknet": g.tanknet.save_state() if g.tanknet != null and g.tanknet.active() else {},
 		"liner": g.liner.save_state() if g.liner != null and g.liner.active() else {},
+		"boxbeam": g.boxbeam.save_state() if g.boxbeam != null and g.boxbeam.active() else {},
+		"sail": g.sail.save_state() if g.sail != null and g.sail.active() else {},
 		"bio": g.bio.save_state() if g.bio != null else {},
 		"ore": g.ore.save_state() if g.ore != null else {},
 		"cryo": g.cryo.save_state() if g.cryo != null else {},

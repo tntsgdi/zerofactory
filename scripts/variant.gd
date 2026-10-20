@@ -354,6 +354,10 @@ static func _scope(d: Dictionary, job: Dictionary) -> void:
 			for k in fv:
 				if str(fv[k].get("piece", "")) != "":
 					holds[str(fv[k].piece)] = true
+			# nor a container that carries the wall (CF-90): it can't come out on its own
+			for bay in d.get("boxbeam", {}).get("bays", []):
+				for t in bay:
+					holds[str(t)] = true
 			var pool: Array = []
 			for pd in d.pieces:
 				if pd.get("cls", "") == "equip" and float(pd.get("value", 0.0)) >= 2000.0 and pd.get("tag", "") != "" and pd.get("hazard", "") == "" and not holds.has(pd.get("tag", "")):
