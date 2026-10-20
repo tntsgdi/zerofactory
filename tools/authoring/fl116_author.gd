@@ -51,7 +51,9 @@ static func build(world) -> void:
 	_airlock()
 	_aft()
 	_engine()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -212,6 +214,108 @@ static func _engine() -> void:
 	K.bolt(nz, en, 112.0, 5.8)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a process ship carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.2, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1)
+	return p
+
+
+# equipment standing on a sloping floor (inner edge i), h tall at its high end
+static func _floor(tag: String, art: String, x0: float, x1: float, h: float, i: int, opts: Dictionary):
+	var ya := _iy(i, x0)
+	var yb := _iy(i, x1)
+	var top := minf(ya, yb) - h
+	var p = K.equip(tag, art, K.rect(x0, top, x1, maxf(ya, yb)), opts, K.mp([Vector2(x0, top), Vector2(x1, top), Vector2(x1, yb), Vector2(x0, ya)]))
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) + 0.2, ["hull"]), x, _iy(i, x))
+	return p
+
+
+# equipment bolted by its side to a wall at x (two bolts at y0 + 0.5, y1 - 0.5)
+static func _wall(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, wall, wx: float, opts: Dictionary):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	K.bolt(p, wall, wx, y0 + 0.5)
+	K.bolt(p, wall, wx, y1 - 0.5)
+	return p
+
+
+static func _fitout() -> void:
+	var cd = by_tag["CDECK"]
+	var pd = by_tag["PDECK"]
+	# the cockpit: the sample analyser, the emergency shutdown panel, the gas detection
+	# rack, the overhead panel off the roof
+	_stand("LAB", "insp", 11.6, 1.4, 13.6, CDECK, cd, {"mass": 0.25, "value": 7000.0, "fragile": 0.6, "room": "C", "name_key": "p_assay"})
+	_stand("ESD", "panel", 19.4, 0.6, 21.4, CDECK, cd, {"mass": 0.2, "value": 6000.0, "fragile": 0.5, "room": "C", "name_key": "p_esd"})
+	_stand("GASD", "cabinet", 21.8, 1.0, 23.4, CDECK, cd, {"mass": 0.2, "value": 5000.0, "fragile": 0.5, "room": "C", "name_key": "p_gas_det"})
+	_hang("OVH-C", "overhead", 19.0, 22.6, -8.6, 2, {"mass": 0.2, "value": 3500.0, "fragile": 0.45, "room": "C", "name_key": "p_ovh"})
+	_wall("OVERVIEW", "screen", 25.4, -7.0, F1, -0.6, by_tag["F1"], F1, {"mass": 0.2, "value": 5000.0, "fragile": 0.5, "room": "C", "name_key": "p_pod_overview"})
+	_hang("RADIO", "nav", 5.8, 9.4, -6.2, 1, {"mass": 0.2, "value": 4000.0, "fragile": 0.5, "room": "C", "name_key": "p_comms"})
+	# the airlock: suit lockers and the decontamination station under the deck, the spill
+	# kit, the breathing-air compressor on the floor, its bottle bank on the bulkhead
+	for i in 3:
+		var sx := 3.0 + i * 1.8
+		_stand("SUIT-%d" % (i + 1), "suit", sx, CDECK + 0.3, sx + 1.4, 6.6, cd, {"mass": 0.15, "value": 3000.0, "fragile": 0.4, "room": "L", "name_key": "p_suit_locker"}, true)
+	_stand("DECON", "env", 16.8, CDECK + 0.3, 19.8, 6.6, cd, {"mass": 0.4, "value": 4000.0, "fragile": 0.35, "room": "L", "name_key": "p_decon"}, true)
+	_stand("SPILL", "locker", 21.0, CDECK + 0.3, 23.0, 6.0, cd, {"mass": 0.3, "value": 1800.0, "fragile": 0.3, "room": "L", "name_key": "p_spill_kit"}, true)
+	_floor("AIRC", "pump", 8.0, 12.4, 2.0, 13, {"mass": 0.9, "value": 5000.0, "fragile": 0.35, "room": "L", "name_key": "p_compressor"})
+	_wall("BA-BANK", "gastank", 25.0, 6.6, F1, 9.8, by_tag["F1"], F1, {"mass": 0.5, "value": 2400.0, "fragile": 0.3, "room": "L", "hazard": "gas_tank", "name_key": "p_ba_bank"})
+	# the process hall: heat exchangers between the tanks, a level radar over each,
+	# the flow meter skid and the nitrogen blanketing header aft, the foam station forward
+	_stand("HEX-1", "radiator", 43.4, 1.0, 46.6, PDECK, pd, {"mass": 2.0, "value": 7000.0, "fragile": 0.3, "room": "P", "name_key": "p_heat_exchanger"})
+	_stand("HEX-2", "radiator", 61.4, 1.0, 64.6, PDECK, pd, {"mass": 2.0, "value": 7000.0, "fragile": 0.3, "room": "P", "name_key": "p_heat_exchanger"})
+	for e in [["LVL-1", 38.6], ["LVL-2", 56.6], ["LVL-3", 74.6]]:
+		_hang(e[0], "radar", e[1], e[1] + 1.8, -8.8, 5, {"mass": 0.1, "value": 4000.0, "fragile": 0.55, "room": "P", "name_key": "p_level_radar"})
+	_stand("FLOWM", "pump", 79.6, 3.4, 83.2, PDECK, pd, {"mass": 1.2, "value": 9000.0, "fragile": 0.4, "room": "P", "name_key": "p_flow_meter"})
+	_wall("N2-H", "gastank", 81.6, -6.0, F2, -1.0, by_tag["F2"], F2, {"mass": 0.5, "value": 2500.0, "fragile": 0.3, "room": "P", "hazard": "gas_tank", "name_key": "p_n2_header"})
+	_wall("FOAM", "gastank", F1 + 0.4, -2.0, 28.8, 4.0, by_tag["F1"], F1 + 0.4, {"mass": 0.4, "value": 2000.0, "fragile": 0.3, "room": "P", "name_key": "p_foam"})
+	# the pump bay: a strainer ahead of each pump, the dosing pump, the sump pump aft
+	for i in 3:
+		var sx: float = TANKS[i] - 4.4
+		_stand("STR-%d" % (i + 1), "filter", sx, 11.4, sx + 2.0, BELLY, K.at(sx + 1.0, BELLY + 0.25, ["hull"]), {"mass": 0.3, "value": 2200.0, "fragile": 0.3, "room": "B", "name_key": "p_strainer"})
+	_stand("DOSE", "pump", 39.4, 11.0, 42.6, BELLY, K.at(41.0, BELLY + 0.25, ["hull"]), {"mass": 0.5, "value": 4000.0, "fragile": 0.35, "room": "B", "name_key": "p_transfer_pump"})
+	_stand("SUMP", "pump", 76.0, 11.0, 79.0, BELLY, K.at(77.5, BELLY + 0.25, ["hull"]), {"mass": 0.5, "value": 3500.0, "fragile": 0.35, "room": "B", "name_key": "p_sump_pump"})
+	# aft: the cabinet's standby supply, the waste tank and the sample cabinet on the stern wall
+	_wall("UPS-A", "battery", 90.4, -1.0, 92.8, 3.0, by_tag["CTL"], 90.4, {"mass": 0.6, "value": 5500.0, "fragile": 0.4, "room": "A", "name_key": "p_ups"})
+	var sw = K.at(101.75, 3.0, ["hull"])
+	_wall("WASTE-T", "fueltank", 96.5, 1.0, 101.55, 6.0, sw, 101.55, {"mass": 1.6, "value": 3000.0, "fragile": 0.3, "room": "A", "name_key": "p_waste_tank"})
+	_hang("SAMPLE-A", "cabinet", 98.4, 101.2, 0.4, 8, {"mass": 0.3, "value": 6000.0, "fragile": 0.5, "room": "A", "name_key": "p_samples"})
+	# a relief valve on each separator
+	for i in 3:
+		var x0: float = TANKS[i] - 5.0
+		_stand("PSV-%d" % (i + 1), "insp", x0 + 6.6, -16.4, x0 + 7.6, -15.4, by_tag["SEP-%d" % (i + 1)], {"mass": 0.1, "value": 2500.0, "fragile": 0.4, "room": "T%d" % (i + 1), "name_key": "p_psv"})
+
+
+static func _fit_lines() -> void:
+	K.line("g1", "cable", "power", "CON", Vector2(19.0, 1.4), "ESD", Vector2(19.4, 1.4))
+	K.line("g2", "cable", "power", "ESD", Vector2(21.4, 1.4), "GASD", Vector2(21.8, 1.4))
+	K.line("g3", "cable", "power", "CON", Vector2(14.0, 1.6), "LAB", Vector2(13.6, 1.6))
+	K.line("g4", "cable", "power", "LAMP-C", Vector2(13.2, _iy(2, 13.0) + 0.16), "OVH-C", Vector2(19.0, -9.0), [Vector2(13.2, -9.0)])
+	K.line("g15", "cable", "power", "BATCHLOG", Vector2(25.8, 0.0), "OVERVIEW", Vector2(25.8, -0.6))
+	K.line("g16", "cable", "power", "NAV", Vector2(5.0, 0.8), "RADIO", Vector2(7.6, -6.2), [Vector2(5.0, -2.0), Vector2(7.6, -2.0)])
+	K.line("g5", "cable", "power", "SWB", Vector2(16.4, 4.0), "DECON", Vector2(16.8, 4.0))
+	K.line("g6", "cable", "power", "SWB", Vector2(15.2, 6.0), "AIRC", Vector2(11.0, minf(_iy(13, 8.0), _iy(13, 12.4)) - 2.0), [Vector2(15.2, 7.6), Vector2(11.0, 7.6)])
+	K.line("g7", "cable", "power", "LAMP-P", Vector2(44.8, ROOF + 0.16), "LVL-1", Vector2(40.4, -9.2), [Vector2(44.8, -9.2)])
+	K.line("g8", "cable", "power", "LAMP-P", Vector2(45.4, ROOF + 0.16), "LVL-2", Vector2(56.6, -9.2), [Vector2(45.4, -9.2)])
+	K.line("g9", "cable", "power", "LVL-2", Vector2(58.4, -9.2), "LVL-3", Vector2(74.6, -9.2))
+	K.line("g10", "cable", "power", "LVL-3", Vector2(76.4, -9.2), "FLOWM", Vector2(81.0, 3.4), [Vector2(80.2, -9.2), Vector2(80.2, 3.0), Vector2(81.0, 3.0)])
+	K.line("g11", "cable", "power", "PM-1", Vector2(37.8, 12.0), "DOSE", Vector2(39.4, 12.0))
+	K.line("g12", "cable", "power", "PM-3", Vector2(73.8, 12.4), "SUMP", Vector2(76.0, 12.4))
+	K.line("g13", "cable", "power", "CTL", Vector2(89.6, 4.0), "UPS-A", Vector2(91.6, 3.0), [Vector2(89.6, 4.4), Vector2(91.6, 4.4)])
+	K.line("g14", "cable", "power", "LAMP-A", Vector2(95.8, _iy(7, 95.6) + 0.16), "SAMPLE-A", Vector2(98.4, 0.0), [Vector2(95.8, 0.0)])
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -277,6 +381,8 @@ static func _controls() -> void:
 	K.ctrl("AUX-P", "socket", px2, Vector2(32.2, 14.05), {"target": "aux", "state": false})
 	for h in [["HT-C", ""], ["HT-P", ""], ["HT-A", ""], ["HT-B", ""], ["HT-L", ""]]:
 		K.door(h[0], h[1])
+	K.ctrl("PBA", "port", by_tag["BA-BANK"], Vector2(26.0, 7.0), {"medium": "gas", "target": "BA", "hidden_room": "L"})
+	K.ctrl("PN2", "port", by_tag["N2-H"], Vector2(82.6, -1.4), {"medium": "gas", "target": "N2H", "hidden_room": "P"})
 
 
 # ---------------------------------------------------------------- rooms
@@ -299,6 +405,8 @@ static func meta() -> Dictionary:
 	var vessels := {}
 	var vols := {}
 	var branches := {}
+	vessels["BA"] = {"V": 0.1, "kpa": 20000.0, "piece": "BA-BANK", "burst": 200.0}
+	vessels["N2H"] = {"V": 0.12, "kpa": 6000.0, "piece": "N2-H", "burst": 200.0}
 	var labels := {"BAT": "BAT", "SWB": "SWB", "MANIFOLD": "MANIFOLD", "BATCHLOG": "BATCH LOG", "CTL": "CONTROL"}
 	for i in 3:
 		var n := str(i + 1)
@@ -314,10 +422,10 @@ static func meta() -> Dictionary:
 		"title": ["FL-116「潮汐」工艺船 · 118 m", "FL-116 TIDE · PROCESS SHIP · 118 m"],
 		"contract": "FL-116",
 		"length": 118.0,
-		"value": {"total": 180000.0, "metal": 36000.0},
+		"value": {"total": 308100.0, "metal": 36000.0},
 		"clamps": [[34.0, 13.8], [56.0, 13.8], [78.0, 13.8]],
 		"room_names": {"C": "room_flC", "L": "room_flL", "P": "room_flP", "B": "room_flB", "A": "room_flA", "T1": "room_flT", "T2": "room_flT", "T3": "room_flT"},
-		"gas": {"rooms": {"C": 101.0, "L": 101.0, "P": 101.0, "B": 101.0, "A": 101.0, "T1": 101.0, "T2": 101.0, "T3": 101.0}, "vessels": vessels, "valves": [], "value": 2400.0},
+		"gas": {"rooms": {"C": 101.0, "L": 101.0, "P": 101.0, "B": 101.0, "A": 101.0, "T1": 101.0, "T2": 101.0, "T3": 101.0}, "vessels": vessels, "valves": [], "value": 3200.0},
 		"media": {"branches": branches, "manifold": "MANIFOLD"},
 		"power": {
 			"bus": "SWB",
@@ -332,7 +440,7 @@ static func meta() -> Dictionary:
 		"labels": labels,
 		"hints": {},
 		"market": {
-			"class": "FL", "name": ["潮汐级工艺船", "TIDE-CLASS PROCESS SHIP"], "time": 44.0,
+			"class": "FL", "name": ["潮汐级工艺船", "TIDE-CLASS PROCESS SHIP"], "time": 54.0,
 			"rooms": {"C": [0.2, 40.0, 101.0], "L": [0.2, 40.0, 101.0], "B": [0.2, 40.0, 101.0], "A": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {"t1": [0.3, 1.5], "t2": [0.3, 1.5], "t3": [0.3, 1.5]}, "fill": {"l1": "t1", "l2": "t2", "l3": "t3"},

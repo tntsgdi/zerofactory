@@ -50,7 +50,9 @@ static func build(world) -> void:
 	_cabinet()
 	_engines()
 	_strakes()
+	_fitout()
 	_lines()
+	_fit_lines()
 	_controls()
 	_rooms()
 
@@ -277,6 +279,91 @@ static func _strakes() -> void:
 		K.bolt(st, K.at(sx[1] - 1.0, 10.5, ["hull"]), sx[1] - 1.0, 10.8)
 
 
+# ---------------------------------------------------------------- the fit-out (player 2026-10-19: fill the rooms with what a custody transport carries)
+
+# equipment hung from the hull above (its top on inner edge i)
+static func _hang(tag: String, art: String, x0: float, x1: float, y1: float, i: int, opts: Dictionary):
+	var top: float = maxf(_iy(i, x0), _iy(i, x1))
+	var p = K.equip(tag, art, K.rect(x0, top, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) - 0.3, ["hull"]), x, top)
+	return p
+
+
+# equipment standing on a piece below it (or hung under it)
+static func _stand(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, base, opts: Dictionary, under := false, type := "bolt"):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, base, x, y0 if under else y1, type)
+	return p
+
+
+# equipment standing on a sloping floor (inner edge i), h tall at its high end
+static func _floor(tag: String, art: String, x0: float, x1: float, h: float, i: int, opts: Dictionary):
+	var ya := _iy(i, x0)
+	var yb := _iy(i, x1)
+	var top := minf(ya, yb) - h
+	var p = K.equip(tag, art, K.rect(x0, top, x1, maxf(ya, yb)), opts, K.mp([Vector2(x0, top), Vector2(x1, top), Vector2(x1, yb), Vector2(x0, ya)]))
+	for x in [x0 + 0.3, x1 - 0.3]:
+		K.bolt(p, K.at(x, _iy(i, x) + 0.3, ["hull"]), x, _iy(i, x))
+	return p
+
+
+# equipment bolted by its side to a wall at x
+static func _wall(tag: String, art: String, x0: float, y0: float, x1: float, y1: float, wall, wx: float, opts: Dictionary):
+	var p = K.equip(tag, art, K.rect(x0, y0, x1, y1), opts)
+	K.bolt(p, wall, wx, y0 + 0.5)
+	K.bolt(p, wall, wx, y1 - 0.5)
+	return p
+
+
+static func _fitout() -> void:
+	# each vault's upper tier: four locked deposit drawers under its roof
+	for v in VAULTS:
+		var n: String = v[2]
+		var x0: float = v[0] + VW
+		var xs: Array = [0.4, 5.2, 10.0, 15.8]
+		for k in 4:
+			var dx: float = x0 + xs[k]
+			_stand("DEP-%s%d" % [n, k + 1], "vault", dx, VTOP + VW, dx + 4.4, VTOP + VW + 2.2, by_tag["V%s-T" % n],
+				{"mass": 0.6, "value": 6000.0, "fragile": 0.3, "room": "V" + n, "name_key": "p_deposit"}, true, "lock")
+	# security: the camera wall and its air under the roof, the armoury, the evidence
+	# locker on the bulkhead, the biometric terminal, the vault door controller
+	_hang("CCTV-S", "screen", 31.0, 36.0, -8.6, 2, {"mass": 0.3, "value": 6000.0, "fragile": 0.5, "room": "S", "name_key": "p_cargo_mon"})
+	_hang("AIR-S", "env", 36.4, 39.6, -9.4, 2, {"mass": 0.4, "value": 4000.0, "fragile": 0.4, "room": "S", "name_key": "p_ahu"})
+	_hang("ARMORY", "locker", 24.0, 27.6, -8.0, 1, {"mass": 0.7, "value": 8000.0, "fragile": 0.3, "room": "S", "name_key": "p_armory"})
+	_wall("EVID", "cabinet", B1 + 0.4, -6.0, 22.4, -1.0, by_tag["B1"], B1 + 0.4, {"mass": 0.4, "value": 7000.0, "fragile": 0.4, "room": "S", "name_key": "p_evidence"})
+	_stand("BIO", "insp", 31.9, 1.6, 33.2, SDECK, by_tag["SD-2"], {"mass": 0.1, "value": 5000.0, "fragile": 0.6, "room": "S", "name_key": "p_biometric"})
+	_wall("DOOR-CTL", "swb", 37.6, -9.0, B2, -6.4, by_tag["B2-T"], B2, {"mass": 0.3, "value": 5500.0, "fragile": 0.4, "room": "S", "name_key": "p_vault_ctrl"})
+	# the power room: standby supply and charger under the deck, the inverter on the
+	# floor, the CO2 bottles on the bulkhead
+	_stand("UPS-P", "battery", 32.4, SDECK + 0.3, 35.4, 6.0, by_tag["SD-2"], {"mass": 0.7, "value": 6000.0, "fragile": 0.4, "room": "P", "name_key": "p_ups"}, true)
+	_stand("CHG-P", "cap", 36.0, SDECK + 0.3, 38.6, 5.8, by_tag["SD-2"], {"mass": 0.3, "value": 4000.0, "fragile": 0.4, "room": "P", "name_key": "p_charge_ctrl"}, true)
+	_stand("INV-P", "swb", 37.6, 7.6, 40.4, BELLY, K.at(39.0, BELLY + 0.35, ["hull"]), {"mass": 0.4, "value": 5000.0, "fragile": 0.4, "room": "P", "name_key": "p_inverter"})
+	_wall("CO2-P", "gastank", 39.2, 4.2, B2, 7.2, by_tag["B2-B"], B2, {"mass": 0.4, "value": 1500.0, "fragile": 0.3, "room": "P", "hazard": "gas_tank", "name_key": "p_co2_bottle"})
+	# the bridge's radio
+	_stand("RADIO-B", "nav", 38.6, -14.4, 41.0, -13.6, by_tag["BR-R2"], {"mass": 0.1, "value": 4000.0, "fragile": 0.5, "room": "B", "name_key": "p_comms"}, true)
+	# aft: the cabinet room's air, the voyage recorder on the stern wall, the escort
+	# crew's locker under the release panel, the standby generator on the floor
+	_hang("AIR-M", "env", 91.0, 93.6, -7.0, 3, {"mass": 0.3, "value": 3500.0, "fragile": 0.4, "room": "M", "name_key": "p_ahu"})
+	var sw = K.at(101.6, -2.0, ["hull"])
+	_wall("REC-M", "blackbox", 99.4, -3.6, 101.3, -0.2, sw, 101.3, {"mass": 0.2, "value": 9000.0, "fragile": 0.3, "room": "M", "name_key": "p_voyage_recorder"})
+	_wall("ESCORT-L", "locker", B3 + 0.4, 6.8, 92.8, BELLY, by_tag["B3-B"], B3 + 0.4, {"mass": 0.4, "value": 2500.0, "fragile": 0.3, "room": "M", "name_key": "p_suit_locker"})
+	_floor("GEN-M", "gen", 94.4, 98.0, 2.0, 6, {"mass": 1.4, "value": 7000.0, "fragile": 0.35, "room": "M", "name_key": "p_standby_gen"})
+
+
+static func _fit_lines() -> void:
+	K.line("f1", "cable", "power", "LAMP-S", Vector2(30.4, ROOF + 0.16), "CCTV-S", Vector2(31.0, -9.6), [Vector2(30.4, -9.6)])
+	K.line("f2", "cable", "power", "CCTV-S", Vector2(36.0, -10.0), "AIR-S", Vector2(36.4, -10.0))
+	K.line("f3", "cable", "power", "LS-1", Vector2(39.9, -5.6), "DOOR-CTL", Vector2(39.9, -6.4))
+	K.line("f4", "cable", "power", "S-RACK", Vector2(33.4, 2.0), "BIO", Vector2(33.2, 2.0))
+	K.line("f5", "cable", "power", "SWB", Vector2(22.4, 4.4), "UPS-P", Vector2(32.4, 4.4))
+	K.line("f6", "cable", "power", "UPS-P", Vector2(35.4, 4.6), "CHG-P", Vector2(36.0, 4.6))
+	K.line("f7", "cable", "power", "CHG-P", Vector2(37.0, 5.8), "INV-P", Vector2(38.4, 7.6), [Vector2(37.0, 7.0), Vector2(38.4, 7.0)])
+	K.line("f8", "cable", "power", "HELM", Vector2(40.2, -13.4), "RADIO-B", Vector2(40.2, -13.6))
+	K.line("f9", "cable", "power", "LAMP-M", Vector2(93.8, _iy(3, 94.0) + 0.16), "AIR-M", Vector2(93.6, -7.4), [Vector2(93.8, -7.4)])
+	K.line("f10", "cable", "power", "LB", Vector2(100.3, 0.4), "REC-M", Vector2(100.3, -0.2))
+
 # ---------------------------------------------------------------- lines
 
 static func _lines() -> void:
@@ -327,6 +414,7 @@ static func _controls() -> void:
 	K.ctrl("MR-2", "switch", by_tag["MRP"], Vector2(B3 + 0.8, 5.6), {"target": "MR-2", "state": false, "hidden_room": "M"})
 	K.ctrl("E-L1", "test", by_tag["LS-1"], Vector2(B2 - 0.7, -4.0), {"medium": "volt", "target": "LS-1", "hidden_room": "S"})
 	K.ctrl("E-L2", "test", by_tag["LS-2"], Vector2(B3 + 1.1, -4.0), {"medium": "volt", "target": "LS-2", "hidden_room": "M"})
+	K.ctrl("PCO", "port", by_tag["CO2-P"], Vector2(39.9, 6.6), {"medium": "gas", "target": "CO2P", "hidden_room": "P"})
 
 
 # ---------------------------------------------------------------- rooms
@@ -354,10 +442,10 @@ static func meta() -> Dictionary:
 		"title": ["ES-112「铁誓」装甲保管运输舰 · 115 m", "ES-112 IRON OATH · ARMOURED CUSTODY TRANSPORT · 115 m"],
 		"contract": "ES-112",
 		"length": 115.0,
-		"value": {"total": 228000.0, "metal": 48000.0},
+		"value": {"total": 354700.0, "metal": 48000.0},
 		"clamps": [[36.0, 10.8], [62.0, 10.8], [86.0, 10.8]],
 		"room_names": {"S": "room_esS", "P": "room_esP", "B": "room_esB", "V1": "room_esV1", "V2": "room_esV2", "M": "room_esM"},
-		"gas": {"rooms": {"S": 101.0, "P": 101.0, "B": 101.0, "V1": 101.0, "V2": 101.0, "M": 101.0}, "vessels": {}, "valves": [], "value": 1800.0},
+		"gas": {"rooms": {"S": 101.0, "P": 101.0, "B": 101.0, "V1": 101.0, "V2": 101.0, "M": 101.0}, "vessels": {"CO2P": {"V": 0.06, "kpa": 5700.0, "piece": "CO2-P", "burst": 200.0}}, "valves": [], "value": 2100.0},
 		"vaults": {"VD-1": {"locks": ["LS-1"], "release": "MR-1"}, "VD-2": {"locks": ["LS-2"], "release": "MR-2"}},
 		"power": {
 			"bus": "SWB",
@@ -374,7 +462,7 @@ static func meta() -> Dictionary:
 		"labels": labels,
 		"hints": {},
 		"market": {
-			"class": "ES", "name": ["铁誓级装甲保管运输舰", "IRON OATH-CLASS CUSTODY TRANSPORT"], "time": 46.0,
+			"class": "ES", "name": ["铁誓级装甲保管运输舰", "IRON OATH-CLASS CUSTODY TRANSPORT"], "time": 54.0,
 			"rooms": {"S": [0.2, 40.0, 101.0], "P": [0.2, 40.0, 101.0], "B": [0.2, 40.0, 101.0], "M": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.2, 1.0]},
 			"fluids": {},
