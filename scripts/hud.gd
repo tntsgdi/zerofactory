@@ -790,8 +790,13 @@ func _contract_panel() -> void:
 			c.draw_arc(Vector2(mx, by + 14), 4.0 + 18.0 * Pal.ease_out(pe), 0.0, TAU, 24, Pal.heat(0.8 * (1.0 - pe), 1.3), 1.4, true)
 	_text(g.txt("target") + " 70% · 80% · 92%", Vector2(x, by + 36), 13, Pal.ink(0.5), font)
 	if not g.training and g.exam == null:
-		var nl: int = g.pieces_left().size()
+		var nl: int = g.left_count()
 		_text(g.txt("left_n") % nl, Vector2(x, by + 60), 13, Pal.heat(0.9, 1.2) if nl > 0 and nl <= 8 else Pal.ink(0.5), font_b if nl <= 8 else font)
+		# a job of several days: which day it is, and what is left of it
+		if g.workday != null and g.workday.active():
+			var fresh: bool = g.workday.card_t >= 0.0
+			_text(g.txt("wd_day") % [g.workday.day, g.workday.planned(), _clock(maxf(0.0, g.workday.left_today()))], Vector2(x + 300, by + 60), 13,
+				Pal.heat(0.9, 1.3) if fresh else Pal.ink(0.5), font_b if fresh else font, 1)
 	if g.story != null and not g.story.items.is_empty():
 		_text(g.txt("st_found") % [g.story.found_count(), g.story.items.size()], Vector2(x + 300, by + 36), 13, Pal.tint(Pal.AIR, 0.55, 1.0), font, 1)
 	elif g.standard_time() > 0.0:

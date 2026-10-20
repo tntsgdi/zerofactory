@@ -102,6 +102,11 @@ static func build(w, d: Dictionary) -> Dictionary:
 			push_warning("ship %s: line %s has a missing end" % [d.get("id", "?"), ld.id])
 			continue
 		w.add_line(ld.id, ld.kind, ld.net, a, _v(ld.pa), b, _v(ld.pb), _poly(ld.path))
+		# a line that came in already severed (ARK-01's trunk at L6): where it was cut
+		if ld.has("cut"):
+			var l = w.lines[ld.id]
+			l.alive = false
+			l.cut_at = _v(ld.cut)
 	for cd in d.get("ctrls", []):
 		var opts := {}
 		for k in ["state", "medium", "target", "hidden_room"]:

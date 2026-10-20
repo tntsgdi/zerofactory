@@ -57,5 +57,13 @@ func _run() -> void:
 	for i in 90:
 		await process_frame
 	Cap.save(root, "res://tests/out/ark_close_cut.png")
+	# more views: "x,y,zoom,name" after the ship's name
+	for a in args.slice(1):
+		var v := a.split(",")
+		g.zoom_override = float(v[2])
+		g.cam_override = Vector2(float(v[0]), float(v[1])) * M
+		for i in 70:
+			await process_frame
+		Cap.save(root, "res://tests/out/ark_%s.png" % v[3])
 	print("ARK SHOT done (removed %s)" % (best.tag if best != null else "-"))
 	quit()

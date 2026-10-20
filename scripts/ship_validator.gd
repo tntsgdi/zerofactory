@@ -437,6 +437,8 @@ static func _settle(d: Dictionary, w, bad: Array) -> void:
 		bad.append("contract value is not set")
 		return
 	var sum := float(v.get("metal", 0.0)) + float(d.get("gas", {}).get("value", 0.0))
+	# what a ship pays on top of its parts when it goes out whole (LC-140's nested ship)
+	sum += float(v.get("bonus", 0.0))
 	sum += float(d.get("ore", {}).get("fines", 0.0)) * float(d.get("ore", {}).get("price", 0.0))
 	for f in d.get("fluids", {}).get("value", {}):
 		sum += float(d.fluids.value[f])

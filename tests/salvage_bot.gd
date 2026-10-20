@@ -129,6 +129,9 @@ func step() -> bool:
 	t += 1
 	phase_t += 1
 	if t < 3:
+		# a big ship gets the time it needs
+		if t == 2 and g.world != null:
+			timeout = maxi(timeout, g.world.order.size() * 40)
 		return false
 	if paced:
 		busy = maxf(0.0, busy - (g.sys.time - last_sim))
@@ -172,6 +175,14 @@ func _prep() -> void:
 		if cs != "" and w.ctrls.has(cs) and not w.ctrls[cs].state and not _hidden(cs) and _once("cold " + cs):
 			_w(cs)
 			_note("temporary cooling on %s" % cs)
+			_work(2.5)
+			return
+	# a hull still hot from the sun: the berth's cooling into its loop before anything else
+	if g.thermal != null and g.thermal.active():
+		var lp: String = str(g.thermal.cfg.get("loop", ""))
+		if lp != "" and w.ctrls.has(lp) and not w.ctrls[lp].state and not _hidden(lp) and _once("loop " + lp):
+			_w(lp)
+			_note("berth cooling on %s" % lp)
 			_work(2.5)
 			return
 	# a guard over a port comes off first (it is a fixture: its fixings undone)
@@ -306,6 +317,52 @@ func _prep() -> void:
 					_note("seat %s let go" % t)
 					_work(2.0)
 					return
+	# a dilution refrigerator: the isolation table locked and the circulation stopped
+	# before anything else; the heaters on once the mixing chamber is past the shock
+	# temperature (the bus stays up until the mixture is recovered, below)
+	if g.dilution != null and g.dilution.active():
+		var dc: Dictionary = g.dilution.cfg
+		var lk: String = str(dc.get("isolation", {}).get("lock", ""))
+		if not s.on(lk) and not _hidden(lk) and _once("vi " + lk):
+			_w(lk)
+			_note("isolation table locked")
+			_work(2.5)
+			return
+		var ci: String = str(dc.get("circ", ""))
+		if s.on(ci) and not _hidden(ci) and _once("circ " + ci):
+			_w(ci)
+			_note("circulation stopped")
+			_work(2.5)
+			return
+		var pt: String = str(dc.get("pt", ""))
+		if not g.dilution.mix_in() and s.on(pt) and not _hidden(pt) and _once("pt " + pt):
+			_w(pt)
+			_note("mixture in: pulse tube off")
+			_work(2.5)
+			return
+		var ht: String = str(dc.get("heater", ""))
+		if not g.dilution.running() and g.dilution.mxc_temp() > float(dc.get("shock_T", 30.0)) + 5.0 and not s.on(ht) and not _hidden(ht) and _once("heat " + ht):
+			_w(ht)
+			_note("warm-up heaters on")
+			_work(2.5)
+			return
+	# a client's drives latched into custody before anything moves them
+	if g.immersion != null and g.immersion.active():
+		for d in g.immersion.cfg.get("drives", {}):
+			var lt: String = str(g.immersion.cfg.drives[d])
+			if not s.on(lt) and not _hidden(lt) and _once("cust " + lt):
+				_w(lt)
+				_note("drive %s latched into custody" % d)
+				_work(1.5)
+				return
+	# the newer modules list their own preparations: [switch, note, seconds]
+	for m in _gen_mods():
+		for st in m.bot_prep():
+			if not _hidden(str(st[0])) and _once("gen " + str(st[0])):
+				_w(str(st[0]))
+				_note(str(st[1]))
+				_work(float(st[2]))
+				return
 	# a reactor's control drums locked before anything near the core moves
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
@@ -436,6 +493,8 @@ func _prep() -> void:
 			continue
 		if g.tanknet != null and (g.tanknet.hold_port(id) or id == g.tanknet.cfg.get("port", "")):
 			continue
+		if _gen_mods().any(func(m): return m.has_method("hold_port") and m.hold_port(id)):
+			continue
 		if not w.ctrl_alive(c) or g.tools._ctrl_blocked(c) != "":
 			continue
 		var want := false
@@ -462,9 +521,48 @@ func _prep() -> void:
 			_note("hose %s" % id)
 			_work(2.5)
 			return
+	# a room with no port of its own (ARK-01's spine segments under the halls, its transfer
+	# airlocks): once a neighbour is empty, the door between them opens and it vents
+	# through the neighbour's hose (the doors run on the bus, or on the berth's supply)
+	for n in w.rooms:
+		if s.P(n) <= 5.0 or _has_port(n):
+			continue
+		for id in _doors_of(n):
+			var dc = w.ctrls[id]
+			var dp = w.tag(str(dc.target))
+			if dp == null or dp.gone or dp.door_open or done_ops.has("door " + id):
+				continue
+			# only into a neighbour that is being drawn off (its gas recovered, not lost to space)
+			var other := ""
+			for o in _door_rooms(id):
+				if o != n and s.P(o) < 5.0 and _hosed(o):
+					other = o
+			if other == "":
+				continue
+			if dc.hidden_room != "" and w.room_hidden(dc.hidden_room):
+				if s.P(dc.hidden_room) < 5.0 and _once("open " + dc.hidden_room):
+					_open_room(dc.hidden_room, id)
+					return
+				continue
+			if g.rings != null and g.rings.active() and _ring_shut(id):
+				continue
+			if not (s.bus_live or s.aux):
+				for sid in w.ctrls:
+					var sc = w.ctrls[sid]
+					if sc.kind == "socket" and sc.target == "aux" and not sc.state and not _hidden(sid) and _once("aux " + sid):
+						_w(sid)
+						_note("berth supply on %s for the doors" % sid)
+						_work(2.5)
+						return
+				continue
+			done_ops["door " + id] = true
+			_w(id)
+			_note("door %s open: %s vents into %s" % [id, n, other])
+			_work(2.5)
+			return
 	# a hot furnace core: its heat exchange keeps running on the bus until it is cool;
 	# a propellant network's pump runs on the bus until the propellant is drawn
-	var core_hot: bool = (g.furnace != null and g.furnace.hot()) or (g.tanknet != null and g.tanknet.active() and g.tanknet.fuel_left() > 0.02) 		or (g.train != null and g.train.active() and g.train.fluid_left() > 0.02) or (g.ice != null and g.ice.active() and g.ice.blocks_left() > 0)
+	var core_hot: bool = (g.furnace != null and g.furnace.hot()) or (g.tanknet != null and g.tanknet.active() and g.tanknet.fuel_left() > 0.02) 		or (g.train != null and g.train.active() and g.train.fluid_left() > 0.02) or (g.ice != null and g.ice.active() and g.ice.blocks_left() > 0) or (g.dilution != null and g.dilution.active() and g.dilution.mix_in()) 		or _gen_mods().any(func(m): return m.has_method("hold_power") and m.hold_power())
 	# power: open every source switch, send remote stops, then bleed capacitors
 	for tg in s.src_order:
 		if core_hot:
@@ -506,6 +604,60 @@ func _prep() -> void:
 			_note("discharge %s" % src.discharge)
 			_work(2.5)
 			return
+	if g.rings != null and g.rings.active():
+		var rgs = g.rings
+		var rc: Dictionary = rgs.cfg.rings
+		for r in rc:
+			if rgs.locked.has(r):
+				continue
+			var e: Dictionary = rc[r]
+			var dump := ""
+			var cp: String = e.get("cap", "")
+			if s.iso.has(cp):
+				dump = str(s.iso[cp].get("discharge", ""))
+			for sw in [str(e.get("cool", "")), dump]:
+				if sw != "" and not s.on(sw) and not _hidden(sw) and _once("ring " + sw):
+					_w(sw)
+					_note("%s on" % sw)
+					_work(2.5)
+					return
+			# its own battery off and still live: fed from the other ring down the trunk; its slip ring opened
+			if rgs.loads_live(r):
+				var sr: String = str(e.get("slip", ""))
+				if s.iso.has("BAT-R" + r) and s.on(str(s.iso["BAT-R" + r].get("switch", ""))):
+					continue
+				if s.on(sr) and not _hidden(sr) and _once("slip " + sr):
+					_w(sr)
+					_note("slip ring %s open: ring %s still fed" % [sr, r])
+					_work(2.5)
+					return
+		if not rc.keys().any(func(r): return rgs.loads_live(r)):
+			# as many brakes on each as bring both to rest together, one ring and the other in turn
+			var want := {}
+			var slow := 0.0
+			for r in rc:
+				slow = maxf(slow, float(rgs.rpm[r]) / float(rc[r].get("decel", 0.01)))
+			for r in rc:
+				var nb: int = rc[r].get("brakes", []).size()
+				var tr: float = float(rgs.rpm[r]) / float(rc[r].get("decel", 0.01))
+				want[r] = clampi(ceili(nb * tr / maxf(slow, 0.001)), 1, nb)
+			for i in 4:
+				for r in rc:
+					var bs: Array = rc[r].get("brakes", [])
+					if i < int(want[r]) and i < bs.size() and rgs.turning(r):
+						var bsw: String = str(bs[i])
+						if not s.on(bsw) and not _hidden(bsw) and _once("brake " + bsw):
+							_w(bsw)
+							_note("brake %s on" % bsw)
+							_work(2.5)
+							return
+			for r in rc:
+				var lk: String = str(rc[r].get("lock", ""))
+				if not rgs.turning(r) and not rgs.locked.has(r) and not _hidden(lk) and _once("lock " + lk):
+					_w(lk)
+					_note("ring %s at rest: bearing locked" % r)
+					_work(2.5)
+					return
 	# heavy parts that must come off together: the hull's support set first
 	if g.mech != null and not g.mech.balance.is_empty():
 		var sup: String = g.mech.balance.get("support", "")
@@ -589,7 +741,7 @@ func _prep() -> void:
 	Engine.time_scale = fast
 	if _safe() or phase_t > 60 * 60 * 6:
 		if not _safe():
-			_note("prep gave up: %s" % _unsafe())
+			_note("prep gave up: %s" % str(_unsafe()))
 			forced += 1
 		Engine.time_scale = 1.0
 		_note("safe at t=%.1f s sim" % s.time)
@@ -635,6 +787,20 @@ func _cond_ok(until: Dictionary) -> bool:
 				v = s.loop_T
 				op = a[0]
 				lim = a[1]
+			"stage":
+				v = g.dilution.stage_temp(a[0]) if g.dilution != null else 0.0
+				op = a[1]
+				lim = a[2]
+			"zone":
+				v = g.thermal.zone_temp(a[0]) if g.thermal != null else 0.0
+				op = a[1]
+				lim = a[2]
+			"mod":
+				# a module's own reading: [module, its method, op, limit]
+				var m = g.get(str(a[0]))
+				v = float(m.call(str(a[1]))) if m != null else 0.0
+				op = a[2]
+				lim = a[3]
 			_:
 				continue
 		if (op == "<" and v >= lim) or (op == ">" and v <= lim):
@@ -727,6 +893,16 @@ func _unsafe() -> Array:
 		out.append_array(g.sandwich.unsafe())
 	if g.ice != null and g.ice.active():
 		out.append_array(g.ice.unsafe())
+	if g.rings != null and g.rings.active():
+		out.append_array(g.rings.unsafe())
+	if g.dilution != null and g.dilution.active():
+		out.append_array(g.dilution.unsafe())
+	if g.thermal != null and g.thermal.active():
+		out.append_array(g.thermal.unsafe())
+	if g.immersion != null and g.immersion.active():
+		out.append_array(g.immersion.unsafe())
+	for m in _gen_mods():
+		out.append_array(m.unsafe())
 	if g.reactor != null and g.reactor.active():
 		for d in g.reactor.cfg.get("drums", {}):
 			if not s.on(str(g.reactor.cfg.drums[d])):
@@ -786,6 +962,88 @@ func _unsafe() -> Array:
 	return out
 
 
+# loose equipment not yet sent off lying within reach of a piece
+# the newer ship modules, which tell the bot what they need themselves
+# (bot_prep(), unsafe(), optionally bot_order())
+const GEN_MODS := ["optics", "magnets", "waterball", "nested", "drillstring"]
+
+
+func _gen_mods() -> Array:
+	var out: Array = []
+	for n in GEN_MODS:
+		var m = g.get(n)
+		if m != null and m.active():
+			out.append(m)
+	return out
+
+
+func _loose_near(p) -> bool:
+	var bb: Rect2 = Geom.bbox(g.world.world_poly(p)).grow(3.0 * M)
+	for b in g.world.bodies:
+		if not is_instance_valid(b) or sent.has(b) or b.capture != null:
+			continue
+		if not b.pieces.any(func(q): return q.cls == "equip" and q.intact):
+			continue
+		if bb.has_point(b.global_transform * b.center_of_mass):
+			return true
+	return false
+
+
+func _hosed(room: String) -> bool:
+	for id in g.world.ctrls:
+		var c = g.world.ctrls[id]
+		if c.kind == "port" and c.medium == "gas" and c.target == room and g.sys.hoses.has(id):
+			return true
+	return false
+
+
+func _has_port(room: String) -> bool:
+	for id in g.world.ctrls:
+		var c = g.world.ctrls[id]
+		if c.kind == "port" and c.medium == "gas" and c.target == room:
+			return true
+	return false
+
+
+# the rooms either side of a door (looked at once)
+var _door_rooms_c := {}
+
+
+func _door_rooms(id: String) -> Array:
+	if _door_rooms_c.has(id):
+		return _door_rooms_c[id]
+	var out: Array = []
+	var c = g.world.ctrls[id]
+	var dp = g.world.tag(str(c.target))
+	if dp != null:
+		var bb := Geom.bbox(dp.poly)
+		var cc := bb.get_center()
+		var d := 0.9 * M
+		var probes: Array = [cc + Vector2(bb.size.x * 0.5 + d, 0), cc - Vector2(bb.size.x * 0.5 + d, 0)] if bb.size.y > bb.size.x else [cc + Vector2(0, bb.size.y * 0.5 + d), cc - Vector2(0, bb.size.y * 0.5 + d)]
+		for q in probes:
+			var r: String = g.world.room_at(q)
+			if r != "" and not out.has(r):
+				out.append(r)
+	_door_rooms_c[id] = out
+	return out
+
+
+func _doors_of(room: String) -> Array:
+	var out: Array = []
+	for id in g.world.ctrls:
+		if g.world.ctrls[id].kind == "door" and _door_rooms(id).has(room):
+			out.append(id)
+	return out
+
+
+# a transfer airlock's door stays shut while its ring is unlocked
+func _ring_shut(id: String) -> bool:
+	for r in g.rings.cfg.rings:
+		if (g.rings.cfg.rings[r].get("airlocks", []) as Array).has(id) and not g.rings.locked.has(r):
+			return true
+	return false
+
+
 func _safe() -> bool:
 	return _unsafe().is_empty()
 
@@ -793,7 +1051,10 @@ func _safe() -> bool:
 func _go_strip() -> void:
 	var s = g.sys
 	for id in s.hoses.keys():
-		g.do_hose(ctrl(id))
+		# (a port that went with its piece, LC-140's courier, has no hose to take off)
+		var hc := ctrl(id)
+		if not hc.is_empty():
+			g.do_hose(hc)
 	for n in g.world.rooms:
 		g.world.reveal(n, g.world.rooms[n].from)
 	var rank := {"equip": 0, "fixture": 1, "strut": 2, "rail": 3, "rib": 3, "beam": 4, "door": 5, "bulkhead": 5, "deck": 5, "hatch": 6, "hull": 6, "keel": 7}
@@ -805,6 +1066,14 @@ func _go_strip() -> void:
 			return -1
 		return rank.get(p.kind, 5)
 	order.sort_custom(func(a, b): return rk.call(a) < rk.call(b))
+	# a spine that carries the tail: the tail's weight comes off first (else a chord, or
+	# the posts that hold one, goes with the whole weight still on it)
+	if g.spine != null and g.spine.active():
+		var hx: float = float(g.spine.cfg.get("hung_x", 0.0)) * M
+		var aft: Array = order.filter(func(id): return Geom.centroid(g.world.pieces[id].poly).x > hx)
+		# from the stern forward: what holds the spine's aft chords goes last of all
+		aft.sort_custom(func(a, b): return Geom.centroid(g.world.pieces[a].poly).x > Geom.centroid(g.world.pieces[b].poly).x)
+		order = aft + order.filter(func(id): return Geom.centroid(g.world.pieces[id].poly).x <= hx)
 	# a train comes apart from its tail: everything aft of the jammed coupler first
 	if g.train != null and g.train.active():
 		var aft: Array = g.train.cfg.get("jam", {}).get("aft", [])
@@ -832,6 +1101,10 @@ func _go_strip() -> void:
 			var p = g.world.pieces[id]
 			var c: Vector2 = Geom.centroid(p.poly)
 			return p.scope or (p.kind == "hull" and c.y < -3.5 * M and c.x > lo - M and c.x < hi + M))
+	# the newer modules' own order (after the scope: they may add what must come off first)
+	for m in _gen_mods():
+		if m.has_method("bot_order"):
+			order = m.bot_order(order)
 	phase = "strip"
 	phase_t = 0
 	Engine.time_scale = 1.0
@@ -853,15 +1126,28 @@ func _strip() -> void:
 			break
 	if phase_t % 2 != 0:
 		return
+	# a big ship would otherwise have hundreds of pieces adrift at once
+	if w.bodies.size() >= LOOSE_MAX * 2:
+		return
+	var tries := order.size()
 	while not order.is_empty():
 		var id = order.pop_front()
 		var p = w.pieces.get(id)
 		if p == null or p.gone or p.body != null:
 			continue
+		if g.spine != null and g.spine.carrying(p.tag) and tries > 0:
+			tries -= 1
+			order.append(id)
+			continue
 		# with the heavy crane a piece it can lift goes out whole; without, along its marked lines
 		if not (g.crane != null and p.mass <= g.crane.MAX_T) and _cut_segments(p):
 			_requeue_parts(p)
 			return
+		# structure isn't taken out from under loose equipment still lying against it
+		if p.cls != "equip" and tries > 0 and _loose_near(p):
+			tries -= 1
+			order.append(id)
+			continue
 		for j in w.joints_of(p):
 			w.kill_joint(j)
 		for l in w.lines_of(p):
@@ -978,10 +1264,16 @@ func _strip_paced() -> void:
 	# behind, wait for them to catch up (a big ship otherwise fills the berth with drift)
 	if w.bodies.size() >= LOOSE_MAX:
 		return
+	var tries := order.size()
 	while not order.is_empty():
 		var id = order.pop_front()
 		var p = w.pieces.get(id)
 		if p == null or p.gone or p.body != null:
+			continue
+		# a spine chord still carrying the tail waits until the weight is off it
+		if g.spine != null and g.spine.carrying(p.tag) and tries > 0:
+			tries -= 1
+			order.append(id)
 			continue
 		# with the heavy crane a piece it can lift goes out whole; without, along its marked lines
 		if not (g.crane != null and p.mass <= g.crane.MAX_T) and _cut_segments(p):

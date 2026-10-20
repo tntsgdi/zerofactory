@@ -10,7 +10,8 @@ var view: Node2D
 var heat_view: Node2D
 var hit_imp := 0.0
 var hit_pos := Vector2.ZERO
-var prev_v := Vector2.ZERO
+var prev_v := Vector2.ZERO     # its motion at the last upkeep (game.gd: how hard a knock really was)
+var prev_w := 0.0
 var tethered := false
 var capture = null          # recovery zone that is swallowing this body
 var capture_t := 0.0

@@ -5,7 +5,8 @@ extends Node
 #   {"pods": {pod tag: {"clamps": [joint tags], "charge": the pyrotechnic charge,
 #     "bolt": the joint that holds the charge, "circuit": its firing capacitor (an
 #     isolated supply, cabled to the charge by "lead"), "kick": [x, y] m/s}},
-#    "glazing": {"room": the hall, "panes": [piece tags], "kpa": over this it blows out}}
+#    "glazing": {"room": the hall, "panes": [piece tags], "kpa": over this it blows out},
+#    "glazings": [more of those, one a hall (ARK-01's two greenhouses)]}
 #   A pod's launch clamp undone or cut (or its charge unbolted) while its charge is
 #   still on its lead and its firing circuit live: the bolts fire and the pod is
 #   thrown off (badly damaged). The circuit dead (its arming switch open, or never
@@ -124,9 +125,15 @@ func _fire(pod: String) -> void:
 func on_freed(b) -> void:
 	if not active():
 		return
-	var gz: Dictionary = cfg.get("glazing", {})
-	if gz.is_empty():
-		return
+	var all: Array = cfg.get("glazings", []).duplicate()
+	if not cfg.get("glazing", {}).is_empty():
+		all.append(cfg.glazing)
+	for gz in all:
+		_glazing(b, gz)
+
+
+# a pane of a hall still under pressure, freed: it blows out ("glazings": several halls)
+func _glazing(b, gz: Dictionary) -> void:
 	var room: String = gz.get("room", "")
 	if not game.sys.vols.has(room) or game.sys.P(room) <= float(gz.get("kpa", 20.0)):
 		return

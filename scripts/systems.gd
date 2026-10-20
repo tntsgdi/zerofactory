@@ -59,6 +59,9 @@ var switch := {}
 # electric
 var src := {}                     # source piece tag -> its ship-file entry + live "charge" / "running"
 var src_order: Array = []
+var breakers := {}                # cable line id -> the switch it runs through
+var _flood_key := ""              # what the networks were last walked for
+var _iso_sets := {}               # isolated supply tag -> {piece id: true} it reaches
 var iso := {}                     # isolated source tag -> {volts, charge, switch}: a supply of its own (a reefer unit, a nav battery)
 var bus_tag := ""
 var bus_live := false
@@ -123,6 +126,15 @@ func setup(g, w, ship: Dictionary) -> void:
 					cell_owner[gy * GW + gx] = id
 					c += 1
 		room_cells[n] = c
+	# a room inside another takes its cells from it (rooms are laid down outer first)
+	if world.rooms.size() > 1:
+		var cnt := {}
+		for i in cell_owner.size():
+			var o: int = cell_owner[i]
+			if o != 0:
+				cnt[o] = int(cnt.get(o, 0)) + 1
+		for n in world.rooms:
+			room_cells[n] = int(cnt.get(room_ids[n], 0))
 	var start: Dictionary = gas.get("rooms", {})
 	for n in world.rooms:
 		var v: float = room_cells[n] * CELL * CELL
@@ -165,6 +177,7 @@ func setup(g, w, ship: Dictionary) -> void:
 		# discharge point (inside, by the weapons' distribution) bleeds it
 		iso[s.piece] = {"volts": float(s.volts), "charge": float(s.get("charge", 1.0)), "switch": s.get("switch", ""),
 			"kind": s.get("kind", "battery"), "discharge": s.get("discharge", "")}
+	breakers = pw.get("breakers", {})
 	var fl: Dictionary = cfg.get("fluids", {})
 	for k in fl.get("volumes", {}):
 		var e: Dictionary = fl.volumes[k].duplicate()
@@ -251,6 +264,11 @@ func _grid_job_calc(polys: Array) -> Array:
 	solid.resize(GW * GH)
 	solid.fill(0)
 	var inv := 1.0 / (CELL * Geom.M)
+	# on a coarse grid (a station-sized ship's 0.8 m) a plate thinner than a cell can miss
+	# every cell centre and leave the wall open: a cell it covers 0.15 of a cell in from
+	# a corner counts as well (enough for a 0.6 m plate, without closing a 1.6 m hatch)
+	var sub := CELL * Geom.M * 0.15 if CELL >= 0.8 else 0.0
+	var offs := [Vector2(-sub, -sub), Vector2(sub, -sub), Vector2(-sub, sub), Vector2(sub, sub)]
 	for poly in polys:
 		var bb := Geom.bbox(poly)
 		var x0 := maxi(0, int(bb.position.x * inv - GX0 / CELL))
@@ -260,8 +278,16 @@ func _grid_job_calc(polys: Array) -> Array:
 		for gy in range(y0, y1 + 1):
 			for gx in range(x0, x1 + 1):
 				var idx := gy * GW + gx
-				if solid[idx] == 0 and Geometry2D.is_point_in_polygon(_cell_px(gx, gy), poly):
+				if solid[idx] != 0:
+					continue
+				var c := _cell_px(gx, gy)
+				if Geometry2D.is_point_in_polygon(c, poly):
 					solid[idx] = 1
+				elif sub > 0.0:
+					for o in offs:
+						if Geometry2D.is_point_in_polygon(c + o, poly):
+							solid[idx] = 1
+							break
 	var seen := PackedByteArray()
 	seen.resize(GW * GH)
 	seen.fill(0)
@@ -315,6 +341,34 @@ func _grid_job_calc(polys: Array) -> Array:
 					var a: Array = contact[ks[i]]
 					var b: Array = contact[ks[k]]
 					out.append([room_names[ks[i]], room_names[ks[k]], float(mini(a[0], b[0])) * CELL / 0.1, (a[1] / a[0] + b[1] / b[0]) * 0.5, Vector2.ZERO])
+	# on a coarse grid an open hatch can be thinner than a cell: the two rooms' cells
+	# then meet with no free cell between them, and nothing floods through. Two rooms'
+	# open cells side by side are open to each other.
+	if CELL >= 0.8:
+		var pairs := {}
+		for gy in GH:
+			for gx in GW:
+				var idx := gy * GW + gx
+				var o := cell_owner[idx]
+				if o == 0 or solid[idx] != 0:
+					continue
+				for d in 2:
+					var nx := gx + (1 if d == 0 else 0)
+					var ny := gy + (1 if d == 1 else 0)
+					if nx >= GW or ny >= GH:
+						continue
+					var ni := ny * GW + nx
+					var o2 := cell_owner[ni]
+					if o2 == 0 or o2 == o or solid[ni] != 0:
+						continue
+					var key := Vector2i(mini(o, o2), maxi(o, o2))
+					if not pairs.has(key):
+						pairs[key] = [0, Vector2.ZERO]
+					pairs[key][0] += 1
+					pairs[key][1] += _cell_px(gx, gy)
+		for key in pairs:
+			var pr: Array = pairs[key]
+			out.append([room_names[key.x], room_names[key.y], float(pr[0]) * CELL / 0.1, pr[1] / pr[0], Vector2.ZERO])
 	return out
 
 
@@ -376,9 +430,15 @@ func _physics_process(dt: float) -> void:
 			var ta := Time.get_ticks_usec()
 			_apply_links(r)
 			World._p("apply_links", ta)
+	var t0 := Time.get_ticks_usec()
 	_step_gas(dt)
+	World._ps("gas", t0)
+	t0 = Time.get_ticks_usec()
 	_step_elec(dt)
+	World._ps("elec", t0)
+	t0 = Time.get_ticks_usec()
 	_step_fluids(dt)
+	World._ps("fluids", t0)
 
 
 func _exit_tree() -> void:
@@ -622,25 +682,42 @@ func _step_elec(dt: float) -> void:
 					gen_on = true
 			if not gen_on:
 				s.charge = maxf(0.0, s.charge - dt * float(s.get("drain", 0.0)))
-	# what the bus reaches, through live cables and whole pieces
-	powered = {}
-	if bus_live:
-		var bus = world.tag(bus_tag)
-		_flood(bus.id, powered, {})
+	# what the bus and each isolated supply reach, through live cables and whole
+	# pieces: walked again only when a cable, a breaker or a supply changed (a 2,000-
+	# piece ship's nine networks were milliseconds a frame)
+	var fk := "%d|%s|%d" % [world.electrical_links_version, bus_live, world.gone_n]
+	for t in src_order:
+		fk += "1" if feeding[t] else "0"
+	for t in iso:
+		fk += "1" if iso_live(t) else "0"
+	for lid in breakers:
+		fk += "1" if on(str(breakers[lid])) else "0"
+	var refl := fk != _flood_key
+	if refl:
+		_flood_key = fk
+		powered = {}
+		if bus_live:
+			var bus = world.tag(bus_tag)
+			_flood(bus.id, powered, {})
 	# an isolated capacitor bleeds through its own discharge point
 	for t in iso:
 		var ic: Dictionary = iso[t]
 		if ic.kind == "cap" and ic.discharge != "" and on(ic.discharge) and ic.charge > 0.0:
 			ic.charge = maxf(0.0, ic.charge - ic.charge * dt / 0.9 - dt * 0.02)
+	if refl:
+		_iso_sets = {}
+		for t in iso:
+			var p = world.tag(t)
+			if p == null or p.gone or not iso_live(t):
+				continue
+			var seen := {}
+			_flood(p.id, seen, {})
+			_iso_sets[t] = seen
 	iso_powered = {}
-	for t in iso:
-		var p = world.tag(t)
-		if p == null or p.gone or not iso_live(t):
-			continue
-		var seen := {}
-		_flood(p.id, seen, {})
-		for id in seen:
-			iso_powered[id] = maxf(float(iso_powered.get(id, 0.0)), iso_volts(t))
+	for t in _iso_sets:
+		var v := iso_volts(t)
+		for id in _iso_sets[t]:
+			iso_powered[id] = maxf(float(iso_powered.get(id, 0.0)), v)
 	# rooms whose lamp is on
 	var redraw := false
 	var lamps: Dictionary = cfg.get("power", {}).get("lamps", {})
@@ -667,9 +744,17 @@ func _step_elec(dt: float) -> void:
 		sig += "%s%s" % [_alive(src[t].cable), on(src[t].get("switch", ""))]
 	for t in iso:
 		sig += "i%s%d" % [iso_live(t), int(iso[t].charge * 20)]
+	for lid in breakers:
+		sig += "b%s" % on(str(breakers[lid]))
 	if sig != _elec_sig:
 		_elec_sig = sig
 		elec_ver += 1
+
+
+# a cable run through a breaker ("power": {"breakers": {line: switch}}, ARK-01's slip
+# rings): open, nothing passes it
+func breaker_open(l) -> bool:
+	return breakers.has(l.id) and not on(str(breakers[l.id]))
 
 
 # all pieces reachable from piece id through live power cables
@@ -690,7 +775,7 @@ func _flood(start: int, seen: Dictionary, _unused: Dictionary) -> void:
 	while not stack.is_empty():
 		var id = stack.pop_back()
 		for l in _cable_index.get(id, []):
-			if not l.alive or l.kind != "cable":
+			if not l.alive or l.kind != "cable" or breaker_open(l):
 				continue
 			var other := -1
 			if l.a == id:

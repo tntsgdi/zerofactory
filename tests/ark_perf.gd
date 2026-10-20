@@ -60,7 +60,8 @@ func _run() -> void:
 	var one = null
 	for id in g.world.order:
 		var p = g.world.pieces[id]
-		if p.tag.begins_with("HS9") and p.kind == "hull" and Geom.centroid(p.poly).y < -5.0 * Geom.M:
+		var cc: Vector2 = Geom.centroid(p.poly) / Geom.M
+		if p.kind == "hull" and p.barrier and cc.y < -5.0 and cc.y > -6.5 and cc.x > 300.0 and cc.x < 340.0:
 			one = p
 			break
 	var t2 := Time.get_ticks_usec()
@@ -73,7 +74,7 @@ func _run() -> void:
 	var t1 := Time.get_ticks_usec()
 	for id in g.world.order:
 		var p = g.world.pieces[id]
-		if p.tag.begins_with("HS5") and p.kind == "hull":
+		if p.tag.begins_with("HS" if ship_id != "arktest" else "HS5") and p.kind == "hull" and (ship_id == "arktest" or absf(Geom.centroid(p.poly).x / Geom.M - 141.0) < 12.0):
 			var c: Vector2 = Geom.centroid(p.poly)
 			if c.y < -5.0 * Geom.M:
 				g.world.remove_piece(p)

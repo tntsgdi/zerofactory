@@ -29,6 +29,18 @@ var reactor                   # a shut-down reactor's dose field (NR-95), script
 var softshell                 # inflatable bags on a rigid spine (IH-55), scripts/softshell.gd
 var train                     # a train of modules on couplers (MT-140), scripts/train.gd
 var flywheel                  # a mass driver still spinning (MD-160), scripts/flywheel.gd
+var rings                     # habitat rings still turning (ARK-01), scripts/rings.gd
+var spine                     # a spine carrying the tail (ARK-01), scripts/spine.gd
+var workday                   # a job of several working days (ARK-01), scripts/workday.gd
+var drillstring               # a drill string in its derrick (DR-150), scripts/drillstring.gd
+var nested                    # a ship carried inside the ship (LC-140), scripts/nested.gd
+var waterball                 # a water ball in its net (BL-88), scripts/waterball.gd
+var magnets                   # superconducting magnets (FX-70), scripts/magnets.gd
+var optics                    # a telescope's primary mirror (OB-90), scripts/optics.gd
+var immersion                 # racks in dielectric fluid, drives under custody (DC-84), scripts/immersion.gd
+var thermal                   # a hull still hot from the sun (EV-55), scripts/thermal.gd
+var composite                 # a composite hull that smokes when cut in air (ST-40), scripts/composite.gd
+var dilution                  # a dilution refrigerator still at millikelvin (QC-30), scripts/dilution.gd
 var tether                    # a tethered pair still turning (TB-180), scripts/tether.gd
 var sandwich                  # a cargo module clamped between two hulls (CH-110), scripts/sandwich.gd
 var ice                       # a hull of ice (IC-120), scripts/ice.gd
@@ -300,6 +312,54 @@ func _ready() -> void:
 	flywheel.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(flywheel)
 	flywheel.setup(self, ship)
+	rings = preload("res://scripts/rings.gd").new()
+	rings.process_mode = Node.PROCESS_MODE_PAUSABLE
+	world.add_child(rings)
+	rings.setup(self, ship)
+	spine = preload("res://scripts/spine.gd").new()
+	spine.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(spine)
+	spine.setup(self, ship)
+	workday = preload("res://scripts/workday.gd").new()
+	workday.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(workday)
+	workday.setup(self, ship)
+	drillstring = preload("res://scripts/drillstring.gd").new()
+	drillstring.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(drillstring)
+	drillstring.setup(self, ship)
+	nested = preload("res://scripts/nested.gd").new()
+	nested.process_mode = Node.PROCESS_MODE_PAUSABLE
+	world.add_child(nested)
+	nested.setup(self, ship)
+	waterball = preload("res://scripts/waterball.gd").new()
+	waterball.process_mode = Node.PROCESS_MODE_PAUSABLE
+	world.add_child(waterball)
+	waterball.setup(self, ship)
+	magnets = preload("res://scripts/magnets.gd").new()
+	magnets.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(magnets)
+	magnets.setup(self, ship)
+	optics = preload("res://scripts/optics.gd").new()
+	optics.process_mode = Node.PROCESS_MODE_PAUSABLE
+	world.add_child(optics)
+	optics.setup(self, ship)
+	immersion = preload("res://scripts/immersion.gd").new()
+	immersion.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(immersion)
+	immersion.setup(self, ship)
+	thermal = preload("res://scripts/thermal.gd").new()
+	thermal.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(thermal)
+	thermal.setup(self, ship)
+	composite = preload("res://scripts/composite.gd").new()
+	composite.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(composite)
+	composite.setup(self, ship)
+	dilution = preload("res://scripts/dilution.gd").new()
+	dilution.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(dilution)
+	dilution.setup(self, ship)
 	tether = preload("res://scripts/tether.gd").new()
 	tether.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(tether)
@@ -478,6 +538,30 @@ func _ready() -> void:
 			train.load_state(data.train)
 		if data.has("flywheel"):
 			flywheel.load_state(data.flywheel)
+		if data.has("rings"):
+			rings.load_state(data.rings)
+		if data.has("spine"):
+			spine.load_state(data.spine)
+		if data.has("workday") and workday.active():
+			workday.load_state(data.workday)
+		if data.has("drillstring"):
+			drillstring.load_state(data.drillstring)
+		if data.has("nested"):
+			nested.load_state(data.nested)
+		if data.has("waterball"):
+			waterball.load_state(data.waterball)
+		if data.has("magnets"):
+			magnets.load_state(data.magnets)
+		if data.has("optics"):
+			optics.load_state(data.optics)
+		if data.has("immersion"):
+			immersion.load_state(data.immersion)
+		if data.has("thermal"):
+			thermal.load_state(data.thermal)
+		if data.has("composite"):
+			composite.load_state(data.composite)
+		if data.has("dilution"):
+			dilution.load_state(data.dilution)
 		if data.has("tether"):
 			tether.load_state(data.tether)
 		if data.has("sandwich"):
@@ -1073,7 +1157,7 @@ func _enter_berth() -> void:
 # what the berth's length goes by: the career's purchases (and the developer's kit)
 func _upgrades_for_berth() -> Dictionary:
 	var u: Dictionary = {}
-	for k in ["berth88", "berth120", "berth200"]:
+	for k in ["berth88", "berth120", "berth200", "berth620"]:
 		if has_upgrade(k):
 			u[k] = true
 	return u
@@ -1372,6 +1456,19 @@ func pieces_left() -> Array:
 		if not p.gone and p.scope:
 			out.append(p)
 	return out
+
+
+# how many are left (the HUD asks every frame): counted again only when pieces came or went
+var _left_key := Vector2i(-1, -1)
+var _left_n := 0
+
+
+func left_count() -> int:
+	var k := Vector2i(world.order.size(), world.gone_n)
+	if k != _left_key:
+		_left_key = k
+		_left_n = pieces_left().size()
+	return _left_n
 
 
 # "full" | "section" | "rescue" (Variant._scope)
@@ -1684,6 +1781,28 @@ func on_body_freed(b) -> void:
 		softshell.on_freed(b)
 	if flywheel != null:
 		flywheel.on_freed(b)
+	if rings != null:
+		rings.on_freed(b)
+	if spine != null:
+		spine.on_freed(b)
+	if drillstring != null:
+		drillstring.on_freed(b)
+	if nested != null:
+		nested.on_freed(b)
+	if waterball != null:
+		waterball.on_freed(b)
+	if magnets != null:
+		magnets.on_freed(b)
+	if optics != null:
+		optics.on_freed(b)
+	if immersion != null:
+		immersion.on_freed(b)
+	if thermal != null:
+		thermal.on_freed(b)
+	if composite != null:
+		composite.on_freed(b)
+	if dilution != null:
+		dilution.on_freed(b)
 	if tether != null:
 		tether.on_freed(b)
 	if sandwich != null:
@@ -1747,9 +1866,21 @@ func _bodies_upkeep(dt: float) -> void:
 			continue
 		b.age += dt
 		var dv: float = b.hit_imp / maxf(b.mass, 0.05)
+		if dv > 55.0:
+			# what the contact impulse says, but no more than the body's motion really
+			# changed: a light piece pressed between two others takes big impulses that
+			# cancel out, and is not knocked by them
+			var bb := Rect2()
+			for q in b.pieces:
+				var qb := Geom.bbox(world.world_poly(q))
+				bb = qb if bb.size == Vector2.ZERO else bb.merge(qb)
+			var r: float = bb.size.length() * 0.5
+			dv = minf(dv, 1.5 * ((b.linear_velocity - b.prev_v).length() + absf(b.angular_velocity - b.prev_w) * r))
 		if dv > 55.0 and b.age > 0.4:
 			_impact(b, dv)
 		b.hit_imp = 0.0
+		b.prev_v = b.linear_velocity
+		b.prev_w = b.angular_velocity
 
 
 func _impact(b, dv: float) -> void:
@@ -1804,7 +1935,7 @@ func hurt_drone(amount: float, from: Vector2, key: String, cd_key: String = "", 
 	amount *= skill_value("armor") / 100.0
 	if key in ["arc_hit", "live_unplug"]:
 		amount *= skill_value("shield") / 100.0
-	if key in ["scald", "fire_hit"]:
+	if key in ["scald", "fire_hit", "heat_hit"]:
 		amount *= skill_value("thermal") / 100.0
 	drone.hurt(amount, from)
 	shake(0.25 + amount / 100.0, (drone.global_position - from).normalized())
@@ -1872,6 +2003,26 @@ func on_cut_into(p, pos: Vector2) -> void:
 		train.on_cut(p)
 	if flywheel != null:
 		flywheel.on_cut(p)
+	if spine != null:
+		spine.on_cut(p)
+	if drillstring != null:
+		drillstring.on_cut(p)
+	if nested != null:
+		nested.on_cut(p)
+	if waterball != null:
+		waterball.on_cut(p)
+	if magnets != null:
+		magnets.on_cut(p)
+	if optics != null:
+		optics.on_cut(p)
+	if immersion != null:
+		immersion.on_cut(p)
+	if thermal != null:
+		thermal.on_cut(p)
+	if composite != null:
+		composite.on_cut(p)
+	if dilution != null:
+		dilution.on_cut(p)
 	if tether != null:
 		tether.on_cut(p)
 	if sandwich != null:
@@ -2302,6 +2453,30 @@ func do_measure(tg: Dictionary) -> void:
 						sys.measure(c.id, "field", c.id, "inst_bend", {"ctrl": c, "field_fn": func(): return train.aft_mass(), "unit": "t"})
 					"rpm":
 						sys.measure(c.id, "field", c.id, "inst_rpm", {"ctrl": c, "field_fn": func(): return float(flywheel.rpm.get(c.target, 0.0)), "unit": "rpm"})
+					"ring":
+						sys.measure(c.id, "field", c.id, "inst_rpm", {"ctrl": c, "field_fn": func(): return float(rings.rpm.get(c.target, 0.0)), "unit": "rpm"})
+					"bheat":
+						sys.measure(c.id, "field", c.id, "inst_temp", {"ctrl": c, "field_fn": func(): return rings.temp(c.target), "unit": "°C"})
+					"spine":
+						sys.measure(c.id, "field", c.id, "inst_load", {"ctrl": c, "field_fn": func(): return spine.gauge(c.id), "unit": "%"})
+					"mudp":
+						sys.measure(c.id, "field", c.id, "inst_mudp", {"ctrl": c, "field_fn": func(): return drillstring.mud_kpa(), "unit": "kPa"})
+					"torque":
+						sys.measure(c.id, "field", c.id, "inst_torque", {"ctrl": c, "field_fn": func(): return drillstring.torque_pct(), "unit": "%"})
+					"ball":
+						sys.measure(c.id, "field", c.id, "inst_ball", {"ctrl": c, "field_fn": func(): return waterball.level() * 100.0, "unit": "%"})
+					"coil_temp":
+						sys.measure(c.id, "field", c.id, "inst_coil_temp", {"ctrl": c, "field_fn": func(): return magnets.max_temp(), "unit": "K"})
+					"field_pct":
+						sys.measure(c.id, "field", c.id, "inst_coil_energy", {"ctrl": c, "field_fn": func(): return magnets.field(), "unit": "%"})
+					"optics":
+						sys.measure(c.id, "field", c.id, "inst_reflect", {"ctrl": c, "field_fn": func(): return optics.reflect(), "unit": "%"})
+					"zone":
+						sys.measure(c.id, "field", c.id, "inst_temp", {"ctrl": c, "field_fn": func(): return thermal.zone_temp(c.target), "unit": "°C"})
+					"fume":
+						sys.measure(c.id, "field", c.id, "inst_fume", {"ctrl": c, "field_fn": func(): return composite.level(c.target) * 1000.0, "unit": "ppm"})
+					"stage":
+						sys.measure(c.id, "field", c.id, "inst_cryo_t", {"ctrl": c, "field_fn": func(): return dilution.stage_temp(c.target), "unit": "K"})
 					"rail":
 						sys.measure(c.id, "field", c.id, "inst_tension", {"ctrl": c, "field_fn": func(): return flywheel.rail_pull(c.target), "unit": "kN"})
 					"spin":
@@ -2422,6 +2597,42 @@ func restore_reading(rd: Dictionary) -> void:
 				elif c.medium == "rpm":
 					extra.field_fn = func(): return float(flywheel.rpm.get(c.target, 0.0))
 					extra.unit = "rpm"
+				elif c.medium == "ring":
+					extra.field_fn = func(): return float(rings.rpm.get(c.target, 0.0))
+					extra.unit = "rpm"
+				elif c.medium == "bheat":
+					extra.field_fn = func(): return rings.temp(c.target)
+					extra.unit = "°C"
+				elif c.medium == "spine":
+					extra.field_fn = func(): return spine.gauge(c.id)
+					extra.unit = "%"
+				elif c.medium == "mudp":
+					extra.field_fn = func(): return drillstring.mud_kpa()
+					extra.unit = "kPa"
+				elif c.medium == "torque":
+					extra.field_fn = func(): return drillstring.torque_pct()
+					extra.unit = "%"
+				elif c.medium == "ball":
+					extra.field_fn = func(): return waterball.level() * 100.0
+					extra.unit = "%"
+				elif c.medium == "coil_temp":
+					extra.field_fn = func(): return magnets.max_temp()
+					extra.unit = "K"
+				elif c.medium == "field_pct":
+					extra.field_fn = func(): return magnets.field()
+					extra.unit = "%"
+				elif c.medium == "optics":
+					extra.field_fn = func(): return optics.reflect()
+					extra.unit = "%"
+				elif c.medium == "zone":
+					extra.field_fn = func(): return thermal.zone_temp(c.target)
+					extra.unit = "°C"
+				elif c.medium == "fume":
+					extra.field_fn = func(): return composite.level(c.target) * 1000.0
+					extra.unit = "ppm"
+				elif c.medium == "stage":
+					extra.field_fn = func(): return dilution.stage_temp(c.target)
+					extra.unit = "K"
 				elif c.medium == "rail":
 					extra.field_fn = func(): return flywheel.rail_pull(c.target)
 					extra.unit = "kN"
@@ -2842,6 +3053,8 @@ func _operate(c, at: Vector2) -> void:
 			sfx.play("plug")
 		"door":
 			if vault != null and vault.operate(c, at):
+				return
+			if rings != null and rings.blocks_door(c, at):
 				return
 			if Ship.ctrl_cfg(ship, c.id).get("stuck", false):
 				say("door_stuck", at, c.id)

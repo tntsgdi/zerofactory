@@ -187,6 +187,20 @@ func _cond_ok(until: Dictionary) -> bool:
 				v = s.loop_T
 				op = a[0]
 				lim = a[1]
+			"stage":
+				v = game.dilution.stage_temp(a[0]) if game.dilution != null else 0.0
+				op = a[1]
+				lim = a[2]
+			"zone":
+				v = game.thermal.zone_temp(a[0]) if game.thermal != null else 0.0
+				op = a[1]
+				lim = a[2]
+			"mod":
+				# a module's own reading: [module, its method, op, limit]
+				var m = game.get(str(a[0]))
+				v = float(m.call(str(a[1]))) if m != null else 0.0
+				op = a[2]
+				lim = a[3]
 			"open":
 				if game.world.room_hidden(a[0]):
 					return false
@@ -235,6 +249,11 @@ func _job_proc() -> bool:
 			_next()
 		"wait":
 			Engine.time_scale = 4.0
+			# a room opens once the gas grid's worker has redone the topology: that runs in
+			# real time, so its wait doesn't count against the step while it is pending
+			# (else a busy machine fails a correct procedure)
+			if st.until.has("open") and (game.sys.job_id >= 0 or game.sys.topology_dirty):
+				step_t -= 1.0 / 60.0 * Engine.time_scale
 			if _cond_ok(st.until):
 				_next()
 			elif step_t > float(st.get("max", 60.0)):
@@ -343,7 +362,7 @@ func _report() -> void:
 		for c in rows:
 			var bad: Array = r[c[0]]
 			print("  [%s] %s %s" % ["PASS" if bad.is_empty() else "FAIL", c[1], c[2]] + ("" if bad.is_empty() else "  (%d)" % bad.size()))
-			for b in bad.slice(0, 8):
+			for b in bad.slice(0, 200 if OS.get_cmdline_user_args().has("full") else 8):
 				print("         - ", b)
 			if not bad.is_empty():
 				ok = false

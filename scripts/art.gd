@@ -107,6 +107,23 @@ static func draw(ci: CanvasItem, art: String, s: Vector2, p, font: Font) -> void
 			if p != null and p.cond < 0.5:
 				for i in 4:
 					L(ci, Vector2(w * (0.5 + i * 0.1), h * 0.1), Vector2(w * (0.45 + i * 0.12), h * 0.9), 0.5)
+		"mirror":
+			# a mirror seen edge-on: the coated face down its left side, the ribbed
+			# lightweighted blank behind it, its edges chamfered; dusty, specks on the face
+			L(ci, Vector2(1.0, 1.0), Vector2(1.0, h - 1.0), 0.85, 2.0)
+			L(ci, Vector2(w * 0.3, 0.0), Vector2(w * 0.3, h), 0.25)
+			for i in int(maxf(2.0, h / 7.0)):
+				var y := h * (i + 0.5) / maxf(2.0, h / 7.0)
+				L(ci, Vector2(w * 0.3, y), Vector2(w * 0.95, y - h * 0.08), 0.2)
+				L(ci, Vector2(w * 0.3, y), Vector2(w * 0.95, y + h * 0.08), 0.2)
+			L(ci, Vector2(w * 0.08, h * 0.15), Vector2(w * 0.08, h * 0.4), 0.4)
+			if p != null and p.cond < 0.9:
+				for i in int((1.0 - p.cond) * 12.0):
+					var y := h * fposmod(i * 0.618, 1.0)
+					L(ci, Vector2(2.0, y), Vector2(4.0, y + 1.0), 0.6, 1.5)
+			if p != null and p.cond < 0.5:
+				L(ci, Vector2(0.0, h * 0.2), Vector2(w * 0.7, h * 0.55), 0.6)
+				L(ci, Vector2(w * 0.7, h * 0.55), Vector2(w * 0.4, h * 0.9), 0.5)
 		"plants":
 			# a culture rack: its trays, the shoots in them
 			for i in 3:

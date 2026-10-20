@@ -32,6 +32,7 @@ const POINTS := {
 	"crane": [["船坞顶上的门式吊", "An overhead gantry crane"], ["12 t 以内整件吊走", "Lifts whole pieces up to 12 t"], ["用 %s 标记超过 1.5 t 的件给它", "Mark anything over 1.5 t for it with %s"]],
 	"berth120": [["船坞延长到约 120 m", "The berth extended to about 120 m"], ["能接 83–114 m 的船", "Takes ships of 83-114 m"], ["要先扩到 88 m", "Needs the 88 m extension first"]],
 	"berth200": [["船坞延长到约 200 m", "The berth extended to about 200 m"], ["能接 115–194 m 的船：PT-34 隼鹰等", "Takes ships of 115-194 m: PT-34 Falcon and more"], ["要先扩到 120 m", "Needs the 120 m extension first"]],
+	"berth620": [["船坞延长到约 620 m（整艘殖民舰进坞）", "The berth extended to about 620 m (a whole colony ship in)"], ["能接 195 m 以上的船：ARK-01 远航者", "Takes ships over 195 m: ARK-01 Voyager"], ["要先扩到 200 m", "Needs the 200 m extension first"]],
 	"berth88": [["船坞延长到约 88 m", "The berth extended to about 88 m"], ["能接 58–82 m 的船：M-14、MED-47、FR-26", "Takes ships of 58–82 m: M-14, MED-47, FR-26"], ["回收口挪到中段", "The mouths move mid-berth"]],
 }
 

@@ -45,8 +45,13 @@ func _run() -> void:
 	scene.bot = {"skip_intro": true, "skip_contract": true, "aim": Vector2.ZERO, "lmb": false, "move": Vector2.ZERO}
 	root.add_child(scene)
 	await _frames(40)
+	World.prof.clear()
 	var base := await _time(90)
 	print("PROF base %.2f ms" % base)
+	var per := {}
+	for k in World.prof:
+		per[k] = snappedf(World.prof[k] / 90.0 / 1000.0, 0.01)
+	print("PROF parts (ms a frame) ", per)
 	print("PROF bodies %d joints %d" % [scene.world.bodies.size(), scene.world.joints.size()])
 	for half in ["physics", "process"]:
 		var dk = scene.dock

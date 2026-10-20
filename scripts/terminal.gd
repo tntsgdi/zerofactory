@@ -41,6 +41,7 @@ const BERTH := [
 	["berth88", "facility", 240000.0, "fa_berth", "fa_berth_d", true],
 	["berth120", "facility", 520000.0, "fa_berth120", "fa_berth120_d", true],
 	["berth200", "facility", 1200000.0, "fa_berth200", "fa_berth200_d", true],
+	["berth620", "facility", 4500000.0, "fa_berth620", "fa_berth620_d", true],
 	["hauler2", "facility", 60000.0, "fa_hauler2", "fa_hauler2_d", true],
 	["crane", "facility", 150000.0, "fa_crane", "fa_crane_d", true],
 	["port2", "facility", 50000.0, "fa_port2", "fa_port2_d", true],
@@ -48,7 +49,7 @@ const BERTH := [
 	["zones", "facility", 20000.0, "fa_zones", "fa_zones_d", true],
 ]
 # a facility that only makes sense with another one bought first
-const REQUIRES := {"hauler2": "hauler", "berth120": "berth88", "berth200": "berth120"}
+const REQUIRES := {"hauler2": "hauler", "berth120": "berth88", "berth200": "berth120", "berth620": "berth200"}
 # The terminal is one device (P.7 structure A, player 2026-10-18): a home screen
 # of apps; on site the same device, opened by its key or at the berth's
 # computer, with what can't be used there locked and the reason written on it.

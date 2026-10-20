@@ -204,31 +204,76 @@ func _room_shell(r) -> float:
 	return s
 
 
-# every room's at once: each piece's box and area worked out once, not once a room
+# every room's at once. Which walls stand round which room is worked out once (and for
+# each new fragment as it appears); a wall's area is its mass over its density, so a
+# redraw only sums what is still there (40 rooms against 2,000 pieces each time was
+# 30 ms a cut on ARK-01)
+var _shell_of := {}            # room -> [piece ids round it]
+var _shell_seen := {}          # piece id -> true once sorted into rooms
+var _shell_n := -1
+
+
 func _room_shells() -> Dictionary:
-	var boxes := []
-	for id in order:
-		var p = pieces[id]
-		if p.gone or p.body != null or not p.barrier:
-			continue
-		boxes.append([Geom.bbox(p.poly), Geom.area(p.poly)])
+	if order.size() != _shell_n:
+		_shell_n = order.size()
+		var grown := {}
+		for n in rooms:
+			grown[n] = rooms[n].bbox.grow(30.0)
+			if not _shell_of.has(n):
+				_shell_of[n] = []
+		for id in order:
+			if _shell_seen.has(id):
+				continue
+			_shell_seen[id] = true
+			var p = pieces[id]
+			if not p.barrier:
+				continue
+			var pb := Geom.bbox(p.poly)
+			for n in rooms:
+				if pb.intersects(grown[n]):
+					_shell_of[n].append(id)
 	var out := {}
 	for n in rooms:
-		var bb: Rect2 = rooms[n].bbox.grow(30.0)
 		var sum := 0.0
-		for b in boxes:
-			if (b[0] as Rect2).intersects(bb):
-				sum += b[1]
+		for id in _shell_of.get(n, []):
+			var p = pieces.get(id)
+			if p == null or p.gone or p.body != null or not p.barrier:
+				continue
+			sum += p.mass / maxf(p.density, 0.01)
 		out[n] = sum
 	return out
 
 
+# the first piece (in build order) still there with this tag. Looked up through an
+# index (a 2,000-piece ship asks dozens of times a frame): rebuilt whenever pieces
+# come or go, or the one it holds is gone or retagged
+var _tag_idx := {}
+var _tag_n := -1
+var _doors: Array = []         # the door pieces' ids (re-gathered when pieces come or go)
+var _door_n := -1
+var _hot := {}                 # ids of pieces still glowing from a cut
+var gone_n := 0                # pieces gone so far (what counts what is left keys on it)
+
+
 func tag(t: String):
+	if order.size() != _tag_n:
+		_reindex_tags()
+	var p = _tag_idx.get(t)
+	if p == null:
+		return null
+	if p.gone or p.tag != t or pieces.get(p.id) != p:
+		_reindex_tags()
+		return _tag_idx.get(t)
+	return p
+
+
+func _reindex_tags() -> void:
+	_tag_idx = {}
 	for id in order:
 		var p = pieces[id]
-		if p.tag == t and not p.gone:
-			return p
-	return null
+		if not p.gone and not _tag_idx.has(p.tag):
+			_tag_idx[p.tag] = p
+	_tag_n = order.size()
 
 
 # ---------------------------------------------------------------- queries
@@ -379,11 +424,17 @@ func ctrl_alive(c) -> bool:
 
 
 func room_at(wpos: Vector2) -> String:
+	# a room inside another (LC-140's courier in its hold): the inner one, the smaller
+	var best := ""
+	var best_a := INF
 	for n in rooms:
 		var r = rooms[n]
 		if r.bbox.has_point(wpos) and Geometry2D.is_point_in_polygon(wpos, r.poly):
-			return n
-	return ""
+			var a: float = r.bbox.get_area()
+			if a < best_a:
+				best = n
+				best_a = a
+	return best
 
 
 # True for a real room that nobody has opened yet ("" and "F" are never hidden).
@@ -420,50 +471,48 @@ func relink() -> void:
 
 func _relink() -> void:
 	dirty_links = false
-	var parent := {}
+	# union-find over array slots (ids are sparse): by size, with path halving. As a
+	# dictionary walked through lambdas it took a 2,000-piece ship 40 ms a change.
+	var ids: Array = []
+	var ix := {}
 	for id in pieces:
 		if not pieces[id].gone:
-			parent[id] = id
-	parent[Model.ANCHOR] = Model.ANCHOR
-	var find := func(x):
-		var r = x
-		while parent[r] != r:
-			r = parent[r]
-		var y = x
-		while parent[y] != r:
-			var nx = parent[y]
-			parent[y] = r
-			y = nx
-		return r
-	var unite := func(a, b):
-		if not parent.has(a) or not parent.has(b):
-			return
-		var ra = find.call(a)
-		var rb = find.call(b)
-		if ra != rb:
-			parent[ra] = rb
+			ix[id] = ids.size()
+			ids.append(id)
+	var ai := ids.size()
+	ix[Model.ANCHOR] = ai
+	var par: Array = []
+	par.resize(ai + 1)
+	var sz: Array = []
+	sz.resize(ai + 1)
+	for i in ai + 1:
+		par[i] = i
+		sz[i] = 1
 	for j in joints:
 		if j.alive:
-			if not parent.has(j.a) or (j.b != Model.ANCHOR and not parent.has(j.b)):
+			var a: int = ix.get(j.a, -1)
+			var b: int = ix.get(j.b, -1)
+			if a < 0 or (j.b != Model.ANCHOR and b < 0):
 				j.alive = false
 				continue
-			unite.call(j.a, j.b)
+			_uf_unite(par, sz, a, b)
 	for id in lines:
 		var l = lines[id]
 		if l.alive:
-			if not parent.has(l.a) or not parent.has(l.b):
+			var a2: int = ix.get(l.a, -1)
+			var b2: int = ix.get(l.b, -1)
+			if a2 < 0 or b2 < 0:
 				l.alive = false
 				continue
-			unite.call(l.a, l.b)
-	var anchor_root = find.call(Model.ANCHOR)
+			_uf_unite(par, sz, a2, b2)
+	var anchor_root := _uf_find(par, ai)
 	var comps := {}
-	for id in parent:
-		if id == Model.ANCHOR:
-			continue
-		var r = find.call(id)
+	for i in ai:
+		var r := _uf_find(par, i)
 		if not comps.has(r):
 			comps[r] = []
-		comps[r].append(pieces[id])
+		comps[r].append(pieces[ids[i]])
+	var find := func(x): return _uf_find(par, int(ix.get(x, ai)))
 	# attached pieces that are no longer anchored float off
 	for r in comps:
 		if r == anchor_root:
@@ -489,6 +538,26 @@ func _relink() -> void:
 		for k in range(1, keys.size()):
 			make_body(groups[keys[k]], b)
 		b.refresh()
+
+
+static func _uf_find(par: Array, x: int) -> int:
+	while par[x] != x:
+		par[x] = par[par[x]]
+		x = par[x]
+	return x
+
+
+static func _uf_unite(par: Array, sz: Array, a: int, b: int) -> void:
+	var ra := _uf_find(par, a)
+	var rb := _uf_find(par, b)
+	if ra == rb:
+		return
+	if sz[ra] < sz[rb]:
+		var t := ra
+		ra = rb
+		rb = t
+	par[rb] = ra
+	sz[ra] += sz[rb]
 
 
 func _mass_of(arr: Array) -> float:
@@ -649,6 +718,7 @@ func remove_piece(p) -> void:
 	if p.gone:
 		return
 	p.gone = true
+	gone_n += 1
 	for j in joints:
 		if j.alive and (j.a == p.id or j.b == p.id):
 			j.alive = false
@@ -744,9 +814,12 @@ func _process(dt: float) -> void:
 		art.modulate.a = k
 		art.visible = k > 0.01
 	var moving := false
-	for id in order:
+	if order.size() != _door_n:
+		_door_n = order.size()
+		_doors = order.filter(func(i): return pieces[i].door)
+	for id in _doors:
 		var p = pieces[id]
-		if not p.door:
+		if p.gone:
 			continue
 		var tgt := 1.0 if p.door_open else 0.0
 		if not is_equal_approx(p.open_t, tgt):
@@ -773,12 +846,15 @@ func _process(dt: float) -> void:
 	if animating:
 		cover_layer.queue_redraw()
 	var hot := false
-	for id in order:
-		var p = pieces[id]
-		if p.heat.is_empty():
+	for id in _hot.keys():
+		var p = pieces.get(id)
+		if p == null or p.heat.is_empty():
+			_hot.erase(id)
 			continue
 		var now := Time.get_ticks_msec() / 1000.0
 		p.heat = p.heat.filter(func(h): return now - h[1] < 3.2)
+		if p.heat.is_empty():
+			_hot.erase(id)
 		if p.body == null:
 			hot = true
 	if hot or heat_layer.get_meta("was_hot", false):
@@ -961,6 +1037,8 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 		else:
 			q.mass = old_mass * a / maxf(old_area, 1.0)
 		q.heat = keep_heat.filter(func(h): return Geom.dist_to_boundary(_heat_mid(h[0]), q.poly) < r + 6.0)
+		if not q.heat.is_empty():
+			_hot[q.id] = true
 	# hand each fixing, line end and control to whichever part now holds it
 	for j in joints:
 		if not j.alive:
@@ -1071,6 +1149,7 @@ func cut_region(poly: PackedVector2Array, _events: bool) -> void:
 		parts = parts.filter(func(q): return Geom.area(q) >= 8.0)
 		if parts.is_empty():
 			p.gone = true
+			gone_n += 1
 			continue
 		parts.sort_custom(func(a, b): return Geom.area(a) > Geom.area(b))
 		p.poly = parts[0]
