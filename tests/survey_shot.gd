@@ -45,6 +45,9 @@ func _run() -> void:
 		root.add_child(g)
 		current_scene = g
 		await _frames(20)
+		# a tall ship: the berth grows for it first
+		if g.state == "build":
+			g._end_build()
 		g._end_intro()
 		await _frames(5)
 		check(g.contract_open, "%s: the contract card is up" % id)

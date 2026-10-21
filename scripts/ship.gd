@@ -45,6 +45,17 @@ static func _poly(a: Array) -> PackedVector2Array:
 
 # how far a ship reaches above and below its keel line: Vector2(top, bottom) in m, y down
 # (the berth lifts its top and drops its floor for a tall one: Dock.configure)
+# the ship's outline box in metres, as it lies in the berth
+static func bounds(d: Dictionary) -> Rect2:
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for pd in d.get("pieces", []):
+		for q in pd.get("poly", []):
+			lo = Vector2(minf(lo.x, float(q[0])), minf(lo.y, float(q[1])))
+			hi = Vector2(maxf(hi.x, float(q[0])), maxf(hi.y, float(q[1])))
+	return Rect2(lo, hi - lo) if lo.x < INF else Rect2()
+
+
 static func extent(d: Dictionary) -> Vector2:
 	var top := 0.0
 	var bottom := 0.0

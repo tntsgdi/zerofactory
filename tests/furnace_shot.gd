@@ -83,12 +83,37 @@ func _process(_dt: float) -> bool:
 		game.drone.global_position = Vector2(fx - 4.0, F - 3.0) * 48.0
 		game.drone.linear_velocity = Vector2.ZERO
 	if frame < 160:
-		game.cam_override = Vector2(fx + 2.0, F + 3.6) * 48.0
+		game.cam_override = Vector2(fx + 1.0, F + 5.5) * 48.0
 		game.zoom_override = 1.25
 		if frame == 159:
 			Cap.save(root, "res://tests/out/furnace_melt.png")
 		return false
 	if frame == 160:
+		# a tonne of hull plate into the press, a frame with its wiring into the shredder
+		var plate := PackedVector2Array([Vector2(-3.0, -0.9), Vector2(3.0, -0.9), Vector2(3.0, 0.9), Vector2(-3.0, 0.9)])
+		var frame_l := PackedVector2Array([Vector2(-0.8, -0.7), Vector2(0.8, -0.7), Vector2(0.8, -0.4), Vector2(-0.4, -0.4), Vector2(-0.4, 0.7), Vector2(-0.8, 0.7)])
+		var box := PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.6, 0.0), Vector2(0.6, 0.5), Vector2(0.0, 0.5)])
+		d.scrapline.take([plate], 1.0, ["hull"], fx)
+		d.scrapline.take([frame_l, box], 0.6, ["rib", "equip"], fx)
+	if frame < 700:
+		game.cam_override = Vector2(fx - 1.5, F + 3.4) * 48.0
+		game.zoom_override = 0.95
+		var pr = d.scrapline.press
+		if pr != null and int(pr.ph) == 2 and float(pr.pt) > 0.7 and not shots.has("press"):
+			shots.append("press")
+			Cap.save(root, "res://tests/out/furnace_press.png")
+		var sh = d.scrapline.shred
+		if sh != null and float(sh.pt) > 1.4 and not shots.has("shred"):
+			shots.append("shred")
+			Cap.save(root, "res://tests/out/furnace_shred.png")
+		if d.scrapline.fines.size() > 40 and not shots.has("fines"):
+			shots.append("fines")
+			Cap.save(root, "res://tests/out/furnace_fines.png")
+		return false
+	if frame == 700:
+		check(shots.has("press") and shots.has("shred") and shots.has("fines"), "the plate was pressed, the frame shredded to powder: %s" % [shots])
+		check(d.scrapline.pucks_made >= 1 and d.scrapline.shredded > 0.5, "a puck made (%d), %.1f t shredded" % [d.scrapline.pucks_made, d.scrapline.shredded])
+		check(d.scrapline.nonferrous > 0.0, "the drum threw off %.0f kg of non-ferrous" % d.scrapline.nonferrous)
 		# straight to the end of a heat: full and hot
 		sm.m_l = Smelter.CAP
 		sm.m_s = 0.0
@@ -96,7 +121,7 @@ func _process(_dt: float) -> bool:
 		sm.phase = "heat"
 		Engine.time_scale = 4.0
 	if frame < 1200:
-		game.cam_override = Vector2(fx + 2.5, F + 4.2) * 48.0
+		game.cam_override = Vector2(fx + 2.5, F + 6.8) * 48.0
 		game.zoom_override = 1.25
 		if sm.phase == "pour" and sm.m_l < Smelter.CAP - 3.0 and not shots.has("pour"):
 			shots.append("pour")
@@ -109,8 +134,8 @@ func _process(_dt: float) -> bool:
 		Engine.time_scale = 1.0
 		check(shots.has("pour"), "the furnace reached tapping")
 	if frame < 1300:
-		game.cam_override = Vector2(fx + 1.0, F) * 48.0
-		game.zoom_override = 0.7
+		game.cam_override = Vector2(fx + 1.0, F + 3.0) * 48.0
+		game.zoom_override = 0.6
 		if frame == 1299:
 			Cap.save(root, "res://tests/out/furnace_wide.png")
 		return false

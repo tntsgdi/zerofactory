@@ -814,7 +814,14 @@ func _build_overlay(s: Vector2) -> void:
 	var r := Rect2(48, bar + 26.0, 640, 66 + b.steps.size() * 50)
 	c.draw_rect(r, Color(0.02, 0.022, 0.026, 0.88 * k_in))
 	UI.panel(c, r, 0.9 * k_in, 0.0, Pal.HEAT, 1.0)
-	_text(g.txt("bb_head") % [b.x_a, b.x_b], r.position + Vector2(20, 32), 16, Pal.ink(0.95 * k_in), font_b)
+	_text(b.head(), r.position + Vector2(20, 32), 16, Pal.ink(0.95 * k_in), font_b)
+	# the incoming ship's outline, named
+	if b.envelope.size != Vector2.ZERO and b.ship_name != "" and not b.passed("haul") and not b.passed("test"):
+		var xf: Transform2D = g.get_viewport().get_canvas_transform()
+		var ep: Vector2 = xf * (Vector2(b.envelope.end.x, b.envelope.position.y) * Geom.M)
+		var et: String = g.txt("bb_env") % [b.ship_name, b.envelope.size.x, b.envelope.size.y]
+		var ew := font_b.get_string_size(et, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		_text(et, Vector2(clampf(ep.x - ew, r.end.x + 20.0, s.x - ew - 20.0), clampf(ep.y - 10.0, bar + 30.0, s.y - bar - 30.0)), 14, Pal.heat(0.9 * k_in, 1.2), font_b)
 	for i in b.steps.size():
 		var y: float = r.position.y + 70.0 + i * 50.0
 		var done: bool = i < cur or (i == cur and b.k(i) >= 1.0)

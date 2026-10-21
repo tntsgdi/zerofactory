@@ -241,6 +241,7 @@ func _ready() -> void:
 	# the berth: extended once the career has paid for it, or for a ship too long for the standard one
 	var ext := Ship.extent(ship)
 	berth_ext = ext
+	prev_shape = {"len": Dock.floor_end, "lift": Dock.LIFT, "drop": Dock.DROP}
 	berth_len = Dock.length_for(float(ship.get("length", 0.0)), _upgrades_for_berth())
 	Dock.configure(berth_len, ext.x, ext.y)
 	if has_upgrade("port2"):
@@ -1162,35 +1163,52 @@ func _end_survey() -> void:
 
 
 # ---------------------------------------------------------------- the berth extension, built on site
-# An extension bought since the berth was last seen is built in front of the
-# operator the next time the berth comes up: over the empty berth when the
-# terminal closes, or before the tug brings the next ship in (scripts/berth_build.gd).
+# The berth grows in front of the operator (scripts/berth_build.gd), for two reasons:
+# an extension bought since the berth was last seen (over the empty berth when the
+# terminal closes, or before the tug brings the next ship in), and a ship taller than
+# the berth was (player 2026-10-20: "a horizontal rectangle, and a solar sail comes
+# in: show in detail how the berth grows to take it"): the boom is jacked up section
+# by section, the platform drawn down, before the tug brings the ship in. A ship
+# type's first time gets the whole procedure, later ones the same steps fast
+# (Jev B 0.94 / 0.91).
 var berth_ext := Vector2.ZERO
 var berth_len := Dock.STANDARD
+var prev_shape := {}            # the berth as the last scene left it: {len, lift, drop}
 var build = null
 var _after_build := "play"
+static var reshaped := {}       # ship types the berth has grown for this session (outside a career)
 
 
 func _maybe_build() -> void:
-	if build != null or bot != null or (testing and not cine_in_tests) or not career() or state == "build":
+	if build != null or bot != null or (testing and not cine_in_tests) or state == "build":
 		return
-	var d := Career.data
-	if not d.has("berth_seen"):
-		return
-	var seen := float(d.berth_seen)
-	var owned := Dock.owned(d.get("upgrades", {}))
-	if owned <= seen + 0.5:
-		return
-	# what the berth is now (over the empty berth the purchase has only just been made)
+	# what the berth is now (over the empty berth a purchase has only just been made)
 	berth_len = Dock.length_for(float(ship.get("length", 0.0)), _upgrades_for_berth())
-	if absf(berth_len - owned) > 0.5:
-		# this contract's berth isn't simply what was bought: nothing to show
-		d["berth_seen"] = owned
+	var to := {"len": berth_len, "lift": Dock.lift_for(berth_ext.x), "drop": Dock.drop_for(berth_ext.y)}
+	var from := to.duplicate()
+	var paid := false
+	if career() and Career.data.has("berth_seen"):
+		var seen := float(Career.data.berth_seen)
+		var owned := Dock.owned(Career.data.get("upgrades", {}))
+		if owned > seen + 0.5:
+			if absf(berth_len - owned) <= 0.5:
+				from.len = seen
+				paid = true
+			else:
+				# this contract's berth isn't simply what was bought: nothing to show
+				Career.data["berth_seen"] = owned
+	# taller than the berth the last scene left: it grows to take this ship
+	if not in_berth() and not prev_shape.is_empty():
+		from.lift = minf(float(prev_shape.lift), to.lift)
+		from.drop = minf(float(prev_shape.drop), to.drop)
+	if absf(from.len - to.len) < 0.5 and absf(from.lift - to.lift) < 0.5 and absf(from.drop - to.drop) < 0.5:
 		return
-	_layout_berth(seen)
+	var seen_types: Dictionary = Career.data.get("reshaped", {}) if career() else reshaped
+	var quick := not paid and seen_types.has(ship_id)
+	_layout_shape(from.len, from.lift, from.drop)
 	build = preload("res://scripts/berth_build.gd").new()
 	dock.add_child(build)
-	build.setup(self, seen, owned)
+	build.setup(self, from, to, quick, Ship.bounds(ship), ship_title() if not in_berth() else "")
 	_after_build = state
 	state = "build"
 	state_t = 0.0
@@ -1198,14 +1216,18 @@ func _maybe_build() -> void:
 		world.visible = false
 
 
-func _layout_berth(x: float) -> void:
-	Dock.configure(x, berth_ext.x, berth_ext.y)
+func _layout_shape(x: float, lift: float, drop: float) -> void:
+	Dock.configure_shape(x, lift, drop)
 	if has_upgrade("port2"):
 		Dock.add_port2()
 	dock.set_ship(ship)
 
 
-# the build re-lays the berth at its full new length
+func _layout_berth(x: float) -> void:
+	_layout_shape(x, Dock.lift_for(berth_ext.x), Dock.drop_for(berth_ext.y))
+
+
+# the build re-lays the berth at its full new size
 func _relayout_berth() -> void:
 	_layout_berth(berth_len)
 
@@ -1228,9 +1250,17 @@ func _end_build() -> void:
 	build.finish()
 	build.queue_free()
 	build = null
-	Career.data["berth_seen"] = Dock.owned(Career.data.get("upgrades", {}))
-	if in_berth():
-		Career.save()
+	if career():
+		if Career.data.has("berth_seen"):
+			Career.data["berth_seen"] = Dock.owned(Career.data.get("upgrades", {}))
+		if not in_berth():
+			var rs: Dictionary = Career.data.get("reshaped", {})
+			rs[ship_id] = true
+			Career.data["reshaped"] = rs
+		if in_berth():
+			Career.save()
+	elif not in_berth():
+		reshaped[ship_id] = true
 	world.visible = true
 	cam_override = null
 	zoom_override = -1.0
@@ -1249,7 +1279,42 @@ const ZOOM_FOLLOW := 0.85    # below this the view starts leaving the drone for 
 
 func zoom_min() -> float:
 	var vs := get_viewport().get_visible_rect().size
-	return minf(vs.x / ((Dock.FLOOR_X1 - Dock.TOWER_X + 3.0) * Geom.M), vs.y / (26.0 * Geom.M))
+	var r := focus_rect()
+	return minf(0.7, minf(vs.x / maxf(r.size.x, 1.0), vs.y / maxf(r.size.y, 1.0)))
+
+
+# What the zoomed-out view frames (player 2026-10-20: "zoomed out, let me look at the
+# whole ship, not the whole berth: a ship in the berth's left half left me looking at
+# its right half"): the ship's hull as it still stands, with a margin, so the view
+# centres on the ship and the furthest zoom just takes it in (Jev A 0.55 / 0.33).
+# Over the empty berth, or once the hull is gone, the berth. In px; worked out again
+# when pieces come off.
+var _focus := Rect2()
+var _focus_sig := -1
+
+
+func focus_rect() -> Rect2:
+	var sig: int = (world.bodies.size() * 7919 + world.pieces.size()) if world != null else 0
+	if sig == _focus_sig and _focus.size != Vector2.ZERO:
+		return _focus
+	_focus_sig = sig
+	var M := Geom.M
+	var r := Rect2()
+	var have := false
+	if not in_berth() and world != null:
+		for p in world.pieces.values():
+			if p.gone or p.body != null:
+				continue
+			var bb := Geom.bbox(p.poly)
+			r = r.merge(bb) if have else bb
+			have = true
+	if have:
+		r.position += world.position
+		r = r.grow(5.0 * M)
+	else:
+		r = Rect2(Vector2(Dock.TOWER_X - 1.0, Dock.RAIL_Y - 3.0) * M, Vector2(Dock.FLOOR_X1 - Dock.TOWER_X + 2.0, Dock.FLOOR_Y - Dock.RAIL_Y + 5.0) * M)
+	_focus = r
+	return r
 
 
 func _camera(dt: float) -> void:
@@ -1258,7 +1323,7 @@ func _camera(dt: float) -> void:
 	if cam_override != null:
 		target = cam_override
 	elif overview:
-		target = Dock.centre() * Geom.M
+		target = focus_rect().get_center()
 	elif drone != null and (drone.alive or state == "play"):
 		var dp: Vector2 = drone.global_position
 		var lead := drone.linear_velocity * 0.22
@@ -1270,7 +1335,7 @@ func _camera(dt: float) -> void:
 		# zoomed right out the view settles on the berth: the whole ship in sight
 		var zm := zoom_min()
 		if zoom_target < ZOOM_FOLLOW and zm < ZOOM_FOLLOW:
-			target = target.lerp(Dock.centre() * Geom.M, clampf((ZOOM_FOLLOW - zoom_target) / (ZOOM_FOLLOW - zm), 0.0, 1.0))
+			target = target.lerp(focus_rect().get_center(), clampf((ZOOM_FOLLOW - zoom_target) / (ZOOM_FOLLOW - zm), 0.0, 1.0))
 	# a critically damped follow: soft, never laggy
 	var k := 38.0
 	var c := 2.0 * sqrt(k)

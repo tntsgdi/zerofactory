@@ -132,5 +132,37 @@ func _run() -> void:
 	g3._end_build()
 	await _frames(3)
 	check(g3.state == "intro" and g3.world.visible and is_equal_approx(Dock.FLOOR_X1, 88.0), "then the tug brings the ship into the 88 m berth")
+	g3.queue_free()
+	await _frames(3)
+	# a solar sail into the long low berth: the boom jacked up, the platform drawn down
+	Career.data = Career.fresh()
+	Game.contract = {}
+	for pass_n in 2:
+		Game.start_ship = "sa200"
+		var g4: Node = load("res://scenes/main.tscn").instantiate()
+		root.add_child(g4)
+		current_scene = g4
+		await _frames(10)
+		var b4 = g4.build
+		check(g4.state == "build" and b4 != null and b4.idx("lift") >= 0 and b4.idx("drop") >= 0, "SA-200 (pass %d): the berth grows up and down for it" % pass_n)
+		if b4 == null:
+			break
+		check(b4.quick == (pass_n == 1), "pass %d: %s" % [pass_n, "the second time runs fast" if pass_n == 1 else "the first time in full"])
+		var seen := {}
+		var n2 := 0
+		while g4.state == "build" and n2 < 3000:
+			await process_frame
+			n2 += 1
+			if g4.build == null:
+				break
+			var kn: String = g4.build.key()
+			if pass_n == 0 and kn in ["iso", "lift", "drop"] and not seen.has(kn) and g4.build.kk(kn) > 0.55:
+				seen[kn] = true
+				check(Dock.LIFT >= g4.build.lift_a - 0.01 and Dock.LIFT <= g4.build.lift_b + 0.01, "%s: boom lift %.1f m on its way" % [kn, Dock.LIFT])
+				Cap.save(root, "res://tests/out/build_sail_%s.png" % kn)
+		check(g4.state == "intro" and Dock.LIFT > 50.0 and Dock.DROP > 50.0, "then the sail comes into a berth %.0f m up, %.0f m down" % [Dock.LIFT, Dock.DROP])
+		g4.queue_free()
+		await _frames(3)
+		Dock.configure(88.0)
 	print("berth_build_shot: %d failures" % fails)
 	quit(1 if fails > 0 else 0)
