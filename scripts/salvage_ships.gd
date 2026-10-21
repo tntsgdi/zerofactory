@@ -28,6 +28,7 @@ var casks: Array = []       # hazard on its way down the tube: {item, t}
 var lift_t := -1.0          # the ingot lift's car: < 0 idle, else 0..1 down
 var _ingots_seen := -1
 var leave := 0.0            # 0 docked .. 1 gone (when the hull is towed out)
+var cv = null               # the batch this frame is drawn into (canvas_batch.gd)
 
 
 func _init() -> void:
@@ -196,7 +197,7 @@ func step(dt: float) -> void:
 		lift_t += dt / 1.6
 		if lift_t >= 1.0:
 			lift_t = -1.0
-	if _seen():
+	if dock.draw_now and _seen():
 		queue_redraw()
 
 
@@ -219,6 +220,12 @@ func _seen() -> bool:
 func _draw() -> void:
 	if dock == null or dock.furnace_x == -INF:
 		return
+	cv = preload("res://scripts/canvas_batch.gd").new(self)
+	_draw_body()
+	cv.flush()
+
+
+func _draw_body() -> void:
 	var font: Font = dock.font
 	var font_b: Font = dock.font_b
 	var z: float = game.cam_zoom() if game != null else 1.0
@@ -226,32 +233,32 @@ func _draw() -> void:
 		# far out: the two hulls' outlines
 		var sr := ship_rect()
 		var br := barge_rect()
-		draw_set_transform(Vector2(-40.0, -60.0) * Pal.ease_in(leave) * M)
+		cv.draw_set_transform(Vector2(-40.0, -60.0) * Pal.ease_in(leave) * M)
 		_rect(sr, Color(0.045, 0.048, 0.056), Pal.ink(0.5), 1.2)
-		draw_set_transform(Vector2(30.0, 50.0) * Pal.ease_in(leave) * M)
+		cv.draw_set_transform(Vector2(30.0, 50.0) * Pal.ease_in(leave) * M)
 		_rect(br, Color(0.045, 0.048, 0.056), Pal.ink(0.5), 1.2)
-		draw_set_transform(Vector2.ZERO)
+		cv.draw_set_transform(Vector2.ZERO)
 		return
 	_draw_routes(font, z)
 	var up := Vector2(-40.0, -60.0) * Pal.ease_in(leave)
-	draw_set_transform(up * M)
+	cv.draw_set_transform(up * M)
 	_draw_freighter(font, font_b, z)
-	draw_set_transform(Vector2(30.0, 50.0) * Pal.ease_in(leave) * M)
+	cv.draw_set_transform(Vector2(30.0, 50.0) * Pal.ease_in(leave) * M)
 	_draw_barge(font, font_b, z)
-	draw_set_transform(Vector2.ZERO)
+	cv.draw_set_transform(Vector2.ZERO)
 
 
 func _rect(r: Rect2, fill_c: Color, edge: Color = Color(0, 0, 0, 0), w: float = 1.0) -> void:
 	var rr := Rect2(r.position * M, r.size * M)
-	draw_rect(rr, fill_c)
+	cv.draw_rect(rr, fill_c)
 	if edge.a > 0.0:
-		draw_rect(rr, edge, false, w)
+		cv.draw_rect(rr, edge, false, w)
 
 
 func _lbl(at: Vector2, s: String, z: float, col: Color = Pal.ink(0.55), size: int = 11) -> void:
 	var a := clampf((z - 0.5) / 0.3, 0.0, 1.0)
 	if a > 0.01:
-		draw_string(dock.font, at * M, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(col.r, col.g, col.b, col.a * a))
+		cv.draw_string(dock.font, at * M, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(col.r, col.g, col.b, col.a * a))
 
 
 # an item's outline fitted into a box (m), centred on c
@@ -272,9 +279,9 @@ func _fit(polys: Array, c: Vector2, box: Vector2, col: Color, edge: Color) -> vo
 		for q in p:
 			pts.append((c + (q - mid) * s) * M)
 		if pts.size() >= 3 and not Geometry2D.triangulate_polygon(pts).is_empty():
-			draw_colored_polygon(pts, col)
+			cv.draw_colored_polygon(pts, col)
 			pts.append(pts[0])
-			draw_polyline(pts, edge, 1.0)
+			cv.draw_polyline(pts, edge, 1.0)
 
 
 # the paths things take: the shuttle track on the boom, the tunnel, the hazard tube, the ingot lift
@@ -285,8 +292,8 @@ func _draw_routes(font: Font, z: float) -> void:
 	# the shuttle track along the top of the boom
 	var x0 := Dock.TOWER_X + 1.0
 	var x1 := maxf(Dock.ARM_X1, Dock.equip_rail_x1())
-	draw_line(Vector2(x0, R - 0.75) * M, Vector2(x1, R - 0.75) * M, Pal.ink(0.4), 1.4)
-	draw_line(Vector2(x0, R - 0.68) * M, Vector2(x1, R - 0.68) * M, Pal.ink(0.2), 1.0)
+	cv.draw_line(Vector2(x0, R - 0.75) * M, Vector2(x1, R - 0.75) * M, Pal.ink(0.4), 1.4)
+	cv.draw_line(Vector2(x0, R - 0.68) * M, Vector2(x1, R - 0.68) * M, Pal.ink(0.2), 1.0)
 	# the transfer tunnel up to the freighter's belly (folds away when it casts off)
 	var tun := 1.0 - Pal.ease_io(clampf(leave * 4.0, 0.0, 1.0))
 	if tun > 0.01:
@@ -294,7 +301,7 @@ func _draw_routes(font: Font, z: float) -> void:
 		_rect(Rect2(tx - 0.8, top, 1.6, R - 0.75 - top), Color(0.05, 0.053, 0.06, 0.95), Pal.ink(0.5), 1.2)
 		var y := top + 0.3
 		while y < R - 0.9:
-			draw_line(Vector2(tx - 0.8, y) * M, Vector2(tx + 0.8, y) * M, Pal.ink(0.15), 1.0)
+			cv.draw_line(Vector2(tx - 0.8, y) * M, Vector2(tx + 0.8, y) * M, Pal.ink(0.15), 1.0)
 			y += 0.5
 		_lbl(Vector2(tx + 1.0, R - 2.4), Txt.t("sh_tunnel"), z)
 	# equipment on its way: up the lift from the bay, along the boom, up the tunnel
@@ -317,9 +324,9 @@ func _draw_routes(font: Font, z: float) -> void:
 		var pts := PackedVector2Array()
 		for q in tp:
 			pts.append(q * M)
-		draw_polyline(pts, Pal.tint(Pal.FLUID, 0.6), 0.9 * M)
-		draw_polyline(pts, Color(0.05, 0.06, 0.055), 0.7 * M)
-		draw_polyline(pts, Pal.tint(Pal.FLUID, 0.25), 1.0)
+		cv.draw_polyline(pts, Pal.tint(Pal.FLUID, 0.6), 0.9 * M)
+		cv.draw_polyline(pts, Color(0.05, 0.06, 0.055), 0.7 * M)
+		cv.draw_polyline(pts, Pal.tint(Pal.FLUID, 0.25), 1.0)
 		_lbl(tp[0] + Vector2(0.7, 2.0), Txt.t("sh_tube"), z)
 		for c in casks:
 			var u: float = clampf(float(c.t) / 3.0, 0.0, 1.0)
@@ -329,8 +336,8 @@ func _draw_routes(font: Font, z: float) -> void:
 	if leave < 0.05:
 		var ly0 := F + 2.65 + 6.0
 		var ly1 := barge_rect().position.y + 0.8
-		draw_line(Vector2(lx - 0.35, ly0) * M, Vector2(lx - 0.35, ly1) * M, Pal.ink(0.35), 1.4)
-		draw_line(Vector2(lx + 0.35, ly0) * M, Vector2(lx + 0.35, ly1) * M, Pal.ink(0.35), 1.4)
+		cv.draw_line(Vector2(lx - 0.35, ly0) * M, Vector2(lx - 0.35, ly1) * M, Pal.ink(0.35), 1.4)
+		cv.draw_line(Vector2(lx + 0.35, ly0) * M, Vector2(lx + 0.35, ly1) * M, Pal.ink(0.35), 1.4)
 		var cy2 := lerpf(ly0, ly1, Pal.ease_io(lift_t)) if lift_t >= 0.0 else ly0
 		_rect(Rect2(lx - 0.33, cy2 - 0.1, 0.66, 0.12), Color(0.12, 0.125, 0.14), Pal.ink(0.6), 1.0)
 		if lift_t >= 0.0:
@@ -341,9 +348,9 @@ func _draw_routes(font: Font, z: float) -> void:
 func _cask(c: Vector2, kind: String, r: float) -> void:
 	var col := cask_col(kind)
 	_rect(Rect2(c - Vector2(r, r * 1.5), Vector2(r * 2.0, r * 3.0)), Color(0.08, 0.085, 0.09), Pal.tint(col, 0.85, 1.1), 1.4)
-	draw_line((c - Vector2(r, r * 0.6)) * M, (c + Vector2(r, -r * 0.6)) * M, Pal.tint(col, 0.6), 2.0)
-	draw_line((c - Vector2(r, -r * 0.6)) * M, (c + Vector2(r, r * 0.6)) * M, Pal.tint(col, 0.6), 2.0)
-	draw_circle(c * M, r * 0.35 * M, Pal.tint(col, 0.9, 1.3))
+	cv.draw_line((c - Vector2(r, r * 0.6)) * M, (c + Vector2(r, -r * 0.6)) * M, Pal.tint(col, 0.6), 2.0)
+	cv.draw_line((c - Vector2(r, -r * 0.6)) * M, (c + Vector2(r, r * 0.6)) * M, Pal.tint(col, 0.6), 2.0)
+	cv.draw_circle(c * M, r * 0.35 * M, Pal.tint(col, 0.9, 1.3))
 
 
 func _draw_freighter(font: Font, font_b: Font, z: float) -> void:
@@ -358,34 +365,34 @@ func _draw_freighter(font: Font, font_b: Font, z: float) -> void:
 	var hp := PackedVector2Array()
 	for q in hull:
 		hp.append(q * M)
-	draw_colored_polygon(hp, Color(0.045, 0.048, 0.056))
+	cv.draw_colored_polygon(hp, Color(0.045, 0.048, 0.056))
 	hp.append(hp[0])
-	draw_polyline(hp, Pal.ink(0.6), 1.6)
+	cv.draw_polyline(hp, Pal.ink(0.6), 1.6)
 	# the bridge's windows, the frames, the engines and their bells
 	for i in 4:
 		_rect(Rect2(Vector2(x0 + 1.0 + i * 0.6, y0 + 2.6), Vector2(0.4, 0.5)), Pal.tint(Pal.AIR, 0.35 + 0.15 * sin(t + i), 1.2))
 	var fx := x0 + 4.0
 	while fx < x1 - 5.0:
-		draw_line(Vector2(fx, y0) * M, Vector2(fx, y1) * M, Pal.ink(0.1), 1.0)
+		cv.draw_line(Vector2(fx, y0) * M, Vector2(fx, y1) * M, Pal.ink(0.1), 1.0)
 		fx += 3.0
 	for e in 3:
 		var ey := y0 + 1.8 + e * 2.4
 		var bell := PackedVector2Array([Vector2(x1 - 3.0, ey - 0.5) * M, Vector2(x1 - 1.0, ey - 0.9) * M, Vector2(x1 - 1.0, ey + 0.9) * M, Vector2(x1 - 3.0, ey + 0.5) * M])
-		draw_colored_polygon(bell, Color(0.08, 0.083, 0.095))
+		cv.draw_colored_polygon(bell, Color(0.08, 0.083, 0.095))
 		bell.append(bell[0])
-		draw_polyline(bell, Pal.ink(0.5), 1.2)
+		cv.draw_polyline(bell, Pal.ink(0.5), 1.2)
 		if leave > 0.0:
-			draw_colored_polygon(PackedVector2Array([Vector2(x1 - 1.0, ey - 0.7) * M, Vector2(x1 + 3.0 + 6.0 * leave, ey) * M, Vector2(x1 - 1.0, ey + 0.7) * M]), Pal.heat(0.8, 1.8))
+			cv.draw_colored_polygon(PackedVector2Array([Vector2(x1 - 1.0, ey - 0.7) * M, Vector2(x1 + 3.0 + 6.0 * leave, ey) * M, Vector2(x1 - 1.0, ey + 0.7) * M]), Pal.heat(0.8, 1.8))
 	# the hold, cut away: racks of slots, each item stored with its outline, tag and value
 	var h := hold_rect()
 	_rect(h, Color(0.025, 0.027, 0.032), Pal.ink(0.4), 1.2)
 	var cols := int(h.size.x / SLOT.x)
 	for c in cols + 1:
-		draw_line(Vector2(h.position.x + c * SLOT.x, h.position.y) * M, Vector2(h.position.x + c * SLOT.x, h.end.y) * M, Pal.ink(0.12), 1.0)
+		cv.draw_line(Vector2(h.position.x + c * SLOT.x, h.position.y) * M, Vector2(h.position.x + c * SLOT.x, h.end.y) * M, Pal.ink(0.12), 1.0)
 	for rr in 5:
 		var ry := h.position.y + rr * SLOT.y
 		if ry <= h.end.y + 0.01:
-			draw_line(Vector2(h.position.x, ry) * M, Vector2(h.end.x, ry) * M, Pal.ink(0.2), 1.2)
+			cv.draw_line(Vector2(h.position.x, ry) * M, Vector2(h.end.x, ry) * M, Pal.ink(0.2), 1.2)
 	var shown := mini(equip.size(), cols * 4)
 	var total := 0.0
 	for it in equip:
@@ -398,15 +405,15 @@ func _draw_freighter(font: Font, font_b: Font, z: float) -> void:
 			_rect(Rect2(c - SLOT * 0.5, SLOT), Pal.tint(Pal.FLUID, 0.18 * fresh, 1.3))
 		_fit(it.polys, c - Vector2(0, 0.15), SLOT * Vector2(0.8, 0.55), Color(0.14, 0.15, 0.17), Pal.ink(0.75))
 		if z > 0.7:
-			draw_string(font, (c + Vector2(-SLOT.x * 0.45, SLOT.y * 0.42)) * M, str(it.tag), HORIZONTAL_ALIGNMENT_LEFT, SLOT.x * 0.9 * M, 11, Pal.ink(0.75))
-			draw_string(font, (c + Vector2(-SLOT.x * 0.45, -SLOT.y * 0.28)) * M, Pal.money(float(it.value)), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Pal.tint(Pal.FLUID, 0.85, 1.1))
+			cv.draw_string(font, (c + Vector2(-SLOT.x * 0.45, SLOT.y * 0.42)) * M, str(it.tag), HORIZONTAL_ALIGNMENT_LEFT, SLOT.x * 0.9 * M, 11, Pal.ink(0.75))
+			cv.draw_string(font, (c + Vector2(-SLOT.x * 0.45, -SLOT.y * 0.28)) * M, Pal.money(float(it.value)), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Pal.tint(Pal.FLUID, 0.85, 1.1))
 	# the manifest, painted beside the hold
-	draw_string(font_b, Vector2(x0 + 4.4, y0 + 1.0) * M, "RT-07 · " + Txt.t("sh_freighter"), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Pal.ink(0.9))
-	draw_string(font, Vector2(h.position.x, y1 - 0.3) * M, Txt.t("sh_manifest_e") % [equip.size(), Pal.money(total)], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.tint(Pal.FLUID, 0.9, 1.1))
+	cv.draw_string(font_b, Vector2(x0 + 4.4, y0 + 1.0) * M, "RT-07 · " + Txt.t("sh_freighter"), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Pal.ink(0.9))
+	cv.draw_string(font, Vector2(h.position.x, y1 - 0.3) * M, Txt.t("sh_manifest_e") % [equip.size(), Pal.money(total)], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.tint(Pal.FLUID, 0.9, 1.1))
 	# docking clamps onto the boom
 	if leave < 0.02:
 		for cx in [x0 + 6.0, x1 - 8.0]:
-			draw_line(Vector2(cx, y1) * M, Vector2(cx, Dock.RAIL_Y - 0.6) * M, Pal.ink(0.45), 3.0)
+			cv.draw_line(Vector2(cx, y1) * M, Vector2(cx, Dock.RAIL_Y - 0.6) * M, Pal.ink(0.45), 3.0)
 
 
 func _draw_barge(font: Font, font_b: Font, z: float) -> void:
@@ -414,10 +421,10 @@ func _draw_barge(font: Font, font_b: Font, z: float) -> void:
 	var X: float = dock.furnace_x
 	var hp := PackedVector2Array([r.position * M, Vector2(r.end.x - 2.0, r.position.y) * M, Vector2(r.end.x, r.position.y + 2.0) * M,
 		Vector2(r.end.x, r.end.y) * M, Vector2(r.position.x + 2.0, r.end.y) * M, Vector2(r.position.x, r.end.y - 2.0) * M])
-	draw_colored_polygon(hp, Color(0.045, 0.048, 0.056))
+	cv.draw_colored_polygon(hp, Color(0.045, 0.048, 0.056))
 	hp.append(hp[0])
-	draw_polyline(hp, Pal.ink(0.6), 1.6)
-	draw_string(font_b, (r.position + Vector2(1.0, r.size.y - 0.6)) * M, "HB-03 · " + Txt.t("sh_barge"), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Pal.ink(0.9))
+	cv.draw_polyline(hp, Pal.ink(0.6), 1.6)
+	cv.draw_string(font_b, (r.position + Vector2(1.0, r.size.y - 0.6)) * M, "HB-03 · " + Txt.t("sh_barge"), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Pal.ink(0.9))
 	# the ingot hold: stacks growing from under the lift
 	var ih := Rect2(Vector2(r.position.x + 1.5, r.position.y + 0.8), Vector2(ingot_lift_x() + 1.5 - r.position.x - 1.5, 3.8))
 	_rect(ih, Color(0.025, 0.027, 0.032), Pal.ink(0.4), 1.2)
@@ -432,8 +439,8 @@ func _draw_barge(font: Font, font_b: Font, z: float) -> void:
 		var by := ih.end.y - 0.15 - row * 0.3
 		bars.append_array([Vector2(bx - 0.24, by) * M, Vector2(bx + 0.24, by) * M])
 	if not bars.is_empty():
-		draw_multiline(bars, Color(0.32, 0.31, 0.32), 0.22 * M)
-	draw_string(font, (ih.position + Vector2(0.3, 0.6)) * M, Txt.t("sh_ingots") % [n, dock.smelter.shipped_t], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.8))
+		cv.draw_multiline(bars, Color(0.32, 0.31, 0.32), 0.22 * M)
+	cv.draw_string(font, (ih.position + Vector2(0.3, 0.6)) * M, Txt.t("sh_ingots") % [n, dock.smelter.shipped_t], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.8))
 	# the shielded hazard hold: thick walls, hazard stripes, one cask per thing, made safe
 	var hz: Vector2 = Dock.ZONES.hazard.pos
 	var hh := hazard_hold()
@@ -441,7 +448,7 @@ func _draw_barge(font: Font, font_b: Font, z: float) -> void:
 	_rect(hh, Color(0.02, 0.026, 0.024))
 	var sx := hh.position.x
 	while sx < hh.end.x:
-		draw_line(Vector2(sx, hh.position.y - 0.2) * M, Vector2(minf(sx + 0.3, hh.end.x), hh.position.y) * M, Pal.tint(Pal.FLUID, 0.5), 2.0)
+		cv.draw_line(Vector2(sx, hh.position.y - 0.2) * M, Vector2(minf(sx + 0.3, hh.end.x), hh.position.y) * M, Pal.tint(Pal.FLUID, 0.5), 2.0)
 		sx += 0.6
 	var per := maxi(1, int(hh.size.x / 0.9))
 	for i in mini(hazard.size(), per * 2):
@@ -449,18 +456,18 @@ func _draw_barge(font: Font, font_b: Font, z: float) -> void:
 		var c := Vector2(hh.position.x + 0.5 + (i % per) * 0.9, hh.end.y - 0.7 - (i / per) * 1.7)
 		_cask(c, it.kind, 0.3)
 		if z > 0.7:
-			draw_string(font, (c + Vector2(-0.4, -0.65)) * M, str(it.tag), HORIZONTAL_ALIGNMENT_LEFT, 0.85 * M, 8, Pal.ink(0.7))
+			cv.draw_string(font, (c + Vector2(-0.4, -0.65)) * M, str(it.tag), HORIZONTAL_ALIGNMENT_LEFT, 0.85 * M, 8, Pal.ink(0.7))
 			var done := float(it.t) > 4.0
-			draw_string(font, (c + Vector2(-0.4, 0.75)) * M, Txt.t(treatment(it.kind)) if done else "…", HORIZONTAL_ALIGNMENT_LEFT, 0.85 * M, 8, Pal.tint(Pal.FLUID, 0.85, 1.1) if done else Pal.heat(0.8, 1.2))
-	draw_string(font, (hh.position + Vector2(0.3, 0.55)) * M, Txt.t("sh_hazards") % hazard.size(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.tint(Pal.FLUID, 0.9, 1.1))
+			cv.draw_string(font, (c + Vector2(-0.4, 0.75)) * M, Txt.t(treatment(it.kind)) if done else "…", HORIZONTAL_ALIGNMENT_LEFT, 0.85 * M, 8, Pal.tint(Pal.FLUID, 0.85, 1.1) if done else Pal.heat(0.8, 1.2))
+	cv.draw_string(font, (hh.position + Vector2(0.3, 0.55)) * M, Txt.t("sh_hazards") % hazard.size(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.tint(Pal.FLUID, 0.9, 1.1))
 	# the rest of the manifest: non-ferrous, debris bales
 	var nf: float = dock.scrapline.nonferrous
-	draw_string(font, (Vector2(r.position.x + 1.5, r.position.y + 5.3)) * M, Txt.t("sh_manifest_b") % [n, dock.smelter.shipped_t, hazard.size(), nf, dock.net_bales], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.7))
+	cv.draw_string(font, (Vector2(r.position.x + 1.5, r.position.y + 5.3)) * M, Txt.t("sh_manifest_b") % [n, dock.smelter.shipped_t, hazard.size(), nf, dock.net_bales], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.7))
 	# moored to the plant's base frame
 	if leave < 0.02:
 		for mx in [X - 10.0, X + 6.0]:
-			draw_line(Vector2(mx, Dock.FLOOR_Y + 10.6) * M, Vector2(mx, r.position.y) * M, Pal.ink(0.4), 2.0)
+			cv.draw_line(Vector2(mx, Dock.FLOOR_Y + 10.6) * M, Vector2(mx, r.position.y) * M, Pal.ink(0.4), 2.0)
 	if leave > 0.0:
 		for e in 2:
 			var ey := r.position.y + 1.5 + e * 3.0
-			draw_colored_polygon(PackedVector2Array([Vector2(r.position.x, ey - 0.5) * M, Vector2(r.position.x - 3.0 - 6.0 * leave, ey) * M, Vector2(r.position.x, ey + 0.5) * M]), Pal.heat(0.8, 1.8))
+			cv.draw_colored_polygon(PackedVector2Array([Vector2(r.position.x, ey - 0.5) * M, Vector2(r.position.x - 3.0 - 6.0 * leave, ey) * M, Vector2(r.position.x, ey + 0.5) * M]), Pal.heat(0.8, 1.8))

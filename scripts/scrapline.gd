@@ -279,7 +279,7 @@ func _p(x: float, y: float, F: float) -> Vector2:
 	return Vector2(X + x, F + y) * M
 
 
-func _rect(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float, F: float, fill_c: Color, edge: Color = Color(0, 0, 0, 0), w: float = 1.0) -> void:
+func _rect(ci, x0: float, y0: float, x1: float, y1: float, F: float, fill_c: Color, edge: Color = Color(0, 0, 0, 0), w: float = 1.0) -> void:
 	var r := Rect2(_p(x0, y0, F), Vector2(x1 - x0, y1 - y0) * M)
 	ci.draw_rect(r, fill_c)
 	if edge.a > 0.0:
@@ -287,7 +287,7 @@ func _rect(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float, F: float,
 
 
 # an item's outline drawn at (m), scaled, squashed toward an anchor and crumpled as it goes
-func _item(ci: CanvasItem, it: Dictionary, at: Vector2, F: float, sx: float, sy: float, crumple: float, col: Color, edge: Color, clip_y: float = INF) -> void:
+func _item(ci, it: Dictionary, at: Vector2, F: float, sx: float, sy: float, crumple: float, col: Color, edge: Color, clip_y: float = INF) -> void:
 	var s: float = it.s
 	var i := 0
 	for poly in it.polys:
@@ -305,7 +305,7 @@ func _item(ci: CanvasItem, it: Dictionary, at: Vector2, F: float, sx: float, sy:
 			_poly(ci, pts, F, col, edge)
 
 
-func _poly(ci: CanvasItem, pts: PackedVector2Array, F: float, col: Color, edge: Color) -> void:
+func _poly(ci, pts: PackedVector2Array, F: float, col: Color, edge: Color) -> void:
 	var w := PackedVector2Array()
 	for p in pts:
 		w.append(_p(p.x, p.y, F))
@@ -316,7 +316,7 @@ func _poly(ci: CanvasItem, pts: PackedVector2Array, F: float, col: Color, edge: 
 	ci.draw_polyline(w, edge, 1.0)
 
 
-func draw(ci: CanvasItem, F: float, mx: float, font: Font, font_b: Font, zoom: float, txt: Callable) -> void:
+func draw(ci, F: float, mx: float, font: Font, font_b: Font, zoom: float, txt: Callable) -> void:
 	var ink := Pal.ink(0.42)
 	if zoom < 0.55:
 		# far out: the machines' outlines
@@ -376,7 +376,7 @@ func draw(ci: CanvasItem, F: float, mx: float, font: Font, font_b: Font, zoom: f
 	_panel(ci, F, font, font_b, txt, zoom)
 
 
-func _draw_press(ci: CanvasItem, F: float, font: Font, zoom: float, txt: Callable, steel: Color, part_c: Color, part_e: Color) -> void:
+func _draw_press(ci, F: float, font: Font, zoom: float, txt: Callable, steel: Color, part_c: Color, part_e: Color) -> void:
 	# the box: thick walls, the side-ram cylinder to the left, the lid cylinder above
 	_rect(ci, PRESS_X0 - 0.2, PRESS_Y0 - 0.2, PRESS_X1 + 0.2, PRESS_Y1 + 0.2, F, steel, Pal.ink(0.6), 1.6)
 	_rect(ci, PRESS_X0, PRESS_Y0, PRESS_X1, PRESS_Y1, F, Color(0.025, 0.026, 0.03))
@@ -450,7 +450,7 @@ func _draw_press(ci: CanvasItem, F: float, font: Font, zoom: float, txt: Callabl
 
 
 # a pressed puck: dense, its folded layers showing as wavy lines across its face
-func _puck(ci: CanvasItem, c: Vector2, w: float, h: float, F: float, seed: int) -> void:
+func _puck(ci, c: Vector2, w: float, h: float, F: float, seed: int) -> void:
 	var r := Rect2(_p(c.x - w * 0.5, c.y - h * 0.5, F), Vector2(w, h) * M)
 	ci.draw_rect(r, Color(0.23, 0.225, 0.23))
 	var n := maxi(2, int(h / 0.06))
@@ -464,7 +464,7 @@ func _puck(ci: CanvasItem, c: Vector2, w: float, h: float, F: float, seed: int) 
 	ci.draw_rect(r, Pal.ink(0.6), false, 1.2)
 
 
-func _draw_shredder(ci: CanvasItem, F: float, font: Font, zoom: float, txt: Callable, steel: Color, part_c: Color, part_e: Color) -> void:
+func _draw_shredder(ci, F: float, font: Font, zoom: float, txt: Callable, steel: Color, part_c: Color, part_e: Color) -> void:
 	# the hopper narrowing to the cutting chamber
 	var hop := PackedVector2Array([_p(3.8, 1.85, F), _p(6.2, 1.85, F), _p(5.8, 2.35, F), _p(4.2, 2.35, F)])
 	ci.draw_colored_polygon(hop, Color(0.035, 0.037, 0.042))
@@ -554,14 +554,14 @@ func _draw_shredder(ci: CanvasItem, F: float, font: Font, zoom: float, txt: Call
 	_label(ci, font, _p(6.45, 5.9, F), txt.call("sl_bin_l"), zoom)
 
 
-func _label(ci: CanvasItem, font: Font, at: Vector2, s: String, zoom: float) -> void:
+func _label(ci, font: Font, at: Vector2, s: String, zoom: float) -> void:
 	var a := clampf((zoom - 0.8) / 0.3, 0.0, 1.0)
 	if a > 0.01:
 		ci.draw_string(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Pal.ink(0.5 * a))
 
 
 # the plate: what the line is doing, in numbers
-func _panel(ci: CanvasItem, F: float, font: Font, font_b: Font, txt: Callable, zoom: float) -> void:
+func _panel(ci, F: float, font: Font, font_b: Font, txt: Callable, zoom: float) -> void:
 	var r := Rect2(_p(10.5, 0.95, F), Vector2(6.9, 2.4) * M)
 	if zoom < 0.3:
 		return
@@ -579,3 +579,14 @@ func _panel(ci: CanvasItem, F: float, font: Font, font_b: Font, txt: Callable, z
 	]
 	for i in lines.size():
 		ci.draw_string(font, Vector2(x, y + 21.0 + i * 18.0), lines[i], HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24.0, 12, Pal.ink(0.66))
+
+
+# a string's width, measured once (shaping text is what made the plant's frame slow)
+var _widths := {}
+
+
+func _tw(font: Font, s: String, size: int) -> float:
+	var k := "%d|%d|%s" % [font.get_instance_id(), size, s]
+	if not _widths.has(k):
+		_widths[k] = font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	return _widths[k]

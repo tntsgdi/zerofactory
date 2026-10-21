@@ -43,6 +43,7 @@ func _run() -> void:
 	g.cam_override = r.get_center()
 	g.zoom_override = clampf(1700.0 / r.size.x, 0.12, 1.0)
 	await _frames(40)
+	await _wall(90)
 	var base := await _wall(90)
 	print("DOCKPERF all %.2f ms (zoom %.2f)" % [base, g.zoom_override])
 	var d = g.dock
@@ -66,4 +67,16 @@ func _run() -> void:
 	d.visible = false
 	await _frames(5)
 	print("DOCKPERF no dock at all %.2f ms" % (await _wall(60)))
+	d.visible = true
+	# up close at the furnace, where the plant is drawn in full every frame
+	g.cam_override = Vector2(d.furnace_x, Dock.FLOOR_Y + 4.0) * 48.0
+	g.zoom_override = 1.3
+	await _frames(60)
+	d.prof_draw = [0, 0, 0, 0]
+	print("DOCKPERF furnace close %.2f ms" % (await _wall(90)))
+	var pf: Array = d.prof_draw
+	print("DOCKPERF plant draw: smelter %.2f ms, line %.2f ms, flush %.2f ms a frame" % [pf[0] / 1000.0 / maxf(1, pf[3]), pf[1] / 1000.0 / maxf(1, pf[3]), pf[2] / 1000.0 / maxf(1, pf[3])])
+	d.visible = false
+	await _frames(5)
+	print("DOCKPERF furnace close, no dock %.2f ms" % (await _wall(60)))
 	quit(0)

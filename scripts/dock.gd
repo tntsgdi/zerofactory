@@ -2,6 +2,7 @@ class_name Dock
 extends Node2D
 
 const Smelter = preload("res://scripts/smelter.gd")
+const CanvasBatch = preload("res://scripts/canvas_batch.gd")
 # The vacuum dock around the ship: girders, the four clamp arms, the three
 # recovery mouths (equipment bay, metal furnace, hazard bay), the debris net,
 # the drone bay and the hose masts. Recovery mouths pull in whatever drifts
@@ -224,10 +225,17 @@ var smelter = preload("res://scripts/smelter.gd").new()
 # and the line before it: press, shredder, hammer mill, magnets (scripts/scrapline.gd)
 var scrapline = preload("res://scripts/scrapline.gd").new()
 var furnace_node: Node2D
+var furnace_text_node: Node2D
+var _text_sig := []
 # far out (the whole ship in view) the berth's girders lose their rivets and bracing, which
 # are under a pixel there and cost the wide view milliseconds a frame to render
 const FAR_ZOOM := 0.5
 var _far := false
+var draw_now := true        # this frame redraws the moving layers
+var prof_draw := [0, 0, 0, 0]   # usec in the plant's drawing (smelter, line, flush, frames): tests/dock_perf.gd
+var _frame_n := 0
+var _sb = null              # the batch the static layer is being drawn into
+var _ab = null              # the batch the light layer is being drawn into
 var furnace_x := -INF       # m: where the furnace stands (its own rails: it moves only when the berth is rebuilt)
 # the ships alongside that take what the mouths recovered (scripts/salvage_ships.gd)
 var ships
@@ -279,6 +287,12 @@ func _init() -> void:
 	furnace_node.show_behind_parent = true
 	furnace_node.draw.connect(_draw_furnace)
 	add_child(furnace_node)
+	# the plant's text (labels, callouts, read-outs) on a layer of its own, redrawn only when
+	# what it says or where it stands changes: shaping it every frame cost milliseconds
+	furnace_text_node = Node2D.new()
+	furnace_text_node.show_behind_parent = true
+	furnace_text_node.draw.connect(_draw_furnace_text)
+	add_child(furnace_text_node)
 	ships = preload("res://scripts/salvage_ships.gd").new()
 	ships.dock = self
 	add_child(ships)
@@ -322,7 +336,7 @@ func set_ship(ship: Dictionary) -> void:
 	for id in ZONES:
 		if not mouth_nodes.has(id):
 			var node := Node2D.new()
-			node.draw.connect(_mouth.bind(id, node))
+			node.draw.connect(_mouth_batched.bind(id, node))
 			add_child(node)
 			move_child(node, overlay_node.get_index())
 			mouth_nodes[id] = node
@@ -509,8 +523,21 @@ func _process(dt: float) -> void:
 	ships.game = game
 	ships.step(dt)
 	_step_net(dt)
+	# far out and nothing moving that matters: the ambient motion (belt, lamps, the plant)
+	# is redrawn every third frame only; up close, or with hoses, debris or a tug, every frame
+	_frame_n += 1
+	var calm := _far and hoses.is_empty() and debris.is_empty() and conveying.is_empty() and swallowing.is_empty() and not game.state in ["intro", "towout", "build"]
+	draw_now = not calm or _frame_n % 3 == 0
 	if _furnace_seen():
-		furnace_node.queue_redraw()
+		# the plant's slow motion (the melt stirring, the coil's current, the pumps) at half
+		# the frame rate; tapping, pressing and shredding at the full
+		var plant_busy: bool = smelter.phase in ["tilt", "pour", "back"] or scrapline.busy() > 0 or not scrapline.frags.is_empty() or not scrapline.fines.is_empty()
+		if draw_now and (plant_busy or _frame_n % 2 == 0):
+			furnace_node.queue_redraw()
+		var sig := [furnace_x, FLOOR_Y, metal_x, roundf(game.cam_zoom() * 20.0), Txt.zh, roundf(smelter.tilt * 40.0), roundf(smelter.hood * 20.0), int(t * 4.0)]
+		if sig != _text_sig:
+			_text_sig = sig
+			furnace_text_node.queue_redraw()
 	suck_glow = maxf(0.0, suck_glow - dt * 2.0)
 	for g in field_glow:
 		g[1] -= dt * 2.5
@@ -548,11 +575,12 @@ func _process(dt: float) -> void:
 		if st.glow > 0.0 or st.reject > 0.0 or st.eat > 0.0 or st.busy > 0.0 or want or signature != _mouth_drawn.get(id, []):
 			mouth_nodes[id].queue_redraw()
 			_mouth_drawn[id] = signature
-	# The belt, buffer, hoses and lamps preserve their original per-frame motion.
-	overlay_node.queue_redraw()
-	queue_redraw()
+	# the belt, buffer, hoses and lamps: every frame up close, every third far out when calm
 	_was_busy = busy
-	add_node.queue_redraw()
+	if draw_now:
+		overlay_node.queue_redraw()
+		queue_redraw()
+		add_node.queue_redraw()
 
 
 # acceleration the field gives at a point (zero well inside the berth)
@@ -811,40 +839,55 @@ func _step_hoses(dt: float) -> void:
 # ---------------------------------------------------------------- drawing
 
 func _draw() -> void:
-	_trough_live()
+	var cb = CanvasBatch.new(self)
+	_trough_live(cb)
+	cb.flush()
 
 
 func _draw_overlay() -> void:
+	var ov = CanvasBatch.new(overlay_node)
+	_draw_overlay_body(ov)
+	ov.flush()
+
+
+func _draw_overlay_body(ov) -> void:
 	if game != null and game.has_upgrade("buffer"):
-		_buffer(overlay_node)
+		_buffer(ov)
 	if game != null:
 		for r in game.keepout:
-			_keepout(r, overlay_node)
+			_keepout(r, ov)
 	# hoses
 	for id in hoses:
 		var pts := PackedVector2Array(hoses[id].pts)
-		overlay_node.draw_polyline(pts, Pal.ink(0.55), 3.4, true)
-		overlay_node.draw_polyline(pts, Color(0.05, 0.05, 0.06), 1.4, true)
+		ov.draw_polyline(pts, Pal.ink(0.55), 3.4, true)
+		ov.draw_polyline(pts, Color(0.05, 0.05, 0.06), 1.4, true)
 	# the tug that brings GR-7 in
 	var tug := tug_pos()
 	if tug != Vector2.INF:
-		_tug(tug, overlay_node)
-	_furnace_strip(overlay_node)
-	_net_detail(overlay_node)
+		_tug(tug, ov)
+	_furnace_strip(ov)
+	_net_detail(ov)
 	# debris on its way to the net
 	for d in debris:
 		var tr := Transform2D(d[4], d[0])
 		var poly: PackedVector2Array = tr * (d[3] as PackedVector2Array)
 		if Geom.valid(poly):
-			overlay_node.draw_colored_polygon(poly, Color(0.09, 0.093, 0.1))
+			ov.draw_colored_polygon(poly, Color(0.09, 0.093, 0.1))
 		var cl := poly.duplicate()
 		if cl.size() > 0:
 			cl.append(poly[0])
-			overlay_node.draw_polyline(cl, Pal.ink(0.6), 1.0, true)
+			ov.draw_polyline(cl, Pal.ink(0.6), 1.0, true)
 
 
 func _draw_static() -> void:
-	var ci := static_node
+	var ci = CanvasBatch.new(static_node)
+	_sb = ci
+	_draw_static_body(ci)
+	ci.flush()
+	_sb = null
+
+
+func _draw_static_body(ci) -> void:
 	var M := Geom.M
 	# the berth's back wall: a dark bay behind the ship, ribbed, its number painted big
 	var low := -5.0 - LIFT
@@ -1034,7 +1077,7 @@ func tug_pos() -> Vector2:
 	return Vector2(x, stern.y * Geom.M)
 
 
-func _tug(p: Vector2, ci: CanvasItem) -> void:
+func _tug(p: Vector2, ci) -> void:
 	var M := Geom.M
 	var hull := PackedVector2Array([p + Vector2(0.2 * M, -0.9 * M), p + Vector2(4.6 * M, -1.3 * M), p + Vector2(6.0 * M, -0.6 * M), p + Vector2(6.0 * M, 0.6 * M), p + Vector2(4.6 * M, 1.3 * M), p + Vector2(0.2 * M, 0.9 * M)])
 	ci.draw_colored_polygon(hull, Color(0.07, 0.073, 0.082))
@@ -1047,7 +1090,7 @@ func _tug(p: Vector2, ci: CanvasItem) -> void:
 
 
 # the buffer platform: a grated deck with tractor emitters along its edge
-func _buffer(ci: CanvasItem) -> void:
+func _buffer(ci) -> void:
 	var r := Rect2(BUFFER.position * Geom.M, BUFFER.size * Geom.M)
 	var deck := Rect2(Vector2(r.position.x, r.end.y - 10.0), Vector2(r.size.x, 10.0))
 	ci.draw_rect(deck, Color(0.06, 0.064, 0.072))
@@ -1066,7 +1109,7 @@ func _buffer(ci: CanvasItem) -> void:
 
 
 # a keep-out zone the operator set: no machine goes in
-func _keepout(r: Rect2, ci: CanvasItem) -> void:
+func _keepout(r: Rect2, ci) -> void:
 	ci.draw_rect(r, Pal.heat(0.05, 1.0))
 	var n := int(r.size.x / 24.0)
 	for i in n + 1:
@@ -1107,7 +1150,13 @@ func _wanted(id: String) -> bool:
 	return game.hud._zone_for(b) == id
 
 
-func _mouth(id: String, ci: CanvasItem) -> void:
+func _mouth_batched(id: String, node: Node2D) -> void:
+	var cb = CanvasBatch.new(node)
+	_mouth(id, cb)
+	cb.flush()
+
+
+func _mouth(id: String, ci) -> void:
 	var M := Geom.M
 	var z: Dictionary = ZONES[id]
 	var st: Dictionary = zone_state[id]
@@ -1201,7 +1250,7 @@ func _mouth(id: String, ci: CanvasItem) -> void:
 
 
 # the sign beside a mouth: an icon, the name, what goes in, and a status lamp
-func _sign(id: String, c: Vector2, f: Vector2, side: Vector2, lip: float, st: Dictionary, ci: CanvasItem) -> void:
+func _sign(id: String, c: Vector2, f: Vector2, side: Vector2, lip: float, st: Dictionary, ci) -> void:
 	var sz := Vector2(262, 66)
 	# beside the mouth, on the side with room (the hazard bay is at the berth's end)
 	# the hazard bay sits at the berth's end: its sign goes straight above it
@@ -1232,7 +1281,7 @@ func _sign(id: String, c: Vector2, f: Vector2, side: Vector2, lip: float, st: Di
 	ci.draw_string(font, Vector2(r.end.x - 24 - sw, r.position.y + 18), game.txt(key), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Pal.ink(0.6))
 
 
-func _icon(id: String, p: Vector2, ci: CanvasItem) -> void:
+func _icon(id: String, p: Vector2, ci) -> void:
 	var col := zone_col(id, 0.95, 1.2)
 	match kind(id):
 		"equip":
@@ -1252,7 +1301,7 @@ func _icon(id: String, p: Vector2, ci: CanvasItem) -> void:
 
 # the scrap trough: a recessed channel along the floor, a belt of slats running
 # toward the furnace, arrows on the rail; lit along its length while scrap is carried
-func _trough_live() -> void:
+func _trough_live(cb) -> void:
 	var M := Geom.M
 	var mx: float = zpos("metal").x
 	var y0 := TROUGH_Y * M
@@ -1261,15 +1310,15 @@ func _trough_live() -> void:
 	var x1 := TROUGH_X1 * M
 	var want := _wanted("metal")
 	if want:
-		draw_rect(Rect2(x0, y0 - 6, x1 - x0, 6), Pal.heat(0.12 + 0.08 * sin(t * 4.0), 1.2))
+		cb.draw_rect(Rect2(x0, y0 - 6, x1 - x0, 6), Pal.heat(0.12 + 0.08 * sin(t * 4.0), 1.2))
 	# the suction over the belt: a band that fades upward, chevrons falling into it,
 	# brighter while scrap is carried and where it draws something down
 	var sh := SUCK_H * M
 	var band := 0.05 + (0.07 + 0.04 * sin(t * 4.0) if want else 0.0) + 0.08 * suck_glow
-	draw_polygon(PackedVector2Array([Vector2(x0, y0 - sh), Vector2(x1, y0 - sh), Vector2(x1, y0), Vector2(x0, y0)]),
+	cb.draw_polygon(PackedVector2Array([Vector2(x0, y0 - sh), Vector2(x1, y0 - sh), Vector2(x1, y0), Vector2(x0, y0)]),
 		PackedColorArray([Pal.heat(0.0), Pal.heat(0.0), Pal.heat(band, 1.2), Pal.heat(band, 1.2)]))
 	if suck_glow > 0.0:
-		draw_texture_rect(game.fx.glow_tex, Rect2(Vector2(suck_x - 1.6 * M, y0 - sh * 0.8), Vector2(3.2 * M, sh)), false, Pal.heat(0.22 * suck_glow, 1.5))
+		cb.draw_texture_rect(game.fx.glow_tex, Rect2(Vector2(suck_x - 1.6 * M, y0 - sh * 0.8), Vector2(3.2 * M, sh)), false, Pal.heat(0.22 * suck_glow, 1.5))
 	# chevrons, belt slats and rail arrows: one batched call each (they were
 	# ~200 calls a frame)
 	var vis := _vis_x()
@@ -1287,7 +1336,7 @@ func _trough_live() -> void:
 				chev_c.append_array([cc, cc])
 		cx += 3.0 * M
 	if not chev.is_empty():
-		draw_multiline_colors(chev, chev_c, 1.4, true)
+		cb.draw_multiline_colors(chev, chev_c, 1.4, true)
 	var ph := fposmod(t * CONVEY * M, 24.0)
 	var slats := PackedVector2Array()
 	var x := x0 + 6.0 + maxf(0.0, floorf((vis.x - x0) / 24.0) - 1.0) * 24.0
@@ -1297,7 +1346,7 @@ func _trough_live() -> void:
 			slats.append_array([Vector2(px, y0 + 8), Vector2(px, y1 - 6)])
 		x += 24.0
 	if not slats.is_empty():
-		draw_multiline(slats, Pal.ink(0.16), 2.0)
+		cb.draw_multiline(slats, Pal.ink(0.16), 2.0)
 	# arrows on the rail, every few metres, pointing to the furnace
 	var arrows := PackedVector2Array()
 	var ax := x0 + 1.5 * M + maxf(0.0, floorf((vis.x - x0) / (3.0 * M))) * 3.0 * M
@@ -1308,7 +1357,7 @@ func _trough_live() -> void:
 			arrows.append_array([Vector2(ax - 5.0 * d, ay - 5), Vector2(ax + 3.0 * d, ay), Vector2(ax + 3.0 * d, ay), Vector2(ax - 5.0 * d, ay + 5)])
 		ax += 3.0 * M
 	if not arrows.is_empty():
-		draw_multiline(arrows, Pal.heat(0.55 if want else 0.3, 1.2), 1.6, true)
+		cb.draw_multiline(arrows, Pal.heat(0.55 if want else 0.3, 1.2), 1.6, true)
 
 
 # a plated girder: a lit top edge, a shadowed bottom, posts and diagonals, rivets at the nodes
@@ -1317,7 +1366,7 @@ func _trough_live() -> void:
 # batch). Now each truss gathers its posts, braces and rivets and draws each
 # kind once (2026-10-18 performance work).
 func _truss(r: Rect2) -> void:
-	var ci := static_node
+	var ci = _sb if _sb != null else static_node
 	ci.draw_rect(r, Color(0.052, 0.055, 0.062))
 	ci.draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * 0.22)), Color(0.075, 0.079, 0.088))
 	ci.draw_rect(Rect2(Vector2(r.position.x, r.end.y - r.size.y * 0.18), Vector2(r.size.x, r.size.y * 0.18)), Color(0.04, 0.042, 0.048))
@@ -1348,7 +1397,7 @@ func _truss(r: Rect2) -> void:
 
 
 func _truss_v(r: Rect2) -> void:
-	var ci := static_node
+	var ci = _sb if _sb != null else static_node
 	ci.draw_rect(r, Color(0.052, 0.055, 0.062))
 	ci.draw_rect(Rect2(r.position, Vector2(r.size.x * 0.22, r.size.y)), Color(0.075, 0.079, 0.088))
 	var posts := PackedVector2Array()
@@ -1375,8 +1424,8 @@ func _truss_v(r: Rect2) -> void:
 
 
 # many small round dots of one colour in one call (hexagons, as small as these are)
-static func _dots(ci: CanvasItem, at: PackedVector2Array, rad: float, col: Color) -> void:
-	if at.is_empty():
+static func _dots(ci, at: PackedVector2Array, rad: float, col: Color) -> void:
+	if at.is_empty() or (ci is RefCounted and ci.no_shapes):
 		return
 	var pts := PackedVector2Array()
 	var idx := PackedInt32Array()
@@ -1392,7 +1441,7 @@ static func _dots(ci: CanvasItem, at: PackedVector2Array, rad: float, col: Color
 
 # diagonal warning stripes over a band (heat on dark)
 func _stripes(r: Rect2, a: float = 0.55) -> void:
-	var ci := static_node
+	var ci = _sb if _sb != null else static_node
 	ci.draw_rect(r, Color(0.03, 0.03, 0.03))
 	var x := r.position.x - r.size.y
 	var i := 0
@@ -1406,7 +1455,7 @@ func _stripes(r: Rect2, a: float = 0.55) -> void:
 		i += 1
 
 
-func _draw_trough(ci: CanvasItem) -> void:
+func _draw_trough(ci) -> void:
 	var M := Geom.M
 	var mx: float = zpos("metal").x
 	var y := (TROUGH_Y + 0.4) * M
@@ -1446,9 +1495,9 @@ func _draw_lights() -> void:
 		# the cone fades out downwards (bright at the lamp, nothing by the hull's far side)
 		var cone := PackedVector2Array([hp + Vector2(-10, 0), hp + Vector2(10, 0), hp + Vector2(3.2 * M, 8.0 * M), hp + Vector2(-3.2 * M, 8.0 * M)])
 		var cc := PackedColorArray([Pal.ink(0.045, 1.2), Pal.ink(0.045, 1.2), Pal.ink(0.0), Pal.ink(0.0)])
-		add_node.draw_polygon(cone, cc)
-		add_node.draw_texture_rect(tex, Rect2(hp - Vector2(26, 14), Vector2(52, 28)), false, Pal.ink(0.5, 1.6))
-		add_node.draw_circle(hp, 3.0, Pal.ink(0.95, 2.0))
+		_ab.draw_polygon(cone, cc)
+		_ab.draw_texture_rect(tex, Rect2(hp - Vector2(26, 14), Vector2(52, 28)), false, Pal.ink(0.5, 1.6))
+		_ab.draw_circle(hp, 3.0, Pal.ink(0.95, 2.0))
 	# marker lights along the deck edge and under the boom, chasing slowly toward the furnace
 	var mx: float = zpos("metal").x / M
 	var vis := _vis_x() / M
@@ -1467,26 +1516,33 @@ func _draw_lights() -> void:
 		_lamp(pts, cols, idx, Vector2(x, RAIL_Y) * M + Vector2(0, 2), 1.8, Pal.ink(a2, 1.6))
 		x += 3.0
 	if not idx.is_empty():
-		RenderingServer.canvas_item_add_triangle_array(add_node.get_canvas_item(), idx, pts, cols)
+		RenderingServer.canvas_item_add_triangle_array(_ab.get_canvas_item(), idx, pts, cols)
 
 
 func _draw_add() -> void:
+	_ab = CanvasBatch.new(add_node)
+	_draw_add_body()
+	_ab.flush()
+	_ab = null
+
+
+func _draw_add_body() -> void:
 	_draw_lights()
 	var tex: Texture2D = game.fx.glow_tex
 	var M := Geom.M
 	# beacons on the open ends of the arm and the platform, and the field corners
 	var blink := 0.5 + 0.5 * sin(t * 2.4)
 	for bp in [Vector2(ARM_X1, RAIL_Y - 0.3), Vector2(FLOOR_X1, FLOOR_Y + 0.3)]:
-		add_node.draw_texture_rect(tex, Rect2(bp * M - Vector2(18, 18), Vector2(36, 36)), false, Pal.heat(0.25 + 0.6 * blink, 1.8))
-		add_node.draw_circle(bp * M, 2.5, Pal.heat(0.6 + 0.4 * blink, 2.0))
+		_ab.draw_texture_rect(tex, Rect2(bp * M - Vector2(18, 18), Vector2(36, 36)), false, Pal.heat(0.25 + 0.6 * blink, 1.8))
+		_ab.draw_circle(bp * M, 2.5, Pal.heat(0.6 + 0.4 * blink, 2.0))
 	var fr := Rect2((BOUNDS.position + Vector2(0.0, 2.0)) * M, (BOUNDS.size - Vector2(2.5, 2.0)) * M)
 	var fb := 0.5 + 0.5 * sin(t * 1.3 + 1.0)
 	for cp in [fr.position, Vector2(fr.end.x, fr.position.y), Vector2(fr.end.x, fr.end.y)]:
-		add_node.draw_texture_rect(tex, Rect2(cp - Vector2(12, 12), Vector2(24, 24)), false, Pal.ink(0.12 + 0.2 * fb, 1.3))
+		_ab.draw_texture_rect(tex, Rect2(cp - Vector2(12, 12), Vector2(24, 24)), false, Pal.ink(0.12 + 0.2 * fb, 1.3))
 	# the field lights up where something leans on it
 	for g in field_glow:
 		var a: float = g[1]
-		add_node.draw_texture_rect(tex, Rect2(g[0] - Vector2(60, 60), Vector2(120, 120)), false, Pal.tint(Pal.AIR, 0.18 * a, 1.2))
+		_ab.draw_texture_rect(tex, Rect2(g[0] - Vector2(60, 60), Vector2(120, 120)), false, Pal.tint(Pal.AIR, 0.18 * a, 1.2))
 	for id in ZONES:
 		var st: Dictionary = zone_state[id]
 		var c := zpos(id)
@@ -1496,13 +1552,13 @@ func _draw_add() -> void:
 		var base := 0.16 if id == "metal" else 0.06
 		var a: float = base + 0.25 * st.glow + 0.7 * st.eat
 		var r: float = 70.0 + 50.0 * st.eat
-		add_node.draw_texture_rect(tex, Rect2(throat - Vector2(r * 1.6, r), Vector2(r * 3.2, r * 2.0)), false, Color(col.r, col.g, col.b, a))
+		_ab.draw_texture_rect(tex, Rect2(throat - Vector2(r * 1.6, r), Vector2(r * 3.2, r * 2.0)), false, Color(col.r, col.g, col.b, a))
 		if id == "metal":
 			# the furnace always breathes
 			var br := 0.08 + 0.05 * sin(t * 2.1)
-			add_node.draw_texture_rect(tex, Rect2(throat - Vector2(90, 40), Vector2(180, 80)), false, Pal.heat(br, 1.4))
+			_ab.draw_texture_rect(tex, Rect2(throat - Vector2(90, 40), Vector2(180, 80)), false, Pal.heat(br, 1.4))
 	if _furnace_seen():
-		smelter.draw_add(add_node, FLOOR_Y, tex)
+		smelter.draw_add(_ab, FLOOR_Y, tex)
 	var tug := tug_pos()
 	if tug != Vector2.INF:
 		# its burn follows its real acceleration (player 2026-10-18: speeding up
@@ -1515,18 +1571,18 @@ func _draw_add() -> void:
 		var retro := clampf(ax / 2400.0, 0.0, 1.0)
 		if main > 0.03:
 			var base := tug + Vector2(6.0 * Geom.M, 0)
-			add_node.draw_colored_polygon(PackedVector2Array([base + Vector2(0, -16), base + Vector2(90 * fl * (0.4 + 0.6 * main), 0), base + Vector2(0, 16)]), Pal.heat(0.6 * main, 1.8))
-			add_node.draw_texture_rect(tex, Rect2(base - Vector2(40, 40), Vector2(80, 80)), false, Pal.heat(0.5 * main, 1.6))
+			_ab.draw_colored_polygon(PackedVector2Array([base + Vector2(0, -16), base + Vector2(90 * fl * (0.4 + 0.6 * main), 0), base + Vector2(0, 16)]), Pal.heat(0.6 * main, 1.8))
+			_ab.draw_texture_rect(tex, Rect2(base - Vector2(40, 40), Vector2(80, 80)), false, Pal.heat(0.5 * main, 1.6))
 		if retro > 0.03:
 			for s: float in [-1.0, 1.0]:
 				var rb := tug + Vector2(1.2 * Geom.M, 1.0 * Geom.M * s)
 				var ln := 60.0 * fl * (0.4 + 0.6 * retro)
-				add_node.draw_colored_polygon(PackedVector2Array([rb + Vector2(0, -7), rb + Vector2(-ln, 3.0 * s), rb + Vector2(0, 7)]), Pal.heat(0.6 * retro, 1.8))
-				add_node.draw_texture_rect(tex, Rect2(rb - Vector2(24, 24), Vector2(48, 48)), false, Pal.heat(0.45 * retro, 1.6))
+				_ab.draw_colored_polygon(PackedVector2Array([rb + Vector2(0, -7), rb + Vector2(-ln, 3.0 * s), rb + Vector2(0, 7)]), Pal.heat(0.6 * retro, 1.8))
+				_ab.draw_texture_rect(tex, Rect2(rb - Vector2(24, 24), Vector2(48, 48)), false, Pal.heat(0.45 * retro, 1.6))
 	for d in debris:
 		var tr: Array = d[7]
 		if tr.size() >= 2:
-			add_node.draw_polyline(PackedVector2Array(tr), Pal.ink(0.25, 1.2), 2.0, true)
+			_ab.draw_polyline(PackedVector2Array(tr), Pal.ink(0.25, 1.2), 2.0, true)
 
 
 # ---------------------------------------------------------------- the furnace below the mouth
@@ -1550,12 +1606,34 @@ func _draw_furnace() -> void:
 		return
 	var z: float = game.cam_zoom() if game != null else 1.0
 	var tx := func(k: String) -> String: return Txt.t(k)
-	smelter.draw(furnace_node, FLOOR_Y, metal_x, font, font_b, z, tx)
-	scrapline.draw(furnace_node, FLOOR_Y, metal_x, font, font_b, z, tx)
+	var cb = CanvasBatch.new(furnace_node)
+	cb.no_text = true
+	var t0 := Time.get_ticks_usec()
+	smelter.draw(cb, FLOOR_Y, metal_x, font, font_b, z, tx)
+	var t1 := Time.get_ticks_usec()
+	scrapline.draw(cb, FLOOR_Y, metal_x, font, font_b, z, tx)
+	var t2 := Time.get_ticks_usec()
+	cb.flush()
+	prof_draw[0] += t1 - t0
+	prof_draw[1] += t2 - t1
+	prof_draw[2] += Time.get_ticks_usec() - t2
+	prof_draw[3] += 1
+
+
+func _draw_furnace_text() -> void:
+	if not _furnace_seen():
+		return
+	var z: float = game.cam_zoom() if game != null else 1.0
+	var tx := func(k: String) -> String: return Txt.t(k)
+	var cb = CanvasBatch.new(furnace_text_node)
+	cb.no_shapes = true
+	smelter.draw(cb, FLOOR_Y, metal_x, font, font_b, z, tx)
+	scrapline.draw(cb, FLOOR_Y, metal_x, font, font_b, z, tx)
+	cb.flush()
 
 
 # under the furnace mouth's sign: the melt and the bunker at a glance
-func _furnace_strip(ci: CanvasItem) -> void:
+func _furnace_strip(ci) -> void:
 	if not ZONES.has("metal"):
 		return
 	var M := Geom.M
@@ -1577,7 +1655,7 @@ func _furnace_strip(ci: CanvasItem) -> void:
 # damage you can't see), a weighing platform on four load cells in the throat, and
 # above it the lift shaft up through the boom to the shuttle that takes it to the
 # freighter; the trolley runs a rack on the rail, fed by a cable drag chain.
-func _equip_detail(id: String, c: Vector2, f: Vector2, side: Vector2, lip: float, throat_w: float, depth: float, st: Dictionary, ci: CanvasItem) -> void:
+func _equip_detail(id: String, c: Vector2, f: Vector2, side: Vector2, lip: float, throat_w: float, depth: float, st: Dictionary, ci) -> void:
 	var M := Geom.M
 	var col := Pal.ink(0.6)
 	var on: bool = st.eat > 0.0 or st.busy > 0.0
@@ -1677,7 +1755,7 @@ func _step_net(dt: float) -> void:
 # ring's ends, load cells under its mounts; when it has taken its load the dump gate
 # at the bottom opens into a little baler under the floor whose bales ride a belt
 # to the furnace's chute.
-func _net_detail(ci: CanvasItem, fixed: bool = false) -> void:
+func _net_detail(ci, fixed: bool = false) -> void:
 	var M := Geom.M
 	var nc := NET * M
 	var F := FLOOR_Y
@@ -1735,7 +1813,7 @@ func _net_detail(ci: CanvasItem, fixed: bool = false) -> void:
 
 
 # the net's moving parts: the load reading, the dump gate, the baler's ram, the bale on its belt
-func _net_moving(ci: CanvasItem, nc: Vector2, F: float) -> void:
+func _net_moving(ci, nc: Vector2, F: float) -> void:
 	var M := Geom.M
 	var za: float = clampf((game.cam_zoom() - 0.8) / 0.3, 0.0, 1.0) if game != null else 0.0
 	var blink := 0.5 + 0.5 * sin(t * 3.0)

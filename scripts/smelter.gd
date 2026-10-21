@@ -319,7 +319,7 @@ func body_pt(x: float, y: float, F: float) -> Vector2:
 	return Vector2(X + r.x, F + PIV + r.y) * M
 
 
-func _rect(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float, F: float, fill_c: Color, edge: Color = Color(0, 0, 0, 0), w: float = 1.0) -> void:
+func _rect(ci, x0: float, y0: float, x1: float, y1: float, F: float, fill_c: Color, edge: Color = Color(0, 0, 0, 0), w: float = 1.0) -> void:
 	var p := PackedVector2Array([Vector2(X + x0, F + y0) * M, Vector2(X + x1, F + y0) * M, Vector2(X + x1, F + y1) * M, Vector2(X + x0, F + y1) * M])
 	ci.draw_colored_polygon(p, fill_c)
 	if edge.a > 0.0:
@@ -327,7 +327,7 @@ func _rect(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float, F: float,
 		ci.draw_polyline(p, edge, w)
 
 
-func _brect(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float, F: float, fill_c: Color, edge: Color = Color(0, 0, 0, 0), w: float = 1.0) -> void:
+func _brect(ci, x0: float, y0: float, x1: float, y1: float, F: float, fill_c: Color, edge: Color = Color(0, 0, 0, 0), w: float = 1.0) -> void:
 	var p := PackedVector2Array([body_pt(x0, y0, F), body_pt(x1, y0, F), body_pt(x1, y1, F), body_pt(x0, y1, F)])
 	ci.draw_colored_polygon(p, fill_c)
 	if edge.a > 0.0:
@@ -335,7 +335,7 @@ func _brect(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float, F: float
 		ci.draw_polyline(p, edge, w)
 
 
-func _bline(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float, F: float, c: Color, w: float = 1.0) -> void:
+func _bline(ci, x0: float, y0: float, x1: float, y1: float, F: float, c: Color, w: float = 1.0) -> void:
 	ci.draw_line(body_pt(x0, y0, F), body_pt(x1, y1, F), c, w)
 
 
@@ -360,7 +360,7 @@ const GROUT := Color(0.13, 0.13, 0.115)
 const FAR := 0.55               # below this zoom the plant is drawn as outlines
 
 
-func draw(ci: CanvasItem, F: float, mx: float, font: Font, font_b: Font, zoom: float, txt: Callable) -> void:
+func draw(ci, F: float, mx: float, font: Font, font_b: Font, zoom: float, txt: Callable) -> void:
 	var floor_y := F
 	F += DY
 	if zoom < FAR:
@@ -659,30 +659,30 @@ func draw(ci: CanvasItem, F: float, mx: float, font: Font, font_b: Font, zoom: f
 		ci.draw_rect(Rect2(Vector2(X + 10.5, F + 0.85) * M, Vector2(6.9 * M, 3.3 * M)), Color(0.035, 0.037, 0.042, 0.96))
 
 
-func _label(ci: CanvasItem, font: Font, at: Vector2, s: String, zoom: float, right: bool = false) -> void:
+func _label(ci, font: Font, at: Vector2, s: String, zoom: float, right: bool = false) -> void:
 	var a := clampf((zoom - 0.8) / 0.3, 0.0, 1.0)
-	if a <= 0.01:
+	if a <= 0.01 or ci.no_text:
 		return
 	var x := at.x
 	if right:
-		x -= font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+		x -= _tw(font, s, 11)
 	ci.draw_string(font, Vector2(x, at.y), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Pal.ink(0.5 * a))
 
 
-func _callout(ci: CanvasItem, font: Font, from: Vector2, to: Vector2, s: String, zoom: float, left: bool = false) -> void:
+func _callout(ci, font: Font, from: Vector2, to: Vector2, s: String, zoom: float, left: bool = false) -> void:
 	var a := clampf((zoom - 0.8) / 0.3, 0.0, 1.0)
 	if a <= 0.01:
 		return
 	ci.draw_line(from, to, Pal.ink(0.22 * a), 1.0)
 	ci.draw_circle(from, 1.8, Pal.ink(0.5 * a))
-	var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+	var w := _tw(font, s, 11)
 	var x0 := to.x - w - 6.0 if left else to.x
 	ci.draw_line(Vector2(x0, to.y), Vector2(x0 + w + 6.0, to.y), Pal.ink(0.22 * a), 1.0)
 	ci.draw_string(font, Vector2(x0 + 3.0, to.y - 3.0), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Pal.ink(0.6 * a))
 
 
 # the plate beside the bunker: what the furnace is doing, in numbers
-func _panel(ci: CanvasItem, F: float, font: Font, font_b: Font, txt: Callable) -> void:
+func _panel(ci, F: float, font: Font, font_b: Font, txt: Callable) -> void:
 	var r := Rect2(Vector2(X + 10.5, F + 0.85) * M, Vector2(6.9 * M, 3.3 * M))
 	ci.draw_rect(r, Color(0.035, 0.037, 0.042, 0.96))
 	ci.draw_rect(Rect2(r.position, Vector2(4, r.size.y)), Pal.heat(0.9, 1.1))
@@ -692,7 +692,7 @@ func _panel(ci: CanvasItem, F: float, font: Font, font_b: Font, txt: Callable) -
 	ci.draw_string(font_b, Vector2(x, y), txt.call("fu_title"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Pal.ink(0.92))
 	var sk := state_key()
 	var sc := Pal.heat(0.6 + 0.4 * sin(t * 8.0), 1.4) if phase in ["tilt", "pour", "back"] or flare_t > 0.3 else Pal.tint(Pal.FLUID, 0.9, 1.2)
-	var sw := font_b.get_string_size(txt.call(sk), HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+	var sw := _tw(font_b, txt.call(sk), 13)
 	ci.draw_circle(Vector2(r.end.x - 16, y - 5), 4.0, sc)
 	ci.draw_string(font_b, Vector2(r.end.x - 26 - sw, y), txt.call(sk), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, sc)
 	var lines := [
@@ -719,7 +719,7 @@ static func _pa(p: float) -> String:
 
 
 # the light it gives off (added on top): the open crucible, the stream, the fresh ingots
-func draw_add(ci: CanvasItem, F: float, tex: Texture2D) -> void:
+func draw_add(ci, F: float, tex: Texture2D) -> void:
 	F += DY
 	var c := body_pt(0.0, 5.0, F)
 	var a := 0.04 + 0.05 * clampf(m_l / CAP, 0.0, 1.0) + 0.5 * flare_t
@@ -744,7 +744,7 @@ func draw_add(ci: CanvasItem, F: float, tex: Texture2D) -> void:
 
 
 # the plant from far away: its boxes, the furnace body with the melt's colour, the casting line
-func _draw_far(ci: CanvasItem, F: float) -> void:
+func _draw_far(ci, F: float) -> void:
 	var edge := Pal.ink(0.4)
 	_rect(ci, -10.0, 1.8, -6.8, 3.8, F, STEEL, edge)
 	_rect(ci, -11.4, 4.0, -7.6, 5.4, F, Color(0.03, 0.045, 0.055), edge)
@@ -767,7 +767,7 @@ func back_temp() -> float:
 # pump drives the coil loop and a bladder accumulator takes up the water's swell.
 # The water moves: dashes run along every tube and snake round the baffles, the
 # impeller and the flowmeter turn, the bladder breathes with the water's temperature.
-func _hx(ci: CanvasItem, F: float, font: Font, zoom: float, txt: Callable) -> void:
+func _hx(ci, F: float, font: Font, zoom: float, txt: Callable) -> void:
 	ci.draw_set_transform(Vector2(-3.0 * M, 0.0))
 	var x0 := -8.4
 	var x1 := -4.6
@@ -865,7 +865,7 @@ func _hx(ci: CanvasItem, F: float, font: Font, zoom: float, txt: Callable) -> vo
 
 
 # water moving along a path (m, from the axis): a tinted bore and bright dashes running with the flow
-func _flow(ci: CanvasItem, path: PackedVector2Array, F: float, col: Color, hi: Color, speed: float, spacing: float, zoom: float, col_end: Color = Color(0, 0, 0, 0)) -> void:
+func _flow(ci, path: PackedVector2Array, F: float, col: Color, hi: Color, speed: float, spacing: float, zoom: float, col_end: Color = Color(0, 0, 0, 0)) -> void:
 	var pts := PackedVector2Array()
 	for p in path:
 		pts.append(Vector2(X + p.x, F + p.y) * M)
@@ -906,7 +906,7 @@ func _flow(ci: CanvasItem, path: PackedVector2Array, F: float, col: Color, hi: C
 		ci.draw_multiline(dash, hi, 1.6)
 
 
-func _pipe(ci: CanvasItem, path: Array, F: float, col: Color, flow_k: float, zoom: float) -> void:
+func _pipe(ci, path: Array, F: float, col: Color, flow_k: float, zoom: float) -> void:
 	var pp := PackedVector2Array()
 	for p in path:
 		pp.append(p)
@@ -923,7 +923,7 @@ func _pipe(ci: CanvasItem, path: Array, F: float, col: Color, flow_k: float, zoo
 # copper) is drawn off the hood into a cold trap: water-cooled plates where the
 # vapour freezes straight out of the gas into a metal frost, thicker as the heats go
 # by; the cooling water runs in the plates' channels.
-func _condenser(ci: CanvasItem, F: float, hdx: float, font: Font, zoom: float, txt: Callable) -> void:
+func _condenser(ci, F: float, hdx: float, font: Font, zoom: float, txt: Callable) -> void:
 	var x0 := 2.6
 	var x1 := 4.4
 	var y0 := 3.65
@@ -963,7 +963,7 @@ func _condenser(ci: CanvasItem, F: float, hdx: float, font: Font, zoom: float, t
 
 
 # ---------------------------------------------------------------- the tilt hydraulics
-func _hpu(ci: CanvasItem, F: float, font: Font, zoom: float, txt: Callable) -> void:
+func _hpu(ci, F: float, font: Font, zoom: float, txt: Callable) -> void:
 	var r := Rect2(Vector2(X - 4.0, F + 6.95) * M, Vector2(1.2, 0.55) * M)
 	ci.draw_rect(r, Color(0.06, 0.063, 0.072))
 	ci.draw_rect(r, Pal.ink(0.5), false, 1.2)
@@ -973,3 +973,15 @@ func _hpu(ci: CanvasItem, F: float, font: Font, zoom: float, txt: Callable) -> v
 	ci.draw_arc(bc, 0.11 * M, PI, TAU, 10, Pal.ink(0.55), 1.2)
 	ci.draw_line(Vector2(X - 3.4, F + 7.5) * M, Vector2(X - 2.0, F + 7.55) * M, Pal.ink(0.35), 2.0)
 	_label(ci, font, Vector2(X - 4.0, F + 7.75) * M, txt.call("fu_hpu") % (hpu_bar / 10.0), zoom)
+
+
+
+# a string's width, measured once (shaping text is what made the plant's frame slow)
+var _widths := {}
+
+
+func _tw(font: Font, s: String, size: int) -> float:
+	var k := "%d|%d|%s" % [font.get_instance_id(), size, s]
+	if not _widths.has(k):
+		_widths[k] = font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	return _widths[k]
