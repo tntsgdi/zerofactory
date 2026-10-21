@@ -200,3 +200,9 @@
   - Q5 A：首屏废船被船坞灯逐盏照亮 + 标题砸入 → 滚动拉近剖面、爆炸图标注零件 → 全屏实机 → 独立区块亲手激光切带燃料罐的舱壁
   - Q6 网址 /zeropressure/，/stellar/ 加导航、游戏库卡片、预告片区块
   - [x] 已上线：https://stellarascensiongame.com/zeropressure/ + /stellar/ 导航、游戏库卡片（即将推出）、预告片区块；宣传片 92.5 s 在 R2 stellar/media/zeropressure-trailer-en-20261020.mp4；采集脚本 tests/trailer_capture.gd，流程见 G:/CODE/stellar-web/ZEROPRESSURE_RELEASE.md
+- [x] 2026-10-21 用户（看线上 /zeropressure/）：上下滑动不丝滑，网页设计太垃圾，互动不行，也不精美也没动画 → 先测卡顿原因，再定改版方向
+  - 原因：每帧 JS 仅 0.3–1.7 ms，卡在 GPU（全屏 canvas 每帧按高分屏重画并裁 182 块大图、全屏噪点动画、导航毛玻璃、火花 canvas 每帧清屏）
+  - 定案（Jev + 用户全按推荐）：Q1 C 整页就是一次连续拆船（巨型废船贯穿全页，滚动时激光按真实流程一节节切开：测量→放气→切割→零件飘走→燃料泄漏爆燃→回炉，鼠标只在主秀船上能切；文字与实机插在每刀之间；WebGL 2D 保流畅）；Q2 A 先只修卡顿上线；Q3 B 手机端同叙事的简化版
+  - [x] 先修卡顿已上线（worker 1e93d00a）：静止不重画、零件预裁小图、canvas ≤1.5 倍、去噪点动画与毛玻璃
+  - 第二轮定案（Jev + 用户全按推荐）：主秀船 ARK-01（608 m）；船竖放船首朝上，滚动沿船身一路下潜、每舱段停下切一刀；鼠标真实切开（分板飘走、罐按内容物喷出/爆燃/沸腾结冰、设备显示名字价值）；保留宣传片、船队改钉住大画廊、结尾，数字并入 HUD，独立切罐玩具并入主秀；画面从游戏导出绘制指令 WebGL 原样重放；声音默认关、右上角开关
+  - [x] 改版已上线（worker f5184352）：tests/web_export.gd 导出 ARK-01 全部零件/设备画法原始图元/房间/管线/内容物 → stellar-web tools/zp_ship_build.py 打包 → zp-ship.js WebGL2 原样重放；六章滚动剧本、鼠标真实切割（分板漂移、按内容物喷出沸腾结冰/有氧起火、破口泄压）、合成音效默认关、手机版用章节静态图 + 实机；细节见 G:/CODE/stellar-web/ZEROPRESSURE_RELEASE.md
