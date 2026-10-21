@@ -474,7 +474,14 @@ func _prep() -> void:
 					_note("draw the oxidiser at its own drain %s" % dp)
 					_work(2.5)
 					return
-			if not s.hoses.has(tn.port) and not _hidden(tn.port) and _once("draw " + tn.port):
+			# the main pump only while the manifold side still has propellant (it runs dry else)
+			if g.tanknet.manifold_left() <= 0.02:
+				if s.hoses.has(tn.port) and _once("draw off " + tn.port):
+					_h(tn.port)
+					_note("manifold drawn: %s off" % tn.port)
+					_work(1.5)
+					return
+			elif not s.hoses.has(tn.port) and not _hidden(tn.port) and _once("draw " + tn.port):
 				done_ops["hose " + tn.port] = true
 				_h(tn.port)
 				_note("draw the propellant at %s" % tn.port)

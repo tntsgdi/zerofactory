@@ -71,6 +71,18 @@ func fuel_left() -> float:
 	return tot
 
 
+# what the main pump can still draw: the manifold and the tanks on it (not an "own" tank)
+func manifold_left() -> float:
+	var s = game.sys
+	var tot: float = s.fluid(cfg.get("manifold", ""))
+	for t in cfg.get("tanks", {}):
+		if cfg.tanks[t].get("own", false):
+			continue
+		tot += s.fluid(cfg.tanks[t].vol)
+		tot += s.fluid(cfg.tanks[t].get("branch", ""))
+	return tot
+
+
 # a tank's vent or the nitrogen bank's ports: kept shut while the propellant is
 # still being drawn (a vented ullage would pull a vacuum)
 func hold_port(id: String) -> bool:

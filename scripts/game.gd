@@ -2390,9 +2390,13 @@ func _arc(pos: Vector2, volts: float, p = null) -> void:
 func _burst(p, pos: Vector2) -> void:
 	incident("burst", p.tag)
 	var v: String = sys.tank_vol(p)
-	sys.gas_lost += sys.vols[v].n
+	var n_out: float = sys.vols[v].n
+	sys.gas_lost += n_out
 	sys.vols[v].n = 0.0
 	var c := world.frame(p) * Geom.centroid(p.poly)
+	# the gas goes where the bottle was: into the room's air, or adrift (oxygen feeds a
+	# fire, hydrogen is one)
+	combustion.gas_released(str(sys.vessel_cfg[v].get("gas", "")), n_out, c)
 	combustion.spark(c, 2.0)
 	fx.flash(c, 240.0, 0.5, Pal.ink(1.0, 2.0))
 	fx.ring(c, 10.0, 220.0, 0.5, Pal.ink(0.9), 3.0)
@@ -2889,6 +2893,9 @@ func do_measure(tg: Dictionary) -> void:
 				story.on_inspect(p)
 			if sys.electric_piece(p):
 				sys.measure(key + "/V", "volts", label, "inst_volts", {"piece": p, "local": local + Vector2(0, 16), "volts_fn": func(): return sys.piece_volts(p)})
+			# a container: what is in it, how much, at what pressure
+			if sys.contents_of(p) != "":
+				sys.measure(key + "/C", "sample", label, "inst_contents", {"piece": p, "local": local + Vector2(0, 32), "sample_fn": func(): return sys.contents_reading(p)})
 	sfx.play("measure")
 	fx.ring(tg.pos, 4.0, 26.0, 0.35, Pal.ink(0.8, 1.3), 1.4)
 	hint("measured")
@@ -2915,6 +2922,9 @@ func restore_reading(rd: Dictionary) -> void:
 		if rd.kind == "volts":
 			extra.local += Vector2(0, 16)
 			extra.volts_fn = func(): return sys.piece_volts(p)
+		elif rd.kind == "sample":
+			extra.local += Vector2(0, 32)
+			extra.sample_fn = func(): return sys.contents_reading(p)
 		else:
 			extra.inspect = _inspect_text(p)
 			extra.temp_fn = func(): return p.temp

@@ -1181,7 +1181,8 @@ func dest_of(p) -> String:
 	var fv := fluid_in_piece(p)
 	if fv != "" and fvol[fv].amount > float(fvol[fv].get("hazard", 0.02)):
 		return "hazard"
-	if bursts(p):
+	# a charged cylinder leaves as it is (it is sold charged); only one that is not sealed is a hazard
+	if bursts(p) and not vessel_cfg[tank_vol(p)].get("sealed", false):
 		return "hazard"
 	if src.has(p.tag) and src[p.tag].kind == "cap" and src[p.tag].charge > 0.05:
 		return "hazard"
@@ -1209,6 +1210,38 @@ func fluid_value() -> float:
 		if fluid0.get(f, 0.0) > 0.0:
 			v += fluid_rec[f] / fluid0[f] * float(vals.get(f, 0.0))
 	return v
+
+
+# what a container holds, as the measuring tool reads it: [value, text]
+const GAS_KEY := {"co2": "cn_co2", "o2": "cn_o2", "n2": "cn_n2", "air": "cn_air", "he": "cn_he", "h2": "cn_h2"}
+
+
+func contents_of(p) -> String:
+	if p == null or p.tag == "":
+		return ""
+	if tank_vol(p) != "" or fluid_in_piece(p) != "":
+		return "y"
+	return ""
+
+
+func contents_reading(p) -> Array:
+	var parts: Array = []
+	var val := 0.0
+	var fv := fluid_in_piece(p)
+	if fv != "":
+		var v: Dictionary = fvol[fv]
+		var look: String = LIQ.look_of(v)
+		var full: float = maxf(float(v.get("full", v.amount)), 0.001)
+		parts.append("%s %.2f m³ (%d %%)" % [Txt.t("cn_" + look) if Txt.has("cn_" + look) else Txt.t("cn_liquid"), float(v.amount), int(round(float(v.amount) / full * 100.0))])
+		val += float(v.amount)
+	var gv := tank_vol(p)
+	if gv != "":
+		var g: String = str(vessel_cfg[gv].get("gas", ""))
+		parts.append("%s %d kPa" % [Txt.t(GAS_KEY.get(g, "cn_gas")), int(round(P(gv)))])
+		val += P(gv) * 0.001
+	if parts.is_empty():
+		return [0.0, Txt.t("cn_empty")]
+	return [val, " · ".join(parts)]
 
 
 # ---------------------------------------------------------------- readings

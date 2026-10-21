@@ -11,7 +11,7 @@
 		"rooms": {"A":101.0,"C":101.0,"K":101.0,"P":101.0,"Q":101.0,"V":0.2},
 		"vessels": {
 			"TU-1": {"V":2.6,"burst":200.0,"kpa":320.0,"piece":"T-1"},
-			"TU-2": {"V":3.8,"burst":200.0,"kpa":320.0,"piece":"T-2"},
+			"TU-2": {"V":0.4,"burst":200.0,"kpa":320.0,"piece":"T-2"},
 			"TU-3": {"V":1.6,"burst":200.0,"kpa":320.0,"piece":"T-3"},
 			"N-1": {"V":0.6,"burst":200.0,"kpa":1800.0,"piece":"NS-1"},
 			"N-2": {"V":0.6,"burst":200.0,"kpa":1800.0,"piece":"NS-2"},
@@ -62,12 +62,12 @@
 		"volumes": {
 			"t1": {"amount":1.4,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"look":"mmh","piece":"T-1","port":"L-1"},
 			"b1": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"look":"mmh","nets":["pb1"],"port":"LD-1"},
-			"t2": {"amount":0.2,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"look":"nto","piece":"T-2","port":"L-2"},
+			"t2": {"amount":3.6,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"look":"nto","piece":"T-2","port":"L-2"},
 			"b2": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"look":"nto","nets":["pb2"],"port":"LD-2","pump":[0.5,0.03]},
 			"t3": {"amount":2.4,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"look":"mmh","piece":"T-3","port":"L-3"},
 			"b3": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"look":"mmh","nets":["pb3"],"port":"LD-3"},
 			"n2_line": {"amount":0.0,"fluid":"n2","nets":["n2"]},
-			"xm": {"amount":0.15,"fluid":"fuel","full":0.4,"leak":0.1,"leak_min":0.004,"nets":["pxm"],"piece":"XMAN","port":"PR","pump":[0.12,0.01]}
+			"xm": {"amount":0.15,"fluid":"fuel","full":0.4,"leak":0.1,"leak_min":0.004,"look":"mmh","nets":["pxm"],"piece":"XMAN","port":"PR","pump":[0.12,0.01]}
 		},
 		"joins": [
 			{"a":"t1","b":"b1","cap":0.02,"leak_through":0.05,"mode":"fill","valves":["XV-1"]},
@@ -103,7 +103,8 @@
 		"time": 55.0,
 		"rooms": {"A":[0.2,40.0,101.0],"C":[0.2,40.0,101.0],"K":[0.2,40.0,101.0],"P":[0.2,40.0,101.0],"Q":[0.2,40.0,101.0]},
 		"charge": {"BAT":[0.3,1.0]},
-		"fluids": {"t1":[0.4,2.4],"t2":[0.1,1.2],"t3":[0.6,3.0]},
+		"fluids": {"t1":[0.4,2.4],"t3":[0.6,3.0]},
+		"ratio": {"t2":[["t1","t3"],1.0]},
 		"fill": {"b1":"t1","b2":"t2","b3":"t3"},
 		"knockable": ["VMAP","FC-V"],
 		"drift": [],

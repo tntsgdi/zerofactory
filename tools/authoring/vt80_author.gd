@@ -32,7 +32,10 @@ const TY0 := 2.1
 const TY1 := 9.5
 const MY := 10.1                 # the manifold (to 10.5)
 const SPHERES := [23.7, 28.7, 40.8, 45.8, 57.9, 62.9]
-const FILL := [1.4, 0.2, 2.4]    # each tank's propellant (of 4.0)
+# each tank's propellant (of 4.0): the oxidiser loaded to the fuel's mixture ratio (MMH/N₂O₄
+# at an O/F of 1.65 by mass is about 1 : 1 by volume: 3.8 m³ of MMH wants 3.8 m³ of N₂O₄;
+# 3.6 leaves its ullage)
+const FILL := [1.4, 3.6, 2.4]
 const CAP := 4.0
 # a bipropellant cargo: monomethylhydrazine fore and aft, nitrogen tetroxide in the
 # middle. The two light on contact, so the oxidiser tank is kept off the fuel manifold:
@@ -407,7 +410,7 @@ static func meta() -> Dictionary:
 		valves.append({"ctrl": "PV-" + n, "a": "NH", "b": "TU-" + n, "g": 1.2})
 	# the pressurisation pipes hold the bank's gas, no liquid
 	vols["n2_line"] = {"fluid": "n2", "amount": 0.0, "nets": ["n2"]}
-	vols["xm"] = {"fluid": "fuel", "amount": 0.15, "piece": "XMAN", "nets": ["pxm"], "port": "PR", "full": 0.4, "leak": 0.1, "leak_min": 0.004, "pump": [0.12, 0.01]}
+	vols["xm"] = {"fluid": "fuel", "look": "mmh", "amount": 0.15, "piece": "XMAN", "nets": ["pxm"], "port": "PR", "full": 0.4, "leak": 0.1, "leak_min": 0.004, "pump": [0.12, 0.01]}
 	for i in SPHERES.size():
 		gas_v["N-%d" % (i + 1)] = {"V": 0.6, "kpa": 1800.0, "piece": "NS-%d" % (i + 1), "burst": 200.0}
 		valves.append({"ctrl": "NV", "a": "N-%d" % (i + 1), "b": "NH", "g": 2.0})
@@ -448,7 +451,7 @@ static func meta() -> Dictionary:
 			"class": "VT", "name": ["长鲸级推进剂运输船", "LONG WHALE-CLASS PROPELLANT CARRIER"], "time": 55.0,
 			"rooms": {"C": [0.2, 40.0, 101.0], "Q": [0.2, 40.0, 101.0], "K": [0.2, 40.0, 101.0], "A": [0.2, 40.0, 101.0], "P": [0.2, 40.0, 101.0]},
 			"charge": {"BAT": [0.3, 1.0]},
-			"fluids": {"t1": [0.4, 2.4], "t2": [0.1, 1.2], "t3": [0.6, 3.0]}, "fill": {"b1": "t1", "b2": "t2", "b3": "t3"},
+			"fluids": {"t1": [0.4, 2.4], "t3": [0.6, 3.0]}, "ratio": {"t2": [["t1", "t3"], 1.0]}, "fill": {"b1": "t1", "b2": "t2", "b3": "t3"},
 			"knockable": ["VMAP", "FC-V"],
 			"drift": [],
 			"section_x": 45.0,

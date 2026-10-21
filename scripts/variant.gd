@@ -161,6 +161,15 @@ static func _hazards_by(d: Dictionary, rng: RandomNumberGenerator) -> void:
 	for k in r.get("fill", {}):
 		if fl.has(k) and fl.has(r.fill[k]):
 			fl[k].amount = minf(float(fl[k].amount), float(fl[r.fill[k]].amount))
+	# a volume that follows others (a bipropellant's oxidiser, loaded to its fuel's
+	# mixture ratio): {"t2": [["t1", "t3"], 1.0]}, capped at 95 % of its tank
+	for k in r.get("ratio", {}):
+		if not fl.has(k):
+			continue
+		var sum := 0.0
+		for o in r.ratio[k][0]:
+			sum += float(fl.get(o, {}).get("amount", 0.0))
+		fl[k].amount = snappedf(minf(sum * float(r.ratio[k][1]), float(fl[k].get("full", sum)) * 0.95), 0.001)
 
 
 # ---------------------------------------------------------------- cargo

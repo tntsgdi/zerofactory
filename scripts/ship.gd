@@ -4,6 +4,7 @@ class_name Ship
 # about its systems setup, so no game code has to know any ship by name.
 
 const DIR := "res://ships/"
+const CONTENTS = preload("res://scripts/contents.gd")
 
 static var _cache := {}
 
@@ -19,6 +20,8 @@ static func load_data(id: String) -> Dictionary:
 	if typeof(d) != TYPE_DICTIONARY:
 		push_error("ship file %s is not valid JSON" % id)
 		return {}
+	# the containers the file left empty get what they really hold (scripts/contents.gd)
+	CONTENTS.add(d)
 	_cache[id] = d
 	return d
 

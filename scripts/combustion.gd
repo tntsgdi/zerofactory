@@ -41,7 +41,11 @@ const CHEM := {
 	"lh2": {"role": "fuel", "hc": 1.2e8, "o2": 8.0, "rho": 71.0, "air": true},
 	"lng": {"role": "fuel", "hc": 5.0e7, "o2": 4.0, "rho": 430.0, "air": true},
 	"nto": {"role": "ox", "rho": 1440.0, "hyper": "mmh"},
+	"oil": {"role": "fuel", "hc": 4.2e7, "o2": 3.3, "rho": 870.0, "air": true},
+	# oxygen let out of a cylinder in vacuum: any fuel burns in it, given a spark
+	"o2": {"role": "ox", "rho": 1.0},
 }
+const H2_KG := 0.00082          # kg of hydrogen in one kPa·m³ of it (at 20 °C)
 
 var game
 var world
@@ -113,6 +117,38 @@ func ignite_cloud(cl: Dictionary, pos: Vector2) -> void:
 
 # ---------------------------------------------------------------- oxygen
 
+# a cylinder's gas let out at pos (kPa·m³ of it): into the room there, or adrift.
+# Oxygen enriches the room's air (or is a cloud that lets fuel burn in vacuum),
+# hydrogen is a fuel cloud of its own; the rest only add to the room's pressure.
+func gas_released(gas: String, n: float, pos: Vector2) -> void:
+	if n <= 0.0:
+		return
+	var s = game.sys
+	var room := _room_at(pos)
+	var in_room: bool = room != "" and s.vols.has(room)
+	match gas:
+		"o2":
+			if in_room:
+				if s.o2_on:
+					s.o2[room] = float(s.o2.get(room, 0.0)) + n
+					s.vols[room].n += n
+				else:
+					var n0: float = s.vols[room].n
+					_o2_frac[room] = (float(_o2_frac.get(room, 0.21)) * n0 + n) / maxf(n0 + n, 1e-6)
+					s.vols[room].n = n0 + n
+			else:
+				vapour.append({"pos": pos, "vel": Vector2.ZERO, "kg": n * O2_KG, "look": "o2", "r": 0.6, "t": 0.0, "burn": -1.0, "ign": -1.0})
+			return
+		"h2":
+			vapour.append({"pos": pos, "vel": Vector2.ZERO, "kg": n * H2_KG, "look": "lh2", "r": 0.6, "t": 0.0, "burn": -1.0, "ign": -1.0})
+	if in_room and gas != "h2":
+		if gas == "air" or s.o2_on:
+			s.vols[room].n += n
+		else:
+			_add_gas(room, n)
+
+
+
 func _room_at(pos: Vector2) -> String:
 	return world.room_at(pos)
 
@@ -152,6 +188,8 @@ func _oxidiser(u: Dictionary) -> String:
 		return ""
 	if ch.has("hyper") and _partner_near(u, float(_r(u)) + REACH) != null:
 		return "hyper"
+	if _o2_near(u, float(_r(u)) + REACH) != null:
+		return "ox"
 	if bool(ch.get("air", false)) and o2_avail(_room_at(u.pos)) > 0.01:
 		return "air"
 	return ""
@@ -210,6 +248,13 @@ func _near(pos: Vector2, r_m: float) -> Array:
 		for dy in range(-n, n + 1):
 			out.append_array(_grid.get(k0 + Vector2i(dx, dy), []))
 	return out
+
+
+func _o2_near(u: Dictionary, reach_m: float):
+	for o in _near(u.pos, reach_m + 6.0):
+		if o.look == "o2" and _kg(o) > 0.0005 and o.pos.distance_to(u.pos) < (reach_m + _r(o)) * M:
+			return o
+	return null
 
 
 func _partner_near(u: Dictionary, reach_m: float):
@@ -365,6 +410,21 @@ func _burn(u: Dictionary, dt: float) -> void:
 				break
 		got = have / NTO_PER_MMH
 		hc = HC_HYPER
+		if got < want * 0.05 and o2_avail(room) > 0.01:
+			u.mode = "air"
+	elif u.mode == "ox":
+		# the oxygen cloud round it is used up with it
+		var need2: float = want * float(CHEM[u.look].get("o2", 3.0))
+		var have2 := 0.0
+		for o in _near(u.pos, _r(u) + REACH + 6.0):
+			if o.look != "o2" or o.pos.distance_to(u.pos) > (_r(u) + REACH + _r(o)) * M:
+				continue
+			var t2: float = minf(_kg(o), need2 - have2)
+			_take(o, t2)
+			have2 += t2
+			if have2 >= need2:
+				break
+		got = have2 / float(CHEM[u.look].get("o2", 3.0))
 		if got < want * 0.05 and o2_avail(room) > 0.01:
 			u.mode = "air"
 	if u.mode == "air":
@@ -568,6 +628,7 @@ func _draw() -> void:
 		match str(v.look):
 			# nitrogen dioxide: red-brown
 			"nto": col = Color(0.62, 0.3, 0.12, a)
+			"o2": col = Pal.tint(Pal.AIR, a * 0.4, 1.0)
 			_: col = Pal.ink(a * 0.5)
 		if float(v.burn) >= 0.0:
 			col = Pal.heat(clampf(a * 4.0, 0.2, 0.9), 2.2)

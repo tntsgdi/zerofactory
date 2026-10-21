@@ -44,6 +44,8 @@ const LOOKS := {
 	"mmh": {"boil_v": 0.02, "boil_a": 0.004, "flash": 0.02, "rho": 880.0, "splash": 2.8, "freeze": 14.0, "pvap": 5.0},
 	"nto": {"boil_v": 0.12, "boil_a": 0.03, "flash": 0.15, "rho": 1440.0, "splash": 2.6, "freeze": 4.0, "pvap": 96.0},
 	"glycol": {"boil_v": 0.001, "boil_a": 0.0005, "flash": 0.0, "rho": 1110.0, "splash": 2.6, "pvap": 0.01},
+	"oil": {"boil_v": 0.0002, "boil_a": 0.0, "flash": 0.0, "rho": 870.0, "splash": 3.2, "pvap": 0.01},
+	"foam": {"boil_v": 0.004, "boil_a": 0.0015, "flash": 0.0, "rho": 1020.0, "splash": 2.2, "freeze": 8.0, "pvap": 2.3},
 	"mud": {"boil_v": 0.0, "boil_a": 0.0, "flash": 0.0, "rho": 1800.0, "splash": 99.0, "sticky": true, "pvap": 0.0},
 }
 const CRYO := ["lhe", "lh2", "lng", "ln2"]
