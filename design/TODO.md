@@ -193,3 +193,10 @@
   - Q1 A：T-2 按真实氧燃比配平（默认近满罐，随机合同按燃料量同比）
   - Q2 A：所有空壳容器按真实装上内容物（灭火瓶 CO₂、氧气瓶、水箱、泥浆、蓄能器、储气罐、氮气瓶、推进剂服务罐……），有端口或测点可测可抽可放，切开按内容物喷出、爆裂或助燃，补进合同价值，机器人会处理
   - Q3：测量工具扫到容器即显示内容物、量与压力（不做悬停与图纸着色）
+- [x] 2026-10-20 用户：新游戏做宣传片（神乎其神、从古到今、世界观酷炫，实机少一点也行）+ 超级华丽的介绍网页，放到 stellarascensiongame.com/stellar/ → 定案（Jev + 用户全按推荐）：
+  - Q1 游戏是零压拆船厂 ZERO PRESSURE；Q2 B：介绍页 + 宣传片 + 站首页卡片/导航/预告区块，网页可玩版以后另做（页面写即将推出）
+  - Q3 沿用：纯英文约 90 s，神话约 70 s + 实机约 15 s + 标题，代码合成配乐，无配音
+  - Q4 A《万物归炉》（恒星锻铁 → 石器 → 青铜铁器帆船船厂拆船滩 → 轨道船只坟场 → 零压船坞拆解回炉），结尾 “Measure before you cut.”
+  - Q5 A：首屏废船被船坞灯逐盏照亮 + 标题砸入 → 滚动拉近剖面、爆炸图标注零件 → 全屏实机 → 独立区块亲手激光切带燃料罐的舱壁
+  - Q6 网址 /zeropressure/，/stellar/ 加导航、游戏库卡片、预告片区块
+  - [x] 已上线：https://stellarascensiongame.com/zeropressure/ + /stellar/ 导航、游戏库卡片（即将推出）、预告片区块；宣传片 92.5 s 在 R2 stellar/media/zeropressure-trailer-en-20261020.mp4；采集脚本 tests/trailer_capture.gd，流程见 G:/CODE/stellar-web/ZEROPRESSURE_RELEASE.md
