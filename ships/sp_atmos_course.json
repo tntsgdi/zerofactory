@@ -1,0 +1,618 @@
+{
+	"ship": "sp_atmos",
+	"lines": {
+		"SO_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SO_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SO_safe_t": {
+			"who": "term",
+			"zh": "舱压已降到安全值。",
+			"en": "BAY PRESSURE BELOW SAFE."
+		},
+		"SO_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SO_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：舱内仍是富氧空气。",
+			"en": "TRAINING INTERLOCK: THE BAY STILL HOLDS OXYGEN-RICH AIR."
+		},
+		"SO_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SO_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SM_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SM_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SM_safe_t": {
+			"who": "term",
+			"zh": "舱压已降到安全值。",
+			"en": "BAY PRESSURE BELOW SAFE."
+		},
+		"SM_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SM_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：舱内仍有空气。",
+			"en": "TRAINING INTERLOCK: THERE IS STILL AIR IN THE BAY."
+		},
+		"SM_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SM_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SH_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SH_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SH_safe_t": {
+			"who": "term",
+			"zh": "炉芯已冷却到安全温度。",
+			"en": "CORE BELOW SAFE TEMPERATURE."
+		},
+		"SH_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SH_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：炉芯仍然高温。",
+			"en": "TRAINING INTERLOCK: THE CORE IS STILL HOT."
+		},
+		"SH_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SH_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SB_in": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		}
+	},
+	"lessons": [
+		{
+			"id": "SP_00",
+			"mode": "lockstep",
+			"title": {
+				"zh": "专项训练",
+				"en": "SPECIAL COURSE"
+			},
+			"done_flag": "SP_00_COMPLETE",
+			"steps": [
+				{
+					"id": "brief",
+					"text": {
+						"zh": "看一眼训练件：按 I 可以随时查图鉴",
+						"en": "LOOK OVER THE RIG: I OPENS THE CODEX ANY TIME"
+					},
+					"tools": [],
+					"done": {
+						"step_t": 4.0
+					},
+					"in": [
+						"SB_in"
+					]
+				}
+			]
+		},
+		{
+			"id": "SP_A1",
+			"mode": "lockstep",
+			"title": {
+				"zh": "富氧舱：先换气，再开口",
+				"en": "OXYGEN-RICH: VENT IT, THEN OPEN IT"
+			},
+			"done_flag": "SP_A1_COMPLETE",
+			"guard": {
+				"pieces": [
+					"OX-T",
+					"OX-L",
+					"OX-R",
+					"OX-B"
+				],
+				"until": {
+					"P": [
+						"OX",
+						"<",
+						5.0
+					]
+				},
+				"lock": [
+					"SO_lock_t",
+					"SO_lock_l"
+				],
+				"accident": [
+					"o2_fire",
+					"blowout"
+				],
+				"reset": [
+					"OX-T",
+					"GL-1",
+					"PL-1"
+				],
+				"remod": [
+					"atmos"
+				],
+				"say": "SO_bad",
+				"restore": {
+					"gas": [
+						"OX"
+					],
+					"hoses": [
+						"G-OX"
+					],
+					"readings": [
+						"O2-1",
+						"G-OX"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "o2",
+					"text": {
+						"zh": "测量（1）：读氧浓度 O2-1",
+						"en": "MEASURE (1): OXYGEN AT O2-1"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"O2-1"
+						]
+					},
+					"in": [
+						"SO_in1",
+						"SO_in2"
+					],
+					"target": {
+						"ctrl": "O2-1"
+					}
+				},
+				{
+					"id": "vent",
+					"text": {
+						"zh": "氧太高，激光一碰就闪燃：软管接 G-OX 抽到 5 kPa 以下（5）",
+						"en": "OXYGEN-RICH: A LASER FLASHES IT. HOSE ON G-OX, UNDER 5 kPa (5)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"P": [
+							"OX",
+							"<",
+							5.0
+						]
+					},
+					"target": {
+						"ctrl": "G-OX"
+					},
+					"warp": true,
+					"out": [
+						"SO_safe_t"
+					]
+				},
+				{
+					"id": "lid",
+					"text": {
+						"zh": "拆下顶板 OX-T 的螺栓（4），推到一边",
+						"en": "WRENCH (4): UNBOLT THE LID OX-T, PUSH IT CLEAR"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "OX-T"
+					},
+					"target": {
+						"piece": "OX-T"
+					}
+				},
+				{
+					"id": "lamp",
+					"text": {
+						"zh": "拆下补光灯 GL-1（4）",
+						"en": "WRENCH (4): FREE THE GROW LAMP GL-1"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "GL-1"
+					},
+					"target": {
+						"piece": "GL-1"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "补光灯完整送进设备回收口",
+						"en": "THE LAMP, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"GL-1",
+							"any"
+						]
+					},
+					"out": [
+						"SO_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		},
+		{
+			"id": "SP_A2",
+			"mode": "lockstep",
+			"title": {
+				"zh": "复合材料：别切，拧下来",
+				"en": "COMPOSITE: DON'T CUT IT, UNBOLT IT"
+			},
+			"done_flag": "SP_A2_COMPLETE",
+			"guard": {
+				"pieces": [
+					"HC-1"
+				],
+				"until": {
+					"P": [
+						"AV",
+						"<",
+						5.0
+					]
+				},
+				"lock": [
+					"SM_lock_t",
+					"SM_lock_l"
+				],
+				"accident": [
+					"composite_fumes",
+					"blowout"
+				],
+				"reset": [
+					"HC-1",
+					"AV-C"
+				],
+				"remod": [
+					"composite"
+				],
+				"say": "SM_bad",
+				"restore": {
+					"gas": [
+						"AV"
+					],
+					"hoses": [
+						"G-AV"
+					],
+					"readings": [
+						"FM-1"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "fume",
+					"text": {
+						"zh": "测量（1）：读航电舱的烟雾 FM-1",
+						"en": "MEASURE (1): SMOKE IN THE AVIONICS BAY, FM-1"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"FM-1"
+						]
+					},
+					"in": [
+						"SM_in1",
+						"SM_in2"
+					],
+					"target": {
+						"ctrl": "FM-1"
+					}
+				},
+				{
+					"id": "vent",
+					"text": {
+						"zh": "舱里有气：切碳纤维会冒毒烟。先接 G-AV 抽成真空（5）",
+						"en": "AIR INSIDE: CUT FIBRE SMOKES. HOSE G-AV DOWN TO VACUUM (5)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"P": [
+							"AV",
+							"<",
+							5.0
+						]
+					},
+					"target": {
+						"ctrl": "G-AV"
+					},
+					"warp": true,
+					"out": [
+						"SM_safe_t"
+					]
+				},
+				{
+					"id": "unbolt",
+					"text": {
+						"zh": "拧下复合材料顶板 HC-1 的四颗螺栓（4），推到一边",
+						"en": "WRENCH (4): UNBOLT THE COMPOSITE LID HC-1, PUSH IT CLEAR"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "HC-1"
+					},
+					"target": {
+						"piece": "HC-1"
+					}
+				},
+				{
+					"id": "console",
+					"text": {
+						"zh": "拆下舱里的航电台 AV-C（4）",
+						"en": "WRENCH (4): FREE THE AVIONICS CONSOLE AV-C"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "AV-C"
+					},
+					"target": {
+						"piece": "AV-C"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "没被烟熏过的航电台完整送进设备回收口",
+						"en": "THE CONSOLE, UNSMOKED AND WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"AV-C",
+							"any"
+						]
+					},
+					"out": [
+						"SM_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		},
+		{
+			"id": "SP_A3",
+			"mode": "lockstep",
+			"title": {
+				"zh": "炉芯：停机不等于冷却",
+				"en": "THE CORE: STOPPED ISN'T COLD"
+			},
+			"done_flag": "SP_A3_COMPLETE",
+			"guard": {
+				"pieces": [
+					"CORE"
+				],
+				"until": {
+					"mod": [
+						"furnace",
+						"core_temp",
+						"<",
+						150.0
+					]
+				},
+				"lock": [
+					"SH_lock_t",
+					"SH_lock_l"
+				],
+				"accident": [
+					"core_cracked"
+				],
+				"reset": [
+					"CORE"
+				],
+				"remod": [
+					"furnace"
+				],
+				"say": "SH_bad",
+				"restore": {
+					"hoses": [
+						"PL"
+					],
+					"readings": [
+						"CT-1"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "temp",
+					"text": {
+						"zh": "测量（1）：读炉芯温度 CT-1",
+						"en": "MEASURE (1): CORE TEMPERATURE CT-1"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"CT-1"
+						]
+					},
+					"in": [
+						"SH_in1",
+						"SH_in2"
+					],
+					"target": {
+						"ctrl": "CT-1"
+					}
+				},
+				{
+					"id": "cool",
+					"text": {
+						"zh": "换热泵有电、回路满着：等它降到 150 °C 以下（按住 = 加速）",
+						"en": "PUMP POWERED, LOOP FULL: WAIT UNDER 150 °C (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"mod": [
+							"furnace",
+							"core_temp",
+							"<",
+							150.0
+						]
+					},
+					"warp": true,
+					"out": [
+						"SH_safe_t"
+					]
+				},
+				{
+					"id": "drain",
+					"text": {
+						"zh": "冷透了，现在才放冷却液：软管接 PL（5）",
+						"en": "COLD THROUGH: ONLY NOW DRAIN THE LOOP, HOSE ON PL (5)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"fluid": [
+							"loop",
+							"<",
+							0.01
+						]
+					},
+					"target": {
+						"ctrl": "PL"
+					},
+					"warp": true
+				},
+				{
+					"id": "free",
+					"text": {
+						"zh": "拆下炉芯 CORE 的螺栓和管子（4）",
+						"en": "WRENCH (4): FREE THE CORE"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "CORE"
+					},
+					"target": {
+						"piece": "CORE"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "炉芯完整送进设备回收口",
+						"en": "THE CORE, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"CORE",
+							"any"
+						]
+					},
+					"out": [
+						"SH_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		}
+	],
+	"rings": [],
+	"long_ring": [],
+	"stop_box": []
+}

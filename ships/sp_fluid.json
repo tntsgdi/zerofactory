@@ -1,0 +1,164 @@
+{
+	"id": "sp_fluid",
+	"name": "SP-FLUID",
+	"title": ["专项训练件 · 流体压力","SPECIAL COURSE RIG · FLUID"],
+	"length": 12.8,
+	"clamps": [[16.0,2.3],[26.0,2.3]],
+	"room_names": {},
+	"gas": {
+		"rooms": {},
+		"vessels": {
+			"TU-1": {"V":0.2,"kpa":300.0},
+			"TU-2": {"V":0.2,"kpa":300.0},
+			"NB": {"V":0.1,"kpa":1500.0}
+		},
+		"valves": [
+			{"a":"NB","b":"TU-1","ctrl":"PV-1","g":5.0},
+			{"a":"NB","b":"TU-2","ctrl":"PV-2","g":5.0}
+		],
+		"value": 600.0
+	},
+	"power": {
+		"bus": "SWB",
+		"sources": [
+			{"cable":"pb","charge":1.0,"drain":0.0,"kind":"battery","local_volts":48.0,"piece":"BAT","switch":"K-B","volts":48.0}
+		],
+		"lamps": {}
+	},
+	"fluids": {
+		"volumes": {
+			"mud": {"amount":0.3,"fluid":"water","full":0.4,"leak":0.3,"look":"mud","nets":["mud"],"piece":"STP","port":"PMUD","pump":[0.04,0.02]},
+			"t1": {"amount":0.3,"fluid":"fuel","full":0.4,"hazard":0.01,"leak":0.2,"piece":"T-1"},
+			"t2": {"amount":0.12,"fluid":"fuel","full":0.4,"hazard":0.01,"leak":0.2,"piece":"T-2"},
+			"xm": {"amount":0.0,"fluid":"fuel","full":0.05,"leak":0.3,"nets":["xm"],"port":"PR","pump":[0.1,0.005]}
+		},
+		"value": {"coolant":50.0,"fuel":60.0,"water":20.0}
+	},
+	"ctrls_cfg": {},
+	"labels": {},
+	"procedures": {
+		"J-1": [
+			{"ctrl":"TQB","do":"operate"},
+			{"do":"wait","max":60.0,"until":{"mod":["drillstring","torque_pct","<",4.0]}},
+			{"ctrl":"PMUD","do":"hose"},
+			{"do":"wait","max":60.0,"until":{"fluid":["mud","<",0.01]}},
+			{"ctrl":"SLIP-1","do":"operate"},
+			{"ctrl":"SLIP-2","do":"operate"},
+			{"do":"free","piece":"J-1"},
+			{"do":"deliver","piece":"J-1","zone":"equip"}
+		],
+		"T-1": [
+			{"ctrl":"XV-1","do":"operate"},
+			{"ctrl":"XV-2","do":"operate"},
+			{"ctrl":"PR","do":"hose"},
+			{"do":"wait","max":120.0,"until":{"mod":["tanknet","fuel_left","<",0.015]}},
+			{"do":"free","piece":"T-1"},
+			{"do":"deliver","piece":"T-1","zone":"equip"}
+		]
+	},
+	"blueprint": {},
+	"training": true,
+	"value": {"metal":3000.0,"total":127000.0},
+	"drillstring": {"bleed":"TQB","floor":[16.5,-6.0,21.2,1.8],"kpa":3200.0,"mud":"mud","mud_safe":0.05,"reach":4.0,"slips":["SLIP-1","SLIP-2"],"spray":0.6,"stands":["J-1","J-2","BHA"],"tau":5.0,"whip":0.4},
+	"tanknet": {
+		"tanks": {
+			"T-1": {"cap":0.4,"pv":"PV-1","ullage":"TU-1","valve":"XV-1","vol":"t1"},
+			"T-2": {"cap":0.4,"pv":"PV-2","ullage":"TU-2","valve":"XV-2","vol":"t2"}
+		},
+		"manifold": "xm",
+		"mcap": 0.05,
+		"pump": "PUMP-M",
+		"port": "PR",
+		"flow": 0.5,
+		"hold": ["TV-1","TV-2"],
+		"bank": "NB"
+	},
+	"pieces": [
+		{"barrier":true,"cut_speed":200.0,"density":1.6,"key":"RIG-F","kind":"hull","mass":10.24,"name_key":"p_sp_floor","poly":[[14.6,1.8],[27.4,1.8],[27.4,2.3],[14.6,2.3]],"rig":true,"tag":"RIG-F"},
+		{"art":"swb","art_size":[1.0,1.5],"art_xf":[1.0,0.0,0.0,1.0,15.0,0.300000011920929],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"SWB","kind":"equip","mass":0.3,"name_key":"p_swb","poly":[[15.0,0.3],[16.0,0.3],[16.0,1.8],[15.0,1.8]],"tag":"SWB","value":3000.0},
+		{"art":"battery","art_size":[0.8,0.8],"art_xf":[1.0,0.0,0.0,1.0,16.2000007629395,1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"hazard":"battery","key":"BAT","kind":"equip","mass":0.3,"name_key":"p_battery","poly":[[16.2,1.0],[17.0,1.0],[17.0,1.8],[16.2,1.8]],"tag":"BAT","value":2500.0},
+		{"cut_speed":200.0,"density":1.0,"key":"DM","kind":"fixture","mass":0.5,"name_key":"p_sp_mast","poly":[[16.9,-5.2],[17.2,-5.2],[17.2,1.8],[16.9,1.8]],"rig":true,"tag":"DM"},
+		{"art":"top_drive","art_size":[0.8,1.2],"art_xf":[1.0,0.0,0.0,1.0,17.5,-5.59999974568685],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"TD","kind":"equip","mass":0.6,"name_key":"p_dr_top_drive","poly":[[17.5,-5.6],[18.3,-5.6],[18.3,-4.4],[17.5,-4.4]],"tag":"TD","value":18000.0},
+		{"art":"pipe","art_size":[0.3,1.4],"art_xf":[1.0,0.0,0.0,1.0,17.75,-4.40000025431315],"cls":"equip","cut_speed":110.0,"density":1.0,"dest":"equip","key":"J-1","kind":"equip","mass":0.4,"name_key":"p_dr_stand","poly":[[17.75,-4.4],[18.05,-4.4],[18.05,-3.0],[17.75,-3.0]],"tag":"J-1","value":4000.0},
+		{"cut_speed":220.0,"density":1.2,"key":"G-1","kind":"fixture","mass":0.132,"name_key":"p_dr_guide","poly":[[17.2,-3.9],[17.75,-3.9],[17.75,-3.7],[17.2,-3.7]],"rig":true,"tag":"G-1"},
+		{"art":"pipe","art_size":[0.3,1.4],"art_xf":[1.0,0.0,0.0,1.0,17.75,-3.0],"cls":"equip","cut_speed":110.0,"density":1.0,"dest":"equip","key":"J-2","kind":"equip","mass":0.4,"name_key":"p_dr_stand","poly":[[17.75,-3.0],[18.05,-3.0],[18.05,-1.6],[17.75,-1.6]],"tag":"J-2","value":4000.0},
+		{"cut_speed":220.0,"density":1.2,"key":"G-2","kind":"fixture","mass":0.132,"name_key":"p_dr_guide","poly":[[17.2,-2.5],[17.75,-2.5],[17.75,-2.3],[17.2,-2.3]],"rig":true,"tag":"G-2"},
+		{"art":"bha","art_size":[0.3,3.0],"art_xf":[1.0,0.0,0.0,1.0,17.75,-1.60000006357829],"cls":"equip","cut_speed":110.0,"density":1.0,"dest":"equip","key":"BHA","kind":"equip","mass":0.8,"name_key":"p_dr_bha","poly":[[17.75,-1.6],[18.05,-1.6],[18.05,1.4],[17.75,1.4]],"tag":"BHA","value":30000.0},
+		{"cut_speed":220.0,"density":1.2,"key":"G-3","kind":"fixture","mass":0.132,"name_key":"p_dr_guide","poly":[[17.2,-1.1],[17.75,-1.1],[17.75,-0.9],[17.2,-0.9]],"rig":true,"tag":"G-3"},
+		{"art":"rotary_table","art_size":[1.4,0.4],"art_xf":[1.0,0.0,0.0,1.0,17.2000007629395,1.39999993642171],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"RT","kind":"equip","mass":0.8,"name_key":"p_dr_rotary","poly":[[17.2,1.4],[18.6,1.4],[18.6,1.8],[17.2,1.8]],"tag":"RT","value":12000.0},
+		{"art":"console","art_size":[1.0,1.4],"art_xf":[1.0,0.0,0.0,1.0,19.0,0.400000015894572],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"DRL","kind":"equip","mass":0.3,"name_key":"p_dr_driller","poly":[[19.0,0.4],[20.0,0.4],[20.0,1.8],[19.0,1.8]],"tag":"DRL","value":8000.0},
+		{"art":"standpipe","art_size":[0.6,3.0],"art_xf":[1.0,0.0,0.0,1.0,20.2999992370605,-1.20000004768372],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"STP","kind":"equip","mass":0.3,"name_key":"p_dr_standpipe","poly":[[20.3,-1.2],[20.9,-1.2],[20.9,1.8],[20.3,1.8]],"tag":"STP","value":6000.0},
+		{"cut_speed":200.0,"density":1.0,"key":"TR","kind":"fixture","mass":0.3,"name_key":"p_sp_rack","poly":[[21.4,-2.9],[21.6,-2.9],[21.6,1.8],[21.4,1.8]],"rig":true,"tag":"TR"},
+		{"art":"fueltank","art_size":[2.2,1.2],"art_xf":[1.0,0.0,0.0,1.0,21.6000010172526,-2.79999987284342],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","hazard":"fuel_tank","key":"T-1","kind":"equip","mass":0.6,"name_key":"p_fueltank","poly":[[21.6,-2.8],[23.8,-2.8],[23.8,-1.6],[21.6,-1.6]],"tag":"T-1","value":9000.0},
+		{"art":"fueltank","art_size":[2.2,1.2],"art_xf":[1.0,0.0,0.0,1.0,21.6000010172526,-1.29999995231628],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","hazard":"fuel_tank","key":"T-2","kind":"equip","mass":0.6,"name_key":"p_fueltank","poly":[[21.6,-1.3],[23.8,-1.3],[23.8,-0.1],[21.6,-0.1]],"tag":"T-2","value":9000.0},
+		{"art":"manifold","art_size":[1.4,1.3],"art_xf":[1.0,0.0,0.0,1.0,24.2000020345052,0.5],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"XM","kind":"equip","mass":0.3,"name_key":"p_cross_manifold","poly":[[24.2,0.5],[25.6,0.5],[25.6,1.8],[24.2,1.8]],"tag":"XM","value":5000.0},
+		{"art":"sphere_tank","art_size":[0.8,2.4],"art_xf":[1.0,0.0,0.0,1.0,24.2999979654948,-0.600000023841858],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"NB","kind":"equip","mass":0.3,"name_key":"p_n2_sphere","poly":[[24.3,-0.6],[25.1,-0.6],[25.1,1.8],[24.3,1.8]],"tag":"NB","value":4000.0},
+		{"art":"pump","art_size":[1.4,0.9],"art_xf":[1.0,0.0,0.0,1.0,25.7999979654948,0.899999936421712],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"PUMP-M","kind":"equip","mass":0.5,"name_key":"p_pump","poly":[[25.8,0.9],[27.2,0.9],[27.2,1.8],[25.8,1.8]],"tag":"PUMP-M","value":9000.0}
+	],
+	"joints": [
+		{"a":"RIG-F","at":[16.0,2.25],"b":null,"tag":"CL-01","type":"clamp"},
+		{"a":"RIG-F","at":[26.0,2.25],"b":null,"tag":"CL-02","type":"clamp"},
+		{"a":"SWB","at":[15.12,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"SWB","at":[15.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BAT","at":[16.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BAT","at":[16.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"DM","at":[17.02,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"DM","at":[17.08,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"TD","at":[17.2,-5.0],"b":"DM","type":"bolt"},
+		{"a":"J-1","at":[17.9,-4.4],"b":"TD","type":"bolt"},
+		{"a":"G-1","at":[17.2,-3.8],"b":"DM","type":"weld"},
+		{"a":"J-1","at":[17.75,-3.8],"b":"G-1","type":"bolt"},
+		{"a":"J-2","at":[17.9,-3.0],"b":"J-1","type":"bolt"},
+		{"a":"G-2","at":[17.2,-2.4],"b":"DM","type":"weld"},
+		{"a":"J-2","at":[17.75,-2.4],"b":"G-2","type":"bolt"},
+		{"a":"BHA","at":[17.9,-1.6],"b":"J-2","type":"bolt"},
+		{"a":"G-3","at":[17.2,-1.0],"b":"DM","type":"weld"},
+		{"a":"BHA","at":[17.75,-1.0],"b":"G-3","type":"bolt"},
+		{"a":"RT","at":[17.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"RT","at":[18.48,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BHA","at":[17.9,1.4],"b":"RT","type":"bolt"},
+		{"a":"DRL","at":[19.12,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"DRL","at":[19.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"STP","at":[20.42,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"STP","at":[20.78,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"TR","at":[21.52,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"TR","at":[21.48,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"T-1","at":[21.7,-2.6],"b":"TR","type":"bolt"},
+		{"a":"T-1","at":[21.7,-1.8],"b":"TR","type":"bolt"},
+		{"a":"T-2","at":[21.7,-1.1],"b":"TR","type":"bolt"},
+		{"a":"T-2","at":[21.7,-0.3],"b":"TR","type":"bolt"},
+		{"a":"XM","at":[24.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"XM","at":[25.48,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"NB","at":[24.42,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"NB","at":[24.98,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"PUMP-M","at":[25.92,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"PUMP-M","at":[27.08,1.8],"b":"RIG-F","type":"bolt"}
+	],
+	"lines": [
+		{"a":"BAT","b":"SWB","id":"pb","kind":"cable","net":"power","pa":[16.6,1.0],"path":[[16.6,1.0],[16.0,1.0]],"pb":[16.0,1.0]},
+		{"a":"STP","b":"TD","id":"m1","kind":"pipe","net":"mud","pa":[20.6,-1.2],"path":[[20.6,-1.2],[20.6,-5.0],[18.3,-5.0]],"pb":[18.3,-5.0]},
+		{"a":"SWB","b":"DRL","id":"pr","kind":"cable","net":"power","pa":[15.4,0.3],"path":[[15.4,0.3],[15.4,-0.1],[19.5,-0.1],[19.5,0.4]],"pb":[19.5,0.4]},
+		{"a":"T-1","b":"XM","id":"b1","kind":"pipe","net":"xm","pa":[23.8,-2.2],"path":[[23.8,-2.2],[24.4,-2.2],[24.4,0.5]],"pb":[24.4,0.5]},
+		{"a":"T-2","b":"XM","id":"b2","kind":"pipe","net":"xm","pa":[23.8,-0.7],"path":[[23.8,-0.7],[24.7,-0.7],[24.7,0.5]],"pb":[24.7,0.5]},
+		{"a":"XM","b":"PUMP-M","id":"bm","kind":"pipe","net":"xm","pa":[25.6,1.0],"path":[[25.6,1.0],[25.7,1.0],[25.7,1.2],[25.8,1.2]],"pb":[25.8,1.2]},
+		{"a":"SWB","b":"PUMP-M","id":"pm","kind":"cable","net":"power","pa":[15.7,0.3],"path":[[15.7,0.3],[15.7,-3.2],[26.8,-3.2],[26.8,0.9]],"pb":[26.8,0.9]}
+	],
+	"ctrls": [
+		{"at":[15.3,0.6],"id":"K-B","kind":"switch","piece":"SWB","state":true,"target":"K-B"},
+		{"at":[15.7,0.6],"id":"E-B","kind":"test","medium":"volt","piece":"SWB","target":"bus"},
+		{"at":[19.2,0.65],"id":"TQB","kind":"switch","piece":"DRL","target":"TQB"},
+		{"at":[19.5,0.65],"id":"TQ","kind":"probe","medium":"torque","piece":"DRL","target":"string"},
+		{"at":[19.8,0.65],"id":"MUDP","kind":"probe","medium":"mudp","piece":"DRL","target":"string"},
+		{"at":[19.3,1.05],"id":"SLIP-1","kind":"switch","piece":"DRL","target":"SLIP-1"},
+		{"at":[19.7,1.05],"id":"SLIP-2","kind":"switch","piece":"DRL","target":"SLIP-2"},
+		{"at":[20.35,0.6],"id":"PMUD","kind":"port","medium":"water","piece":"STP","target":"mud"},
+		{"at":[23.0,-2.65],"id":"TV-1","kind":"port","medium":"gas","piece":"T-1","target":"TU-1"},
+		{"at":[23.0,-1.15],"id":"TV-2","kind":"port","medium":"gas","piece":"T-2","target":"TU-2"},
+		{"at":[24.5,0.8],"id":"XV-1","kind":"switch","piece":"XM","target":"XV-1"},
+		{"at":[24.9,0.8],"id":"XV-2","kind":"switch","piece":"XM","target":"XV-2"},
+		{"at":[24.5,-0.3],"id":"PV-1","kind":"valve","piece":"NB","state":true,"target":"PV-1"},
+		{"at":[24.9,-0.3],"id":"PV-2","kind":"valve","piece":"NB","state":true,"target":"PV-2"},
+		{"at":[26.5,1.2],"id":"PR","kind":"port","medium":"fuel","piece":"PUMP-M","target":"xm"}
+	],
+	"rooms": []
+}

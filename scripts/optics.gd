@@ -68,6 +68,11 @@ func on_mirror(tag: String) -> bool:
 	return p != null and not p.gone and p.body == null
 
 
+# the dust cover all the way down (1) or not (0): the special course's test
+func cover_down() -> float:
+	return 1.0 if cover >= 0.98 else 0.0
+
+
 func ring_locked(r) -> bool:
 	# a ship file's numbers come back as floats: ring 1.0 is the "1" of "locks"
 	return locked.has(str(int(r)) if (r is float or r is int) else str(r))

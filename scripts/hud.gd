@@ -258,6 +258,8 @@ func _input(ev: InputEvent) -> void:
 			# only the start button starts: a stray click on the card does nothing
 			if _start_rect(cr).has_point(c.get_local_mouse_position()):
 				game.close_contract()
+			elif game.codex_hud != null and game.codex_hud.brief_rect.has_point(c.get_local_mouse_position()):
+				game.codex_hud.open_brief()
 			get_viewport().set_input_as_handled()
 			return
 		if game.menu_open:
@@ -1544,6 +1546,9 @@ func _contract_card(s: Vector2) -> void:
 			"gap":
 				y += row[2]
 		i += 1
+	# what is new on this ship: its own mechanisms, in the book already (I opens it)
+	if g.codex_hud != null:
+		g.codex_hud.draw_brief(c, Vector2(x, maxf(y + 22.0, r.position.y + 470.0)), w, a)
 	# the ship's papers: what the manifest declares aboard
 	_manifest(r, a)
 	var m := c.get_local_mouse_position()
@@ -1670,9 +1675,12 @@ func _menu_items() -> Array:
 			["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
 		]
 	if g.training:
-		return [
-			["resume", g.txt("m_resume")],
-			["skip", g.txt("m_skip") if menu_confirm != 1 else g.txt("m_confirm")],
+		var tl := [["resume", g.txt("m_resume")]]
+		# a special course can't be skipped: the contract waiting on it needs it
+		if Codex.class_of_course(g.ship_id) == "":
+			tl.append(["skip", g.txt("m_skip") if menu_confirm != 1 else g.txt("m_confirm")])
+		return tl + [
+			["codex", g.txt("m_codex")],
 			["settings", g.txt("m_settings")],
 			["hints", g.txt("m_hints") if g.hints_on else g.txt("m_hints_off")],
 			["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
@@ -1680,6 +1688,7 @@ func _menu_items() -> Array:
 	return [
 		["resume", g.txt("m_resume")],
 		["end", g.txt("m_end") if menu_confirm != 1 else g.txt("m_confirm")],
+		["codex", g.txt("m_codex")],
 		["settings", g.txt("m_settings")],
 		["title", g.txt("m_title") if menu_confirm != 4 else g.txt("m_confirm")],
 	]
@@ -1693,7 +1702,7 @@ func _menu_rect(i: int) -> Rect2:
 func _menu_hover() -> void:
 	var m := c.get_local_mouse_position()
 	menu_hover = -1
-	for i in 5:
+	for i in _menu_items().size():
 		if _menu_rect(i).has_point(m):
 			menu_hover = i
 
@@ -1726,6 +1735,9 @@ func _menu_click() -> void:
 				menu_confirm = 1
 		"settings":
 			game.settings_panel.open()
+		"codex":
+			if game.codex_hud != null:
+				game.codex_hud.open_book(game.codex.last if game.codex != null else "")
 		"hints":
 			if game.training:
 				game.toggle_hints()

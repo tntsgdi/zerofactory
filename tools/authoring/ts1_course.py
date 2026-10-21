@@ -90,6 +90,21 @@ line("T06_done_l", "liang", "行，至少你没把船坞一起拆了。培训先
 line("T06_h3", "liang", "看看图纸，那根梁是两段拼起来的。", "Check the drawing — that beam is two pieces joined together.")
 line("T_exam_offer", "liang", "接下来有个小考核。想试就试，不想试也能直接接第一份合同。", "There's a short test next. Take it if you like — or go straight to your first contract.")
 
+# ---------------------------------------------------------------- 2026-10-20: the reworked course's new steps
+# (design/新手教程与图鉴定案.md). Liang's lines are the user's to write: left as
+# placeholders, which the course does not play (scripts/tutorial.gd say()); the
+# terminal's are system messages.
+TBW = ("【待写】", "[TO BE WRITTEN]")
+for lid in ["T01_pan", "T01_zoom", "T01_hold", "T02_context",
+            "TF_in1", "TF_in2", "TF_scrap", "TF_equip", "TF_haz", "TF_boom", "TF_done",
+            "TL_in1", "TL_in2", "TL_spill", "TL_drain", "TL_done", "TL_lock_l", "TL_h1"]:
+    line(lid, "liang", *TBW)
+line("TF_scrap_t", "term", "金属废料接收完成。", "SCRAP RECEIVED.")
+line("TF_equip_t", "term", "设备接收完成：完整。", "EQUIPMENT RECEIVED: WHOLE.")
+line("TF_haz_t", "term", "危险品接收完成。", "HAZARD RECEIVED.")
+line("TL_lock_t", "term", "训练安全联锁启动：容器内仍有液体。", "TRAINING INTERLOCK: THE VESSEL STILL HOLDS LIQUID.")
+line("TL_empty_t", "term", "液体回收完成。", "LIQUID RECOVERED.")
+
 # ---------------------------------------------------------------- lessons
 def t(zh, en):
     return {"zh": zh, "en": en}
@@ -104,6 +119,9 @@ LESSONS = [
         {"id": "rings", "text": t("穿过 3 个光环", "FLY THROUGH 3 RINGS"), "tools": [], "done": {"rings": 3}, "in": ["T01_in"], "target": {"ring": 0}},
         {"id": "dash", "text": t("按住 Shift 冲过长光环", "HOLD SHIFT THROUGH THE LONG RING"), "tools": [], "done": {"dash_ring": True}, "in": ["T01_dash"], "target": {"ring": 3}},
         {"id": "stop", "text": t("进框，按 Space 停稳", "INTO THE BOX, SPACE TO STOP"), "tools": [], "done": {"stop_box": True}, "in": ["T01_stop"], "target": {"box": True}},
+        {"id": "pan", "text": t("按住右键拖动画面，看看四周", "HOLD RIGHT MOUSE AND DRAG: LOOK AROUND"), "tools": [], "done": {"panned": True}, "in": ["T01_pan"]},
+        {"id": "overview", "text": t("按住 Z 拉远，看清整个舱段", "HOLD Z: PULL BACK, SEE ALL OF IT"), "tools": [], "done": {"overview": True}, "in": ["T01_zoom"]},
+        {"id": "hold", "text": t("按住 V：悬停锁定，无人机原地不动", "HOLD V: HOVER LOCK, THE DRONE STAYS PUT"), "tools": [], "done": {"hold": True}, "in": ["T01_hold"]},
         {"id": "assist", "text": t("按 F 关掉飞行稳定，再打开", "F: ASSIST OFF, THEN ON"), "tools": [], "done": {"assist_cycle": True}, "in": ["T01_f"]},
         {"id": "find", "text": t("用测量（1）点选检修盖 P-001", "MEASURE (1): SELECT COVER P-001"), "tools": [1], "done": {"inspected": "P-001"},
          "in": ["T01_find"], "out": ["T01_found"], "target": {"piece": "P-001"}, "hint": "T01_h1", "auto": [13.9, -0.6]},
@@ -111,13 +129,24 @@ LESSONS = [
          "in": ["T01_tab"], "out": ["T01_bp1", "T01_bp2"]},
     ]},
     {"id": "TUT_02", "mode": "lockstep", "title": t("你的第一块废铁", "FIRST SCRAP"), "done_flag": "TUT_02_COMPLETE", "steps": [
-        {"id": "unbolt", "text": t("用维护工具（4）拧下 P-001 的螺栓", "WRENCH (4): UNBOLT P-001"), "tools": [4], "done": {"joints_left": ["P-001", "<=", 1]},
-         "in": ["T02_in1", "T02_in2"], "target": {"piece": "P-001"}, "hint": "T02_h1", "auto": [13.9, -0.4]},
+        {"id": "unbolt", "text": t("指着螺栓按左键拧下（自动换成维护工具，也可按 4）", "POINT AT A BOLT, CLICK (THE WRENCH COMES BY ITSELF; OR 4)"), "tools": [1, 3, 4], "context": True,
+         "done": {"joints_left": ["P-001", "<=", 1]},
+         "in": ["T02_in1", "T02_in2", "T02_context"], "target": {"piece": "P-001"}, "hint": "T02_h1", "auto": [13.9, -0.4]},
         {"id": "hold", "text": t("先用磁力抓钩（3）稳住盖板", "GRAPPLE (3): STEADY THE COVER"), "tools": [3, 4], "done": {"any": [{"held": "P-001"}, {"free": "P-001"}]},
          "in": ["T02_last"], "target": {"piece": "P-001"}},
         {"id": "last", "text": t("拧下最后一颗螺栓（抓钩不放）", "UNBOLT THE LAST ONE (KEEP HOLD)"), "tools": [3, 4], "done": {"free": "P-001"}, "target": {"piece": "P-001"}},
         {"id": "furnace", "text": t("拖进金属熔炉", "HAUL IT INTO THE FURNACE"), "tools": [3, 4], "done": {"recovered": ["P-001", "metal"]},
          "out": ["T02_done_t", "T02_done_l"], "target": {"zone": "metal"}},
+    ]},
+    {"id": "TUT_FN", "mode": "lockstep", "title": t("熔炉与回收口", "THE FURNACE AND THE MOUTHS"), "done_flag": "TUT_FN_COMPLETE",
+     "guard": {"pieces": [], "until": {}, "accident": ["furnace"], "reset": ["HZ-T1"], "say": "TF_boom"},
+     "steps": [
+        {"id": "scrap", "text": t("拆下练习废料 SC-T1，对准长槽甩进去（6 m 外也行）", "FREE SCRAP SC-T1 AND FLING IT INTO THE TROUGH (FROM 6 m IS FINE)"), "tools": [3, 4], "context": True,
+         "done": {"recovered": ["SC-T1", "any"]}, "in": ["TF_in1", "TF_in2"], "out": ["TF_scrap_t", "TF_scrap"], "target": {"piece": "SC-T1"}},
+        {"id": "equip", "text": t("拆下传感器 EQ-T1，完整送进设备回收口", "FREE SENSOR EQ-T1, DELIVER IT WHOLE TO THE EQUIPMENT BAY"), "tools": [3, 4], "context": True,
+         "done": {"recovered": ["EQ-T1", "any"]}, "out": ["TF_equip_t", "TF_equip"], "target": {"piece": "EQ-T1"}},
+        {"id": "hazard", "text": t("化学品瓶 HZ-T1 送进危险品口，别进熔炉", "CHEMICAL BOTTLE HZ-T1 TO THE HAZARD MOUTH, NOT THE FURNACE"), "tools": [3, 4], "context": True,
+         "done": {"recovered": ["HZ-T1", "hazard"]}, "out": ["TF_haz_t", "TF_haz", "TF_done"], "target": {"piece": "HZ-T1"}},
     ]},
     {"id": "TUT_03", "mode": "lockstep", "title": t("零不代表安全", "ZERO ISN'T SAFE"), "done_flag": "TUT_03_COMPLETE",
      "guard": {"pieces": ["P-002"], "until": {"P": ["TC", "<", 5.0]}, "lock": ["T03_lock_t", "T03_lock_l"],
@@ -152,6 +181,20 @@ LESSONS = [
         {"id": "verify", "text": t("再测 E-T01，确认 0 V", "MEASURE E-T01: CONFIRM 0 V"), "tools": [1], "done": {"reading": ["E-T01", "<", 1.0]}, "out": ["T04_ok_t"], "target": {"ctrl": "E-T01"}},
         {"id": "free", "text": t("拆下 G-T01 的螺栓和接头（4）", "WRENCH (4): FREE G-T01"), "tools": [3, 4], "done": {"free": "G-T01"}, "target": {"piece": "G-T01"}},
         {"id": "deliver", "text": t("完整送进设备回收口", "DELIVER IT WHOLE TO EQUIPMENT"), "tools": [3, 4], "done": {"recovered": ["G-T01", "equip"]}, "out": ["T04_done"], "target": {"zone": "equip"}},
+    ]},
+    {"id": "TUT_LQ", "mode": "lockstep", "title": t("失重液体", "LIQUIDS IN FREE FALL"), "done_flag": "TUT_LQ_COMPLETE",
+     "guard": {"pieces": ["LQ-T"], "until": {"fluid": ["lq", "<", 0.002]}, "lock": ["TL_lock_t", "TL_lock_l"]},
+     "steps": [
+        {"id": "spill", "text": t("激光（2）：切断管子 LQ-1，看里面的东西怎么出来", "LASER (2): CUT PIPE LQ-1, WATCH WHAT COMES OUT"), "tools": [2],
+         "done": {"liquid_seen": True}, "in": ["TL_in1", "TL_in2"], "out": ["TL_spill"], "target": {"line": "LQ-1"}, "hint": "TL_h1"},
+        {"id": "watch", "text": t("看液团漂走：没有重力，它们不会落下，碰到带电设备会短路", "WATCH THEM DRIFT: NOTHING FALLS; LIVE GEAR THEY TOUCH SHORTS"), "tools": [],
+         "done": {"step_t": 5.0}},
+        {"id": "measure", "text": t("测量（1）：读小罐的排放口 DR-L", "MEASURE (1): READ THE TANK'S DRAIN DR-L"), "tools": [1], "done": {"reading": ["DR-L"]}, "target": {"ctrl": "DR-L"}},
+        {"id": "drain", "text": t("气液回收（5）：软管接 DR-L，把小罐抽空（按住 = 加速）", "HOSE (5): ON DR-L, DRAW THE TANK EMPTY (HOLD = TO SPEED UP)"), "tools": [1, 5],
+         "done": {"fluid": ["lq", "<", 0.002]}, "in": ["TL_drain"], "out": ["TL_empty_t"], "target": {"ctrl": "DR-L"}, "warp": True},
+        {"id": "free", "text": t("拆下小罐 LQ-T（4）", "WRENCH (4): FREE TANK LQ-T"), "tools": [3, 4], "context": True, "done": {"free": "LQ-T"}, "target": {"piece": "LQ-T"}},
+        {"id": "deliver", "text": t("完整送进设备回收口", "DELIVER IT WHOLE TO THE EQUIPMENT BAY"), "tools": [3, 4], "context": True,
+         "done": {"recovered": ["LQ-T", "any"]}, "out": ["TL_done"], "target": {"zone": "equip"}},
     ]},
     {"id": "TUT_05", "mode": "goal", "title": t("你漏了一根管子", "YOU MISSED A PIPE"), "done_flag": "TUT_05_COMPLETE", "steps": [
         {"id": "pump", "text": t("完整回收冷却泵 CP-T", "RECOVER COOLANT PUMP CP-T WHOLE"), "tools": [1, 2, 3, 4, 5], "done": {"recovered": ["CP-T", "any"]},

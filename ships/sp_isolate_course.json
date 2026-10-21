@@ -1,0 +1,525 @@
+{
+	"ship": "sp_isolate",
+	"lines": {
+		"SN_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SN_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SN_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SN_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：小船尚未取出。",
+			"en": "TRAINING INTERLOCK: THE SMALL SHIP IS NOT OUT."
+		},
+		"SN_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SN_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SV_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SV_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SV_backfeed_t": {
+			"who": "term",
+			"zh": "检测到备用供电路径：门锁备用电源。",
+			"en": "BACKUP SUPPLY PATH DETECTED: THE LOCK'S OWN BACKUP."
+		},
+		"SV_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SV_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：门锁仍有供电。",
+			"en": "TRAINING INTERLOCK: THE LOCK STILL HAS A SUPPLY."
+		},
+		"SV_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SV_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SB_in": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		}
+	},
+	"lessons": [
+		{
+			"id": "SP_00",
+			"mode": "lockstep",
+			"title": {
+				"zh": "专项训练",
+				"en": "SPECIAL COURSE"
+			},
+			"done_flag": "SP_00_COMPLETE",
+			"steps": [
+				{
+					"id": "brief",
+					"text": {
+						"zh": "看一眼训练件：按 I 可以随时查图鉴",
+						"en": "LOOK OVER THE RIG: I OPENS THE CODEX ANY TIME"
+					},
+					"tools": [],
+					"done": {
+						"step_t": 4.0
+					},
+					"in": [
+						"SB_in"
+					]
+				}
+			]
+		},
+		{
+			"id": "SP_I1",
+			"mode": "lockstep",
+			"title": {
+				"zh": "船中船：整艘取出",
+				"en": "A SHIP IN A SHIP: OUT WHOLE"
+			},
+			"done_flag": "SP_I1_COMPLETE",
+			"guard": {
+				"pieces": [
+					"SS-H1",
+					"SS-H2",
+					"SS-N",
+					"SS-T"
+				],
+				"until": {
+					"mod": [
+						"nested",
+						"is_out",
+						">",
+						0.5
+					]
+				},
+				"lock": [
+					"SN_lock_t",
+					"SN_lock_l"
+				],
+				"accident": [
+					"nested_lurch",
+					"nested_cut"
+				],
+				"reset": [
+					"SS-H1",
+					"SS-H2",
+					"SS-N",
+					"SS-T",
+					"SS-BAT",
+					"SS-ENG"
+				],
+				"remod": [
+					"nested"
+				],
+				"say": "SN_bad",
+				"restore": {
+					"ctrls": [
+						"SK",
+						"CL-1",
+						"CL-2",
+						"WINCH"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "battery",
+					"text": {
+						"zh": "① 先处理小船自己的危险：断开它的电池 SK（4）",
+						"en": "① ITS OWN DANGERS FIRST: ITS BATTERY SK OFF (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"SK",
+							false
+						]
+					},
+					"in": [
+						"SN_in1",
+						"SN_in2"
+					],
+					"target": {
+						"ctrl": "SK"
+					}
+				},
+				{
+					"id": "stern",
+					"text": {
+						"zh": "② 托架锁从船尾松起：CL-1（4）",
+						"en": "② THE CRADLE LOCKS FROM THE STERN: CL-1 (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"CL-1",
+							false
+						]
+					},
+					"target": {
+						"ctrl": "CL-1"
+					}
+				},
+				{
+					"id": "bow",
+					"text": {
+						"zh": "③ 再松船首的 CL-2（4）",
+						"en": "③ THEN THE BOW'S CL-2 (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"CL-2",
+							false
+						]
+					},
+					"target": {
+						"ctrl": "CL-2"
+					}
+				},
+				{
+					"id": "door",
+					"text": {
+						"zh": "④ 打开首门 BOW（4）",
+						"en": "④ OPEN THE BOW DOOR BOW (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"door": [
+							"BOW",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "BOW"
+					}
+				},
+				{
+					"id": "winch",
+					"text": {
+						"zh": "⑤ 开绞车 WINCH：整艘拖出（一块外壳都别切）",
+						"en": "⑤ THE WINCH: OUT IT GOES, WHOLE (CUT NONE OF ITS HULL)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"mod": [
+							"nested",
+							"is_out",
+							">",
+							0.5
+						]
+					},
+					"out": [
+						"SN_done"
+					],
+					"target": {
+						"ctrl": "WINCH"
+					}
+				}
+			]
+		},
+		{
+			"id": "SP_I2",
+			"mode": "lockstep",
+			"title": {
+				"zh": "库门：两路电都断，才扳释放杆",
+				"en": "THE VAULT: BOTH SUPPLIES DEAD, THEN THE LEVER"
+			},
+			"done_flag": "SP_I2_COMPLETE",
+			"guard": {
+				"pieces": [
+					"LS-1",
+					"VD-1",
+					"SDB-1"
+				],
+				"until": {
+					"all": [
+						{
+							"switch": [
+								"K-B",
+								false
+							]
+						},
+						{
+							"switch": [
+								"K-LB",
+								false
+							]
+						}
+					]
+				},
+				"lock": [
+					"SV_lock_t",
+					"SV_lock_l"
+				],
+				"accident": [
+					"arc"
+				],
+				"reset": [
+					"LS-1"
+				],
+				"say": "SV_bad",
+				"restore": {
+					"power": true,
+					"ctrls": [
+						"K-B",
+						"K-LB",
+						"MR-1"
+					],
+					"readings": [
+						"E-L",
+						"E-B"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "test",
+					"text": {
+						"zh": "测量（1）：门锁电磁铁的验电点 E-L",
+						"en": "MEASURE (1): THE LOCK SOLENOID'S TEST POINT E-L"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"E-L"
+						]
+					},
+					"in": [
+						"SV_in1",
+						"SV_in2"
+					],
+					"target": {
+						"ctrl": "E-L"
+					}
+				},
+				{
+					"id": "main",
+					"text": {
+						"zh": "① 断开主开关 K-B（4）",
+						"en": "① THE MAIN SWITCH K-B OFF (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"K-B",
+							false
+						]
+					},
+					"target": {
+						"ctrl": "K-B"
+					}
+				},
+				{
+					"id": "retest",
+					"text": {
+						"zh": "再测 E-L：还带电？",
+						"en": "MEASURE E-L AGAIN: STILL LIVE?"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading_after": [
+							"E-L",
+							"main"
+						]
+					},
+					"out": [
+						"SV_backfeed_t"
+					],
+					"target": {
+						"ctrl": "E-L"
+					}
+				},
+				{
+					"id": "backup",
+					"text": {
+						"zh": "② 备用电源在倒灌：断开门锁备用电源 K-LB（4）",
+						"en": "② THE BACKUP FEEDS IT: THE LOCK BACKUP K-LB OFF (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"K-LB",
+							false
+						]
+					},
+					"target": {
+						"ctrl": "K-LB"
+					}
+				},
+				{
+					"id": "verify",
+					"text": {
+						"zh": "再测 E-L，确认 0 V",
+						"en": "MEASURE E-L: CONFIRM 0 V"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"E-L",
+							"<",
+							1.0
+						]
+					},
+					"target": {
+						"ctrl": "E-L"
+					}
+				},
+				{
+					"id": "lever",
+					"text": {
+						"zh": "③ 扳释放杆 MR-1（4）",
+						"en": "③ THROW THE RELEASE LEVER MR-1 (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"MR-1",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "MR-1"
+					}
+				},
+				{
+					"id": "open",
+					"text": {
+						"zh": "④ 打开库门 VD-1（4，不需要电）",
+						"en": "④ OPEN THE VAULT DOOR VD-1 (4, NO POWER NEEDED)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"door": [
+							"VD-1",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "VD-1"
+					}
+				},
+				{
+					"id": "box",
+					"text": {
+						"zh": "拆下保管箱 SDB-1（4）",
+						"en": "WRENCH (4): FREE THE DEPOSIT BOXES SDB-1"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "SDB-1"
+					},
+					"target": {
+						"piece": "SDB-1"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "保管箱整件送进设备回收口",
+						"en": "THE BOXES, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"SDB-1",
+							"any"
+						]
+					},
+					"out": [
+						"SV_done"
+					],
+					"target": {
+						"zone": "equip"
+					},
+					"exit": [
+						2.8,
+						0.0
+					]
+				}
+			]
+		}
+	],
+	"rings": [],
+	"long_ring": [],
+	"stop_box": []
+}

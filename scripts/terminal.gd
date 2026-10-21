@@ -305,8 +305,18 @@ func items() -> Array:
 		2: return [BERTH[0]]
 		4: return _supply_items()
 		5: return _route_nodes()
-		7: return [BERTH[1]]
+		7: return _training_rows()
 	return []
+
+
+# the training page's rows (2026-10-20): the base course, the seven special courses
+# (scripts/codex.gd), the codex
+func _training_rows() -> Array:
+	var out: Array = [["base"]]
+	for cls in Codex.CLASSES:
+		out.append(["sp", cls])
+	out.append(["codex"])
+	return out
 
 
 # the route page's nodes, built once a frame
@@ -460,6 +470,14 @@ func _gui_input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
 		dragging = false
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT and tab == 0 and _codex_page == null:
+		for ci in _cx_link:
+			if ci < offers().size() and _cx_link[ci].has_point(ev.position):
+				var oc: Dictionary = offers()[ci]
+				var ms := Codex.ship_entries(str(oc.ship))
+				_codex_page = CodexPage.open(self, ms[0] if not ms.is_empty() else "", str(oc.ship), func(): _codex_page = null, true)
+				get_viewport().set_input_as_handled()
+				return
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		if hover_goal >= 0:
 			_open_goal(hover_goal)
@@ -490,6 +508,8 @@ func _gui_input(ev: InputEvent) -> void:
 
 func _unhandled_input(ev: InputEvent) -> void:
 	if DevPanel.workbench_open and Txt.dev:
+		return
+	if _codex_page != null:
 		return
 	if not (ev is InputEventKey and ev.pressed and not ev.echo) or leaving >= 0.0:
 		return
@@ -708,7 +728,35 @@ func act() -> void:
 		5:
 			_pin(sel)
 		7:
+			_training_act(sel)
+
+
+# the training page: replay the base course, take a special course, open the codex
+func _training_act(i: int) -> void:
+	var rows := _training_rows()
+	if i < 0 or i >= rows.size():
+		return
+	var row: Array = rows[i]
+	match row[0]:
+		"base":
 			buy(BERTH[1])
+		"sp":
+			if overlay and not between:
+				_refuse(Txt.t("tm_onsite_no"))
+				return
+			leave_from = _item_rect(i)
+			Game.start_courses([row[1]], "terminal")
+			Game.contract = {}
+			SaveGame.load_requested = false
+			sfx.play("stamp", Vector2.INF, 1.0)
+			leaving = 0.0
+		"codex":
+			if _codex_page == null:
+				_codex_page = CodexPage.open(self, "", "", func(): _codex_page = null)
+
+
+var _codex_page = null
+var _cx_link := {}          # offer card -> its "new on this ship" line (a click opens the codex)
 
 
 # the route page: the chosen node pinned as a goal, or no longer
@@ -748,6 +796,16 @@ func take(i: int) -> void:
 		return
 	var o: Dictionary = Career.accept(_offer_index(i))
 	if o.is_empty():
+		return
+	# a family of ship never trained for: its special courses first, then this contract
+	# (design/新手教程与图鉴定案.md Q10/Q15: the contract is kept, the courses run back to back)
+	var miss := Codex.missing(str(o.ship))
+	if not miss.is_empty():
+		Game.start_courses(miss, "contract")
+		Game.contract = {}
+		SaveGame.load_requested = false
+		sfx.play("stamp", Vector2.INF, 1.0)
+		leaving = 0.0
 		return
 	Game.start_ship = o.ship
 	Game.contract = o
@@ -909,7 +967,8 @@ func _item_rect(i: int) -> Rect2:
 		5:
 			return _route_rect(i)
 		7:
-			return _training_page_rect()
+			var tr := _training_page_rect()
+			return Rect2(tr.position.x + 18, tr.position.y + 78 + i * 56, tr.size.x - 36, 50)
 	return Rect2(-100, -100, 1, 1)
 
 
@@ -1552,6 +1611,18 @@ func _market(s: Vector2, a: float) -> void:
 		_text(Txt.t("tm_per_min") % Pal.money(snappedf(_rate(o), 10.0)), Vector2(sc.end.x - 16, sc.position.y + 32), 17, Pal.ink(0.9 * hk2), font_s, 1)
 		_text(Txt.t("tm_minutes") % int(float(o.time) / 60.0), Vector2(sc.end.x - 16, sc.position.y + 56), 14, Pal.ink(0.6 * hk2), font, 1)
 		_thumb(o, Rect2(sc.position.x + 16, sc.position.y + 126, sc.size.x - 32, 108), row_k.call(2))
+		# what is new on this ship (scripts/codex.gd), on the screen under the rate: a click opens the codex on it
+		var mechs := Codex.ship_entries(str(o.ship))
+		_cx_link.erase(i)
+		if not mechs.is_empty():
+			var ln := Txt.t("cxu_brief") + "  " + Codex.title(mechs[0]) + ("  +%d" % (mechs.size() - 1) if mechs.size() > 1 else "")
+			var lw: float = minf(font_b.get_string_size(ln, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x, sc.size.x * 0.55)
+			var lr := Rect2(sc.end.x - 22 - lw, sc.position.y + 70, lw + 12, 24)
+			_cx_link[i] = lr
+			var hot := lr.has_point(get_local_mouse_position())
+			if hot:
+				draw_rect(lr, Pal.ink(0.08 * hk2))
+			draw_string(font_b, Vector2(lr.position.x + 6, lr.position.y + 17), ln, HORIZONTAL_ALIGNMENT_LEFT, lw, 13, Pal.heat((0.95 if hot else 0.8) * hk2, 1.05))
 		# 3 · risk as a three-step gauge, and the best of the three said plainly
 		var rk2: float = row_k.call(3)
 		_text(Txt.t("tm_risk_h"), Vector2(x, y + 398), 15, Pal.ink(0.6 * rk2), font_b)
@@ -1602,6 +1673,7 @@ func _market(s: Vector2, a: float) -> void:
 		for cg in o.get("cargo", []):
 			parts.append("%s %s" % [cg[0], Txt.cargo(cg[1])])
 		_text(Txt.t("tm_cargo") + "  " + ("  ·  ".join(parts) if not parts.is_empty() else Txt.t("tm_no_cargo")), Vector2(x, ly + 14), 13, Pal.ink(0.7 * pk), font)
+
 		# a survey report bought for this offer: typed in behind a scan line, on its own screen
 		if o.has("intel"):
 			var it_t := intel_t.get(o.id, 9.0) as float
@@ -2130,6 +2202,14 @@ func _bottom(s: Vector2, a: float) -> void:
 				_text(Txt.t("tm_use_intel") % int(d.items.intel), Vector2(60, s.y - 84), 14, Pal.tint(Pal.AIR, 0.85 * a, 1.0), font)
 			if float(d.money) < float(o.fee):
 				note = Txt.t("tm_borrow") % Pal.money(float(o.fee) - float(d.money))
+			# a family of ship never trained for: the special course first (the contract waits)
+			var miss := Codex.missing(str(o.ship))
+			if not miss.is_empty():
+				label = Txt.t("cxu_take_train") + "   Enter"
+				var ns: Array = []
+				for cls in miss:
+					ns.append(Txt.t("cxu_cls_" + cls).split(" · ")[-1])
+				note = Txt.t("cxu_needs") % "、".join(ns) if Txt.zh else Txt.t("cxu_needs") % ", ".join(ns)
 		1, 4:
 			var list := items()
 			var it: Array = list[sel] if sel < list.size() else []
@@ -2170,8 +2250,18 @@ func _bottom(s: Vector2, a: float) -> void:
 				if Route.pins().size() >= Route.MAX_PINS:
 					note = Txt.t("rt_pin_full")
 		7:
-			label = Txt.t("tm_training_btn") + "   Enter"
-			if overlay and not between:
+			var rows := _training_rows()
+			var row: Array = rows[clampi(sel, 0, rows.size() - 1)]
+			match row[0]:
+				"base":
+					label = Txt.t("tm_training_btn") + "   Enter"
+				"sp":
+					label = Txt.t("cxu_sp_go") + "   Enter"
+					if not Codex.certified(row[1]):
+						note = Txt.t("cxu_sp_bonus") % Pal.money(Codex.BONUS)
+				"codex":
+					label = Txt.t("cxu_open_book") + "   Enter"
+			if overlay and not between and row[0] != "codex":
 				ok = false
 				note = Txt.t("tm_onsite_no")
 	if label != "":
@@ -2680,7 +2770,38 @@ func _training_page(s: Vector2, a: float) -> void:
 	var k := Pal.ease_out(clampf(deal_t / 0.35, 0.0, 1.0)) * a
 	Hmi.raised(self, r, k)
 	Hmi.plate(self, font_s, Rect2(r.position.x + 18, r.position.y + 18, r.size.x - 36, 46), Txt.t("tm_training"), 21, k)
-	var sc := Rect2(r.position.x + 18, r.position.y + 80, r.size.x - 36, 300)
-	Hmi.screen(self, sc, k, true)
-	_app_icon(7, sc.get_center(), k)
-	_wrap(Txt.t("tm_training_d"), Vector2(r.position.x + 40, sc.end.y + 50), r.size.x - 80, 18, Pal.ink(0.85 * k), 3)
+	var rows := _training_rows()
+	for i in rows.size():
+		var row: Array = rows[i]
+		var rr := _item_rect(i)
+		var on := i == sel
+		var hk := 1.0 if i == hover else 0.0
+		draw_rect(rr, Color(0.07, 0.074, 0.084, 1.0) if on else (Color(0.05, 0.053, 0.06, 1.0) if hk > 0.0 else Color(0.03, 0.032, 0.037, 0.9)))
+		if on:
+			draw_rect(Rect2(rr.position, Vector2(4, rr.size.y)), Pal.heat(k, 1.1))
+		var name := ""
+		var info := ""
+		var lamp := Hmi.ok_col()
+		match row[0]:
+			"base":
+				name = Txt.t("cxu_row_base")
+				info = Txt.t("cxu_row_base_d")
+				lamp = Hmi.ok_col() if Career.data.get("certified", false) else Hmi.warn_col()
+			"sp":
+				name = Txt.t("cxu_cls_" + str(row[1]))
+				var codes: Array = []
+				for sid in Codex.CLASS_SHIPS[row[1]].slice(0, 6):
+					codes.append(Codex.code(sid))
+				info = ", ".join(codes)
+				var kind: String = str(Codex._certs().get(row[1], ""))
+				lamp = Hmi.ok_col() if kind != "" else Hmi.warn_col()
+				_text(Txt.t("cxu_cert_" + (kind if kind != "" else "none")), Vector2(rr.end.x - 20, rr.position.y + 32), 15, Pal.tint(Pal.FLUID, 0.9 * k, 1.0) if kind != "" else Pal.ink(0.5 * k), font_b, 1)
+			"codex":
+				name = Txt.t("cxu_book")
+				var have := 0
+				for c in Codex.CATS:
+					have += Codex.count(c).x
+				info = Txt.t("cxu_row_codex_d") % [have, CodexData.E.size()]
+		Hmi.lamp(self, Vector2(rr.position.x + 24, rr.get_center().y), lamp, true, k, 6.0)
+		_text(name, Vector2(rr.position.x + 46, rr.position.y + 22), 18, Pal.ink(0.95 * k), font_s)
+		_text(info, Vector2(rr.position.x + 46, rr.position.y + 42), 13, Pal.ink(0.55 * k), font)

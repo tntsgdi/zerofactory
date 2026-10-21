@@ -300,6 +300,121 @@
 			"who": "liang",
 			"zh": "接下来有个小考核。想试就试，不想试也能直接接第一份合同。",
 			"en": "There's a short test next. Take it if you like — or go straight to your first contract."
+		},
+		"T01_pan": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"T01_zoom": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"T01_hold": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"T02_context": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TF_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TF_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TF_scrap": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TF_equip": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TF_haz": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TF_boom": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TF_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TL_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TL_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TL_spill": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TL_drain": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TL_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TL_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TL_h1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"TF_scrap_t": {
+			"who": "term",
+			"zh": "金属废料接收完成。",
+			"en": "SCRAP RECEIVED."
+		},
+		"TF_equip_t": {
+			"who": "term",
+			"zh": "设备接收完成：完整。",
+			"en": "EQUIPMENT RECEIVED: WHOLE."
+		},
+		"TF_haz_t": {
+			"who": "term",
+			"zh": "危险品接收完成。",
+			"en": "HAZARD RECEIVED."
+		},
+		"TL_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：容器内仍有液体。",
+			"en": "TRAINING INTERLOCK: THE VESSEL STILL HOLDS LIQUID."
+		},
+		"TL_empty_t": {
+			"who": "term",
+			"zh": "液体回收完成。",
+			"en": "LIQUID RECOVERED."
 		}
 	},
 	"lessons": [
@@ -393,6 +508,48 @@
 					}
 				},
 				{
+					"id": "pan",
+					"text": {
+						"zh": "按住右键拖动画面，看看四周",
+						"en": "HOLD RIGHT MOUSE AND DRAG: LOOK AROUND"
+					},
+					"tools": [],
+					"done": {
+						"panned": true
+					},
+					"in": [
+						"T01_pan"
+					]
+				},
+				{
+					"id": "overview",
+					"text": {
+						"zh": "按住 Z 拉远，看清整个舱段",
+						"en": "HOLD Z: PULL BACK, SEE ALL OF IT"
+					},
+					"tools": [],
+					"done": {
+						"overview": true
+					},
+					"in": [
+						"T01_zoom"
+					]
+				},
+				{
+					"id": "hold",
+					"text": {
+						"zh": "按住 V：悬停锁定，无人机原地不动",
+						"en": "HOLD V: HOVER LOCK, THE DRONE STAYS PUT"
+					},
+					"tools": [],
+					"done": {
+						"hold": true
+					},
+					"in": [
+						"T01_hold"
+					]
+				},
+				{
 					"id": "assist",
 					"text": {
 						"zh": "按 F 关掉飞行稳定，再打开",
@@ -467,12 +624,15 @@
 				{
 					"id": "unbolt",
 					"text": {
-						"zh": "用维护工具（4）拧下 P-001 的螺栓",
-						"en": "WRENCH (4): UNBOLT P-001"
+						"zh": "指着螺栓按左键拧下（自动换成维护工具，也可按 4）",
+						"en": "POINT AT A BOLT, CLICK (THE WRENCH COMES BY ITSELF; OR 4)"
 					},
 					"tools": [
+						1,
+						3,
 						4
 					],
+					"context": true,
 					"done": {
 						"joints_left": [
 							"P-001",
@@ -482,7 +642,8 @@
 					},
 					"in": [
 						"T02_in1",
-						"T02_in2"
+						"T02_in2",
+						"T02_context"
 					],
 					"target": {
 						"piece": "P-001"
@@ -559,6 +720,108 @@
 					],
 					"target": {
 						"zone": "metal"
+					}
+				}
+			]
+		},
+		{
+			"id": "TUT_FN",
+			"mode": "lockstep",
+			"title": {
+				"zh": "熔炉与回收口",
+				"en": "THE FURNACE AND THE MOUTHS"
+			},
+			"done_flag": "TUT_FN_COMPLETE",
+			"guard": {
+				"pieces": [],
+				"until": {},
+				"accident": [
+					"furnace"
+				],
+				"reset": [
+					"HZ-T1"
+				],
+				"say": "TF_boom"
+			},
+			"steps": [
+				{
+					"id": "scrap",
+					"text": {
+						"zh": "拆下练习废料 SC-T1，对准长槽甩进去（6 m 外也行）",
+						"en": "FREE SCRAP SC-T1 AND FLING IT INTO THE TROUGH (FROM 6 m IS FINE)"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"SC-T1",
+							"any"
+						]
+					},
+					"in": [
+						"TF_in1",
+						"TF_in2"
+					],
+					"out": [
+						"TF_scrap_t",
+						"TF_scrap"
+					],
+					"target": {
+						"piece": "SC-T1"
+					}
+				},
+				{
+					"id": "equip",
+					"text": {
+						"zh": "拆下传感器 EQ-T1，完整送进设备回收口",
+						"en": "FREE SENSOR EQ-T1, DELIVER IT WHOLE TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"EQ-T1",
+							"any"
+						]
+					},
+					"out": [
+						"TF_equip_t",
+						"TF_equip"
+					],
+					"target": {
+						"piece": "EQ-T1"
+					}
+				},
+				{
+					"id": "hazard",
+					"text": {
+						"zh": "化学品瓶 HZ-T1 送进危险品口，别进熔炉",
+						"en": "CHEMICAL BOTTLE HZ-T1 TO THE HAZARD MOUTH, NOT THE FURNACE"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"HZ-T1",
+							"hazard"
+						]
+					},
+					"out": [
+						"TF_haz_t",
+						"TF_haz",
+						"TF_done"
+					],
+					"target": {
+						"piece": "HZ-T1"
 					}
 				}
 			]
@@ -1027,6 +1290,156 @@
 					},
 					"out": [
 						"T04_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		},
+		{
+			"id": "TUT_LQ",
+			"mode": "lockstep",
+			"title": {
+				"zh": "失重液体",
+				"en": "LIQUIDS IN FREE FALL"
+			},
+			"done_flag": "TUT_LQ_COMPLETE",
+			"guard": {
+				"pieces": [
+					"LQ-T"
+				],
+				"until": {
+					"fluid": [
+						"lq",
+						"<",
+						0.002
+					]
+				},
+				"lock": [
+					"TL_lock_t",
+					"TL_lock_l"
+				]
+			},
+			"steps": [
+				{
+					"id": "spill",
+					"text": {
+						"zh": "激光（2）：切断管子 LQ-1，看里面的东西怎么出来",
+						"en": "LASER (2): CUT PIPE LQ-1, WATCH WHAT COMES OUT"
+					},
+					"tools": [
+						2
+					],
+					"done": {
+						"liquid_seen": true
+					},
+					"in": [
+						"TL_in1",
+						"TL_in2"
+					],
+					"out": [
+						"TL_spill"
+					],
+					"target": {
+						"line": "LQ-1"
+					},
+					"hint": "TL_h1"
+				},
+				{
+					"id": "watch",
+					"text": {
+						"zh": "看液团漂走：没有重力，它们不会落下，碰到带电设备会短路",
+						"en": "WATCH THEM DRIFT: NOTHING FALLS; LIVE GEAR THEY TOUCH SHORTS"
+					},
+					"tools": [],
+					"done": {
+						"step_t": 5.0
+					}
+				},
+				{
+					"id": "measure",
+					"text": {
+						"zh": "测量（1）：读小罐的排放口 DR-L",
+						"en": "MEASURE (1): READ THE TANK'S DRAIN DR-L"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"DR-L"
+						]
+					},
+					"target": {
+						"ctrl": "DR-L"
+					}
+				},
+				{
+					"id": "drain",
+					"text": {
+						"zh": "气液回收（5）：软管接 DR-L，把小罐抽空（按住 = 加速）",
+						"en": "HOSE (5): ON DR-L, DRAW THE TANK EMPTY (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"fluid": [
+							"lq",
+							"<",
+							0.002
+						]
+					},
+					"in": [
+						"TL_drain"
+					],
+					"out": [
+						"TL_empty_t"
+					],
+					"target": {
+						"ctrl": "DR-L"
+					},
+					"warp": true
+				},
+				{
+					"id": "free",
+					"text": {
+						"zh": "拆下小罐 LQ-T（4）",
+						"en": "WRENCH (4): FREE TANK LQ-T"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "LQ-T"
+					},
+					"target": {
+						"piece": "LQ-T"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "完整送进设备回收口",
+						"en": "DELIVER IT WHOLE TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"LQ-T",
+							"any"
+						]
+					},
+					"out": [
+						"TL_done"
 					],
 					"target": {
 						"zone": "equip"

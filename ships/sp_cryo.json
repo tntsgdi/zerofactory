@@ -1,0 +1,152 @@
+{
+	"id": "sp_cryo",
+	"name": "SP-CRYO",
+	"title": ["专项训练件 · 低温","SPECIAL COURSE RIG · CRYO"],
+	"length": 12.8,
+	"clamps": [[16.0,2.3],[26.0,2.3]],
+	"room_names": {},
+	"gas": {
+		"rooms": {},
+		"vessels": {
+			"MIX": {"V":0.02,"kpa":80.0}
+		},
+		"valves": [],
+		"value": 4000.0
+	},
+	"power": {
+		"bus": "SWB",
+		"sources": [
+			{"cable":"pb","charge":1.0,"drain":0.0,"kind":"battery","local_volts":48.0,"piece":"BAT","switch":"K-B","volts":48.0}
+		],
+		"lamps": {}
+	},
+	"fluids": {
+		"volumes": {
+			"t1": {"amount":0.3,"fluid":"coolant","full":0.4,"leak":0.3,"look":"lh2","nets":["t1"],"piece":"TK-1","port":"PT-1","pump":[0.03,0.03]}
+		},
+		"value": {"coolant":50.0}
+	},
+	"ctrls_cfg": {},
+	"labels": {},
+	"procedures": {
+		"TK-1": [
+			{"ctrl":"RVH-1","do":"operate"},
+			{"ctrl":"PT-1","do":"hose"},
+			{"do":"wait","max":90.0,"until":{"fluid":["t1","<",0.02]}},
+			{"do":"free","piece":"TK-1"},
+			{"do":"deliver","piece":"TK-1","zone":"equip"}
+		],
+		"QPU": [
+			{"ctrl":"CIRC","do":"operate"},
+			{"ctrl":"MIXP","do":"hose"},
+			{"do":"wait","max":60.0,"until":{"P":["MIX","<",15.0]}},
+			{"ctrl":"PT","do":"operate"},
+			{"do":"wait","max":90.0,"until":{"stage":["STG-MXC",">",35.0]}},
+			{"ctrl":"HEAT","do":"operate"},
+			{"do":"wait","max":90.0,"until":{"stage":["STG-MXC",">",255.0]}},
+			{"ctrl":"VI-LOCK","do":"operate"},
+			{"do":"free","piece":"QPU"},
+			{"do":"deliver","piece":"QPU","zone":"equip"}
+		]
+	},
+	"blueprint": {},
+	"training": true,
+	"value": {"metal":3000.0,"total":240000.0},
+	"boiloff": {
+		"tanks": {
+			"TK-1": {"centre":[18.9,1.0],"frozen":true,"heater":"RVH-1","line":"cr1","look":"lh2","rate":4.0,"shell":["TK-1"],"valve":"RV-1","vol":"t1"}
+		},
+		"plant": ["CRY-1"],
+		"P0": 420.0,
+		"floor": 300.0,
+		"relief": 600.0,
+		"reseat": 560.0,
+		"burst": 700.0,
+		"cool": 2.0,
+		"draw": 6.0,
+		"vent": 0.004,
+		"thaw": 6.0,
+		"reach": 3.0,
+		"radius": 1.2
+	},
+	"dilution": {
+		"stages": {"STG-4K":4.0,"STG-50K":50.0,"STG-MXC":0.012},
+		"order": ["STG-50K","STG-4K","STG-MXC"],
+		"chip": "QPU",
+		"pt": "PT",
+		"compressor": "PTC",
+		"circ": "CIRC",
+		"heater": "HEAT",
+		"mix": "MIX",
+		"mix_safe": 20.0,
+		"warm": 1.0,
+		"heat_k": 4.0,
+		"shock_T": 30.0,
+		"brittle_T": 250.0,
+		"isolation": {"knock":0.25,"lock":"VI-LOCK","radius":4.0}
+	},
+	"pieces": [
+		{"barrier":true,"cut_speed":200.0,"density":1.6,"key":"RIG-F","kind":"hull","mass":10.24,"name_key":"p_sp_floor","poly":[[14.6,1.8],[27.4,1.8],[27.4,2.3],[14.6,2.3]],"rig":true,"tag":"RIG-F"},
+		{"art":"swb","art_size":[1.0,1.5],"art_xf":[1.0,0.0,0.0,1.0,15.0,0.300000011920929],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"SWB","kind":"equip","mass":0.3,"name_key":"p_swb","poly":[[15.0,0.3],[16.0,0.3],[16.0,1.8],[15.0,1.8]],"tag":"SWB","value":3000.0},
+		{"art":"battery","art_size":[0.8,0.8],"art_xf":[1.0,0.0,0.0,1.0,16.2000007629395,1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"hazard":"battery","key":"BAT","kind":"equip","mass":0.3,"name_key":"p_battery","poly":[[16.2,1.0],[17.0,1.0],[17.0,1.8],[16.2,1.8]],"tag":"BAT","value":2500.0},
+		{"art":"cryotank","art_size":[3.0,1.6],"art_xf":[1.0,0.0,0.0,1.0,17.3999989827474,0.200000007947286],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"TK-1","kind":"equip","mass":1.2,"name_key":"p_sp_lh2_tank","poly":[[17.4,0.2],[20.4,0.2],[20.4,1.8],[17.4,1.8]],"tag":"TK-1","value":12000.0},
+		{"art":"relief","art_size":[0.4,0.55],"art_xf":[1.0,0.0,0.0,1.0,18.7000007629395,-0.349999984105428],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"RV-1","kind":"equip","mass":0.04,"name_key":"p_hg_relief","poly":[[18.7,-0.35],[19.1,-0.35],[19.1,0.2],[18.7,0.2]],"tag":"RV-1","value":1800.0},
+		{"art":"cold_box_h2","art_size":[1.0,2.4],"art_xf":[1.0,0.0,0.0,1.0,21.0,-0.600000023841858],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"CRY-1","kind":"equip","mass":1.0,"name_key":"p_hg_cryocooler","poly":[[21.0,-0.6],[22.0,-0.6],[22.0,1.8],[21.0,1.8]],"tag":"CRY-1","value":22000.0},
+		{"art":"pipe","art_size":[0.2,3.6],"art_xf":[1.0,0.0,0.0,1.0,23.2000020345052,-1.79999987284342],"cut_speed":220.0,"density":1.0,"key":"DF-P","kind":"fixture","mass":0.15,"name_key":"p_sp_post","poly":[[23.2,-1.8],[23.4,-1.8],[23.4,1.8],[23.2,1.8]],"rig":true,"tag":"DF-P"},
+		{"art":"dr_stage","art_size":[2.0,0.22],"art_xf":[1.0,0.0,0.0,1.0,23.3999989827474,-1.60000006357829],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.5,"key":"STG-50K","kind":"equip","mass":0.08,"name_key":"p_qc_stage_50k","poly":[[23.4,-1.6],[25.4,-1.6],[25.4,-1.38],[23.4,-1.38]],"tag":"STG-50K","value":6000.0},
+		{"art":"dr_stage","art_size":[2.0,0.22],"art_xf":[1.0,0.0,0.0,1.0,23.3999989827474,-1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.5,"key":"STG-4K","kind":"equip","mass":0.08,"name_key":"p_qc_stage_4k","poly":[[23.4,-1.0],[25.4,-1.0],[25.4,-0.78],[23.4,-0.78]],"tag":"STG-4K","value":6000.0},
+		{"art":"dr_stage","art_size":[2.0,0.22],"art_xf":[1.0,0.0,0.0,1.0,23.3999989827474,-0.400000015894572],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.5,"key":"STG-MXC","kind":"equip","mass":0.08,"name_key":"p_qc_stage_mxc","poly":[[23.4,-0.4],[25.4,-0.4],[25.4,-0.18],[23.4,-0.18]],"tag":"STG-MXC","value":6000.0},
+		{"art":"qpu","art_size":[0.5,0.38],"art_xf":[1.0,0.0,0.0,1.0,24.8999989827474,-0.180000007152557],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.9,"key":"QPU","kind":"equip","mass":0.03,"name_key":"p_qc_qpu","poly":[[24.9,-0.18],[25.4,-0.18],[25.4,0.2],[24.9,0.2]],"tag":"QPU","value":120000.0},
+		{"art":"iso_table","art_size":[1.8,0.5],"art_xf":[1.0,0.0,0.0,1.0,23.6000010172526,1.29999995231628],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"VI","kind":"equip","mass":0.4,"name_key":"p_qc_vit","poly":[[23.6,1.3],[25.4,1.3],[25.4,1.8],[23.6,1.8]],"tag":"VI","value":8000.0},
+		{"art":"screw_comp","art_size":[1.5,1.2],"art_xf":[1.0,0.0,0.0,1.0,25.7000020345052,0.600000023841858],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"PTC","kind":"equip","mass":0.5,"name_key":"p_qc_compressor","poly":[[25.7,0.6],[27.2,0.6],[27.2,1.8],[25.7,1.8]],"tag":"PTC","value":14000.0},
+		{"art":"ghs","art_size":[0.8,1.8],"art_xf":[1.0,0.0,0.0,1.0,22.2999979654948,0.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"GHS","kind":"equip","mass":0.3,"name_key":"p_qc_ghs","poly":[[22.3,0.0],[23.1,0.0],[23.1,1.8],[22.3,1.8]],"tag":"GHS","value":26000.0}
+	],
+	"joints": [
+		{"a":"RIG-F","at":[16.0,2.25],"b":null,"tag":"CL-01","type":"clamp"},
+		{"a":"RIG-F","at":[26.0,2.25],"b":null,"tag":"CL-02","type":"clamp"},
+		{"a":"SWB","at":[15.12,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"SWB","at":[15.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BAT","at":[16.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BAT","at":[16.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"TK-1","at":[17.52,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"TK-1","at":[20.28,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"RV-1","at":[18.8,0.2],"b":"TK-1","type":"bolt"},
+		{"a":"RV-1","at":[19.0,0.2],"b":"TK-1","type":"bolt"},
+		{"a":"CRY-1","at":[21.12,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"CRY-1","at":[21.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"DF-P","at":[23.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"DF-P","at":[23.28,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"STG-50K","at":[23.45,-1.49],"b":"DF-P","type":"bolt"},
+		{"a":"STG-4K","at":[23.45,-0.89],"b":"DF-P","type":"bolt"},
+		{"a":"STG-MXC","at":[23.45,-0.29],"b":"DF-P","type":"bolt"},
+		{"a":"QPU","at":[25.0,-0.18],"b":"STG-MXC","type":"bolt"},
+		{"a":"QPU","at":[25.3,-0.18],"b":"STG-MXC","type":"bolt"},
+		{"a":"VI","at":[23.72,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"VI","at":[25.28,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"PTC","at":[25.82,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"PTC","at":[27.08,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"GHS","at":[22.42,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"GHS","at":[22.98,1.8],"b":"RIG-F","type":"bolt"}
+	],
+	"lines": [
+		{"a":"BAT","b":"SWB","id":"pb","kind":"cable","net":"power","pa":[16.6,1.0],"path":[[16.6,1.0],[16.0,1.0]],"pb":[16.0,1.0]},
+		{"a":"SWB","b":"CRY-1","id":"pk","kind":"cable","net":"power","pa":[15.8,0.3],"path":[[15.8,0.3],[15.8,-0.9],[21.2,-0.9],[21.2,-0.6]],"pb":[21.2,-0.6]},
+		{"a":"CRY-1","b":"TK-1","id":"cr1","kind":"pipe","net":"t1","pa":[21.0,0.6],"path":[[21.0,0.6],[20.4,0.6]],"pb":[20.4,0.6]},
+		{"a":"SWB","b":"PTC","id":"pp","kind":"cable","net":"power","pa":[15.6,0.3],"path":[[15.6,0.3],[15.6,-2.2],[26.4,-2.2],[26.4,0.6]],"pb":[26.4,0.6]}
+	],
+	"ctrls": [
+		{"at":[15.3,0.6],"id":"K-B","kind":"switch","piece":"SWB","state":true,"target":"K-B"},
+		{"at":[15.7,0.6],"id":"E-B","kind":"test","medium":"volt","piece":"SWB","target":"bus"},
+		{"at":[17.7,0.5],"id":"PT-1","kind":"port","medium":"coolant","piece":"TK-1","target":"t1"},
+		{"at":[18.2,0.5],"id":"TP-1","kind":"probe","medium":"tank_kpa","piece":"TK-1","target":"TK-1"},
+		{"at":[18.8,-0.15],"id":"VT-1","kind":"probe","medium":"valve_temp","piece":"RV-1","target":"TK-1"},
+		{"at":[19.0,-0.15],"id":"RVH-1","kind":"switch","piece":"RV-1","target":"RVH-1"},
+		{"at":[22.5,0.3],"id":"CIRC","kind":"switch","piece":"GHS","state":true,"target":"CIRC"},
+		{"at":[22.9,0.3],"id":"PT","kind":"switch","piece":"GHS","state":true,"target":"PT"},
+		{"at":[22.5,0.7],"id":"HEAT","kind":"switch","piece":"GHS","target":"HEAT"},
+		{"at":[22.9,0.7],"id":"VI-LOCK","kind":"switch","piece":"GHS","target":"VI-LOCK"},
+		{"at":[22.5,1.1],"id":"MXT","kind":"probe","medium":"stage","piece":"GHS","target":"STG-MXC"},
+		{"at":[22.9,1.1],"id":"MIXP","kind":"port","medium":"gas","piece":"GHS","target":"MIX"}
+	],
+	"rooms": []
+}

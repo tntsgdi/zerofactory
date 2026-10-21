@@ -59,6 +59,11 @@ func load_state(d: Dictionary) -> void:
 		_released[str(k)] = true
 
 
+# 1 once the small ship is out (the special course's test)
+func is_out() -> float:
+	return 1.0 if out else 0.0
+
+
 func _on(id: String) -> bool:
 	return game.sys.on(id)
 

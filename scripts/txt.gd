@@ -20,6 +20,7 @@ static var dev := false               # developer mode (F12)
 static var context := true            # the tool follows what the cursor is on (not the laser)
 static var fullscreen := false
 static var calm := false              # no screen shake, flashes or hit-stops
+static var codex_cards := true        # a card the first time something new is met (scripts/codex.gd)
 # animation intensity (UI animation, 2026-10-17): "full" (glow, particles,
 # trails), "lite" (the motion without particles, afterimages or big glows),
 # "off" (screens switch at once, no transitions; shake and flashes off too)
@@ -2664,6 +2665,8 @@ const S := {
 static func t(key: String) -> String:
 	var v = S.get(key)
 	if v == null:
+		v = CodexTxt.S.get(key)
+	if v == null:
 		return key
 	var text: String = v[0] if zh else v[1]
 	if key in ["fa_hauler_d", "fa_crane_d"]:
@@ -2674,7 +2677,7 @@ static func t(key: String) -> String:
 
 
 static func has(key: String) -> bool:
-	return S.has(key)
+	return S.has(key) or CodexTxt.S.has(key)
 
 
 # a declared cargo label ("IND. METAL") by its name in the player's language
@@ -2720,6 +2723,7 @@ static func load_settings(testing: bool) -> void:
 		context = cf.get_value("ui", "context", true)
 		fullscreen = cf.get_value("video", "fullscreen", false)
 		calm = cf.get_value("video", "calm", false)
+		codex_cards = cf.get_value("ui", "codex_cards", true)
 		anim = cf.get_value("video", "anim", "full")
 		if not anim in ANIM_LEVELS:
 			anim = "full"
@@ -2747,6 +2751,7 @@ static func save_settings(testing: bool) -> void:
 	cf.set_value("ui", "context", context)
 	cf.set_value("video", "fullscreen", fullscreen)
 	cf.set_value("video", "calm", calm)
+	cf.set_value("ui", "codex_cards", codex_cards)
 	cf.set_value("video", "anim", anim)
 	Keys.store(cf)
 	cf.set_value("audio", "master", vol_master)

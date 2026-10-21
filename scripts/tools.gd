@@ -135,8 +135,8 @@ func clamp_range(p: Vector2) -> Vector2:
 # The context tool (design/体验打磨定案.md §5): out of the laser, the tool in
 # hand follows what the pointer is on — a bolt, lock, clamp, valve, switch or
 # connector takes the wrench, a pressure port the meter, a floating piece the
-# grapple. Never while a job, a cut or a hold is going on, never in the
-# training course (it teaches the keys), never for a bot.
+# grapple. Never while a job, a cut or a hold is going on, never for a bot; in
+# the training course from the lesson that teaches it (scripts/tutorial.gd).
 const WRENCH_CTRLS := ["valve", "switch", "remote", "stop", "socket", "discharge", "door", "hatch", "jam", "degauss", "seal"]
 
 
@@ -157,12 +157,15 @@ func _context() -> Array:
 
 
 func _context_step() -> void:
-	if not Txt.context or game.bot != null or game.tutorial != null or tool == 2 or tool == 5:
+	if not Txt.context or game.bot != null or tool == 2 or tool == 5:
 		return
 	if cutting or not job.is_empty() or held_body != null or held_piece != null or lmb:
 		return
 	var c := _context()
 	if c[1] == pin_key:
+		return
+	# the training course teaches it from its second lesson on, within the tools it opened
+	if game.tutorial != null and c[0] != 0 and not game.tutorial.context_ok(c[0]):
 		return
 	pin_key = ""
 	if c[0] != 0 and c[0] != tool:

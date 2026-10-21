@@ -73,6 +73,10 @@ static func save(g) -> void:
 	# a developer's test contract is never written over the career's contract in progress
 	if g.dev_job():
 		return
+	# a special course is short and starts over (scripts/codex.gd): never written over the
+	# base course's training save
+	if Codex.class_of_course(str(g.ship_id)) != "" and not g.testing:
+		return
 	var w = g.world
 	var s = g.sys
 	# a cut made this frame splits the body before it is written, as it would next physics step

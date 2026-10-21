@@ -1,0 +1,104 @@
+{
+	"id": "sp_load",
+	"name": "SP-LOAD",
+	"title": ["专项训练件 · 受力与运动","SPECIAL COURSE RIG · LOAD"],
+	"length": 12.8,
+	"clamps": [[16.0,2.3],[26.0,2.3]],
+	"room_names": {},
+	"gas": {
+		"rooms": {},
+		"vessels": {
+			"ACC": {"V":0.02,"kpa":300.0}
+		},
+		"valves": [],
+		"value": 100.0
+	},
+	"power": {
+		"bus": "SWB",
+		"sources": [
+			{"cable":"pb","charge":1.0,"drain":0.0,"kind":"battery","local_volts":48.0,"piece":"BAT","switch":"K-B","volts":48.0}
+		],
+		"lamps": {}
+	},
+	"fluids": {
+		"volumes": {},
+		"value": {"coolant":50.0}
+	},
+	"ctrls_cfg": {},
+	"labels": {},
+	"procedures": {
+		"ARM-1": [
+			{"ctrl":"G-ACC","do":"hose"},
+			{"do":"wait","max":60.0,"until":{"P":["ACC","<",20.0]}},
+			{"do":"free","piece":"ARM-1"},
+			{"do":"deliver","piece":"ARM-1","zone":"equip"}
+		],
+		"BOX-1": [
+			{"ctrl":"GATE","do":"operate"},
+			{"ctrl":"LK-1","do":"operate"},
+			{"do":"wait","max":4.0,"until":{}},
+			{"do":"deliver","piece":"BOX-1","zone":"equip"}
+		]
+	},
+	"blueprint": {},
+	"training": true,
+	"value": {"metal":3000.0,"total":36000.0},
+	"preloads": {
+		"PIV-1": {"kn":40.0,"kpa":30.0,"piece":"ARM-1","pins":["PIN-1","PIN-2"],"push":[0.8,-0.6],"vessel":"ACC"}
+	},
+	"rails": {
+		"R": {"boxes":["BOX-1"],"doors":["GATE"],"lock":"LK-1","out":[1.5,0.0],"rails":["RL-1"]}
+	},
+	"pieces": [
+		{"barrier":true,"cut_speed":200.0,"density":1.6,"key":"RIG-F","kind":"hull","mass":10.24,"name_key":"p_sp_floor","poly":[[14.6,1.8],[27.4,1.8],[27.4,2.3],[14.6,2.3]],"rig":true,"tag":"RIG-F"},
+		{"art":"swb","art_size":[1.0,1.5],"art_xf":[1.0,0.0,0.0,1.0,15.0,0.300000011920929],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"SWB","kind":"equip","mass":0.3,"name_key":"p_swb","poly":[[15.0,0.3],[16.0,0.3],[16.0,1.8],[15.0,1.8]],"tag":"SWB","value":3000.0},
+		{"art":"battery","art_size":[0.8,0.8],"art_xf":[1.0,0.0,0.0,1.0,16.2000007629395,1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"hazard":"battery","key":"BAT","kind":"equip","mass":0.3,"name_key":"p_battery","poly":[[16.2,1.0],[17.0,1.0],[17.0,1.8],[16.2,1.8]],"tag":"BAT","value":2500.0},
+		{"art":"hpu","art_size":[1.0,1.2],"art_xf":[1.0,0.0,0.0,1.0,17.3999989827474,0.600000023841858],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"AB","kind":"equip","mass":0.4,"name_key":"p_hpu","poly":[[17.4,0.6],[18.4,0.6],[18.4,1.8],[17.4,1.8]],"tag":"AB","value":5000.0},
+		{"art":"arm","art_size":[2.6,1.0],"art_xf":[1.0,0.0,0.0,1.0,18.3999989827474,-0.200000007947286],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"ARM-1","kind":"equip","mass":0.6,"name_key":"p_sp_arm","poly":[[18.4,-0.2],[21.0,-0.2],[21.0,0.8],[18.4,0.8]],"tag":"ARM-1","value":14000.0},
+		{"cut_speed":220.0,"density":1.0,"key":"RP-1","kind":"fixture","mass":0.1,"name_key":"p_sp_post","poly":[[21.8,0.7],[22.0,0.7],[22.0,1.8],[21.8,1.8]],"rig":true,"tag":"RP-1"},
+		{"cut_speed":220.0,"density":1.0,"key":"RP-2","kind":"fixture","mass":0.1,"name_key":"p_sp_post","poly":[[26.0,0.7],[26.2,0.7],[26.2,1.8],[26.0,1.8]],"rig":true,"tag":"RP-2"},
+		{"cut_speed":200.0,"density":1.2,"key":"RL-1","kind":"rail","mass":0.864,"name_key":"k_rail","poly":[[21.6,0.55],[26.4,0.55],[26.4,0.7],[21.6,0.7]],"tag":"RL-1"},
+		{"art":"crate","art_size":[2.0,1.15],"art_xf":[1.0,0.0,0.0,1.0,22.0,-0.600000023841858],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.5,"key":"BOX-1","kind":"equip","mass":0.6,"name_key":"p_crate","poly":[[22.0,-0.6],[24.0,-0.6],[24.0,0.55],[22.0,0.55]],"tag":"BOX-1","value":8000.0},
+		{"cut_speed":220.0,"density":1.0,"key":"GP","kind":"fixture","mass":0.1,"name_key":"p_sp_post","poly":[[26.5,0.6],[26.7,0.6],[26.7,1.8],[26.5,1.8]],"rig":true,"tag":"GP"},
+		{"barrier":true,"cut_speed":200.0,"density":1.2,"door":true,"door_open":false,"key":"GATE","kind":"door","mass":0.36,"name_key":"p_sp_gate","open_dir":[0.0,-1.6],"poly":[[26.5,-0.9],[26.7,-0.9],[26.7,0.6],[26.5,0.6]],"tag":"GATE"},
+		{"art":"panel","art_size":[0.8,0.8],"art_xf":[1.0,0.0,0.0,1.0,24.6000010172526,1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"RPN","kind":"equip","mass":0.06,"name_key":"p_sp_rail_panel","poly":[[24.6,1.0],[25.4,1.0],[25.4,1.8],[24.6,1.8]],"tag":"RPN","value":1200.0}
+	],
+	"joints": [
+		{"a":"RIG-F","at":[16.0,2.25],"b":null,"tag":"CL-01","type":"clamp"},
+		{"a":"RIG-F","at":[26.0,2.25],"b":null,"tag":"CL-02","type":"clamp"},
+		{"a":"SWB","at":[15.12,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"SWB","at":[15.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BAT","at":[16.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BAT","at":[16.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"AB","at":[17.52,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"AB","at":[18.28,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"ARM-1","at":[18.42,0.64],"b":"AB","tag":"PIN-1","type":"lock"},
+		{"a":"ARM-1","at":[18.42,0.78],"b":"AB","tag":"PIN-2","type":"lock"},
+		{"a":"ARM-1","at":[18.42,0.72],"b":"AB","tag":"PIV-1","type":"bolt"},
+		{"a":"RP-1","at":[21.92,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"RP-1","at":[21.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"RP-2","at":[26.12,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"RP-2","at":[26.08,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"RL-1","at":[21.9,0.7],"b":"RP-1","type":"weld"},
+		{"a":"RL-1","at":[26.1,0.7],"b":"RP-2","type":"weld"},
+		{"a":"BOX-1","at":[22.4,0.55],"b":"RL-1","type":"lock"},
+		{"a":"BOX-1","at":[23.6,0.55],"b":"RL-1","type":"lock"},
+		{"a":"GP","at":[26.62,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"GP","at":[26.58,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"GATE","at":[26.6,0.58],"b":"GP","type":"weld"},
+		{"a":"RPN","at":[24.72,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"RPN","at":[25.28,1.8],"b":"RIG-F","type":"bolt"}
+	],
+	"lines": [
+		{"a":"BAT","b":"SWB","id":"pb","kind":"cable","net":"power","pa":[16.6,1.0],"path":[[16.6,1.0],[16.0,1.0]],"pb":[16.0,1.0]}
+	],
+	"ctrls": [
+		{"at":[15.3,0.6],"id":"K-B","kind":"switch","piece":"SWB","state":true,"target":"K-B"},
+		{"at":[15.7,0.6],"id":"E-B","kind":"test","medium":"volt","piece":"SWB","target":"bus"},
+		{"at":[17.6,0.9],"id":"G-ACC","kind":"port","medium":"gas","piece":"AB","target":"ACC"},
+		{"at":[18.0,0.9],"id":"TN-1","kind":"probe","medium":"tension","piece":"AB","target":"PIV-1"},
+		{"at":[26.6,-0.15],"id":"GATE","kind":"door","piece":"GATE","target":"GATE"},
+		{"at":[25.0,1.3],"id":"LK-1","kind":"switch","piece":"RPN","state":true,"target":"LK-1"}
+	],
+	"rooms": []
+}

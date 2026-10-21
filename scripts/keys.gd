@@ -7,13 +7,13 @@ class_name Keys
 const RIGHT_MOUSE := -2
 
 const ORDER := ["up", "down", "left", "right", "dash", "brake", "hold", "overview",
-	"tool1", "tool2", "tool3", "tool4", "tool5", "blueprint", "contract", "repair", "ring", "assist", "hints", "warp", "mouth", "mark", "log", "auto", "plan", "zone", "use", "terminal"]
+	"tool1", "tool2", "tool3", "tool4", "tool5", "blueprint", "contract", "repair", "ring", "assist", "hints", "warp", "mouth", "mark", "log", "auto", "plan", "zone", "use", "terminal", "codex"]
 const DEFAULTS := {
 	"up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT],
 	"dash": [KEY_SHIFT], "brake": [KEY_SPACE], "hold": [KEY_V], "overview": [KEY_Z],
 	"tool1": [KEY_1], "tool2": [KEY_2], "tool3": [KEY_3], "tool4": [KEY_4], "tool5": [KEY_5],
 	"blueprint": [KEY_TAB], "contract": [KEY_C], "repair": [KEY_6], "ring": [KEY_7],
-	"assist": [KEY_F], "hints": [KEY_H], "warp": [KEY_EQUAL], "mouth": [KEY_M], "mark": [RIGHT_MOUSE], "log": [KEY_L], "auto": [KEY_J], "plan": [KEY_P], "zone": [KEY_K], "use": [KEY_E], "terminal": [KEY_B],
+	"assist": [KEY_F], "hints": [KEY_H], "warp": [KEY_EQUAL], "mouth": [KEY_M], "mark": [RIGHT_MOUSE], "log": [KEY_L], "auto": [KEY_J], "plan": [KEY_P], "zone": [KEY_K], "use": [KEY_E], "terminal": [KEY_B], "codex": [KEY_I],
 }
 
 static var map := {}

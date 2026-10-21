@@ -1,0 +1,590 @@
+{
+	"ship": "sp_fluid",
+	"lines": {
+		"SR_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SR_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SR_safe_t": {
+			"who": "term",
+			"zh": "钻杆已泄扭泄压，卡瓦已坐。",
+			"en": "STRING BLED, SLIPS SET."
+		},
+		"SR_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SR_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：钻杆仍有扭矩、压力或卡瓦未坐。",
+			"en": "TRAINING INTERLOCK: TORQUE, MUD OR OPEN SLIPS ON THE STRING."
+		},
+		"SR_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SR_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SX_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SX_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SX_safe_t": {
+			"who": "term",
+			"zh": "推进剂已抽完。",
+			"en": "PROPELLANT DRAWN OFF."
+		},
+		"SX_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SX_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：罐内仍有推进剂。",
+			"en": "TRAINING INTERLOCK: PROPELLANT STILL IN THE TANKS."
+		},
+		"SX_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SX_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SB_in": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		}
+	},
+	"lessons": [
+		{
+			"id": "SP_00",
+			"mode": "lockstep",
+			"title": {
+				"zh": "专项训练",
+				"en": "SPECIAL COURSE"
+			},
+			"done_flag": "SP_00_COMPLETE",
+			"steps": [
+				{
+					"id": "brief",
+					"text": {
+						"zh": "看一眼训练件：按 I 可以随时查图鉴",
+						"en": "LOOK OVER THE RIG: I OPENS THE CODEX ANY TIME"
+					},
+					"tools": [],
+					"done": {
+						"step_t": 4.0
+					},
+					"in": [
+						"SB_in"
+					]
+				}
+			]
+		},
+		{
+			"id": "SP_F1",
+			"mode": "lockstep",
+			"title": {
+				"zh": "钻杆：泄扭、泄压、卡瓦、自上而下",
+				"en": "THE STRING: TORQUE, MUD, SLIPS, TOP DOWN"
+			},
+			"done_flag": "SP_F1_COMPLETE",
+			"guard": {
+				"pieces": [
+					"J-1",
+					"J-2"
+				],
+				"until": {
+					"mod_safe": "drillstring"
+				},
+				"lock": [
+					"SR_lock_t",
+					"SR_lock_l"
+				],
+				"accident": [
+					"drill_whip",
+					"mud_blowout",
+					"drill_drop"
+				],
+				"reset": [
+					"J-1",
+					"J-2",
+					"STP"
+				],
+				"remod": [
+					"drillstring"
+				],
+				"say": "SR_bad",
+				"restore": {
+					"ctrls": [
+						"TQB",
+						"SLIP-1",
+						"SLIP-2"
+					],
+					"hoses": [
+						"PMUD"
+					],
+					"readings": [
+						"TQ",
+						"MUDP"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "tq",
+					"text": {
+						"zh": "测量（1）：读扭矩表 TQ",
+						"en": "MEASURE (1): THE TORQUE GAUGE TQ"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"TQ"
+						]
+					},
+					"in": [
+						"SR_in1",
+						"SR_in2"
+					],
+					"target": {
+						"ctrl": "TQ"
+					}
+				},
+				{
+					"id": "bleed",
+					"text": {
+						"zh": "① 松转盘刹车泄扭：TQB（4）",
+						"en": "① RELEASE THE ROTARY BRAKE: TQB (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"TQB",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "TQB"
+					}
+				},
+				{
+					"id": "torque",
+					"text": {
+						"zh": "等扭矩降到 5% 以下（按住 = 加速）",
+						"en": "WAIT: TORQUE UNDER 5 % (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"done": {
+						"mod": [
+							"drillstring",
+							"torque_pct",
+							"<",
+							5.0
+						]
+					},
+					"warp": true
+				},
+				{
+					"id": "mudp",
+					"text": {
+						"zh": "测量（1）：读泥浆压力 MUDP",
+						"en": "MEASURE (1): MUD PRESSURE MUDP"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"MUDP"
+						]
+					},
+					"target": {
+						"ctrl": "MUDP"
+					}
+				},
+				{
+					"id": "mud",
+					"text": {
+						"zh": "② 软管接立管 PMUD 放泥浆（可回收）（5）",
+						"en": "② HOSE ON THE STANDPIPE PMUD: DRAIN THE MUD (IT SELLS) (5)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"mod": [
+							"drillstring",
+							"mud_level",
+							"<",
+							0.05
+						]
+					},
+					"target": {
+						"ctrl": "PMUD"
+					},
+					"warp": true
+				},
+				{
+					"id": "slips",
+					"text": {
+						"zh": "③ 坐好两副卡瓦 SLIP-1、SLIP-2（4）",
+						"en": "③ SET BOTH SLIPS, SLIP-1 AND SLIP-2 (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"all": [
+							{
+								"switch": [
+									"SLIP-1",
+									true
+								]
+							},
+							{
+								"switch": [
+									"SLIP-2",
+									true
+								]
+							}
+						]
+					},
+					"out": [
+						"SR_safe_t"
+					],
+					"target": {
+						"ctrl": "SLIP-1"
+					}
+				},
+				{
+					"id": "free1",
+					"text": {
+						"zh": "④ 从最上面卸起：拆下立根 J-1（4）",
+						"en": "④ TOP DOWN: BREAK OUT STAND J-1 (4)"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "J-1"
+					},
+					"target": {
+						"piece": "J-1"
+					}
+				},
+				{
+					"id": "deliver1",
+					"text": {
+						"zh": "J-1 送进设备回收口",
+						"en": "J-1 TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"J-1",
+							"any"
+						]
+					},
+					"target": {
+						"zone": "equip"
+					},
+					"exit": [
+						2.2,
+						0.0
+					],
+					"lane": -7.2
+				},
+				{
+					"id": "free2",
+					"text": {
+						"zh": "再拆下 J-2（4）",
+						"en": "THEN J-2 (4)"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "J-2"
+					},
+					"target": {
+						"piece": "J-2"
+					}
+				},
+				{
+					"id": "deliver2",
+					"text": {
+						"zh": "J-2 送进设备回收口",
+						"en": "J-2 TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"J-2",
+							"any"
+						]
+					},
+					"out": [
+						"SR_done"
+					],
+					"target": {
+						"zone": "equip"
+					},
+					"exit": [
+						2.2,
+						0.0
+					],
+					"lane": -7.2
+				}
+			]
+		},
+		{
+			"id": "SP_F2",
+			"mode": "lockstep",
+			"title": {
+				"zh": "交叉连通罐：带压抽，抽完就停",
+				"en": "CROSS-CONNECTED TANKS: DRAW UNDER PRESSURE, STOP WHEN DRY"
+			},
+			"done_flag": "SP_F2_COMPLETE",
+			"guard": {
+				"pieces": [
+					"T-1",
+					"T-2"
+				],
+				"until": {
+					"mod": [
+						"tanknet",
+						"fuel_left",
+						"<",
+						0.015
+					]
+				},
+				"lock": [
+					"SX_lock_t",
+					"SX_lock_l"
+				],
+				"accident": [
+					"tank_buckled",
+					"pump_dry"
+				],
+				"reset": [
+					"T-1",
+					"T-2",
+					"PUMP-M"
+				],
+				"remod": [
+					"tanknet"
+				],
+				"say": "SX_bad",
+				"restore": {
+					"gas": [
+						"TU-1",
+						"TU-2",
+						"NB"
+					],
+					"ctrls": [
+						"XV-1",
+						"XV-2",
+						"PV-1",
+						"PV-2"
+					],
+					"hoses": [
+						"PR",
+						"TV-1",
+						"TV-2"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "ullage",
+					"text": {
+						"zh": "测量（1）：读罐顶气压 TV-1（氮气增压保着它）",
+						"en": "MEASURE (1): ULLAGE PRESSURE TV-1 (THE NITROGEN HOLDS IT UP)"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"TV-1"
+						]
+					},
+					"in": [
+						"SX_in1",
+						"SX_in2"
+					],
+					"target": {
+						"ctrl": "TV-1"
+					}
+				},
+				{
+					"id": "cross",
+					"text": {
+						"zh": "① 打开两只罐的连通阀 XV-1、XV-2（4）",
+						"en": "① OPEN BOTH CROSSOVERS XV-1 AND XV-2 (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"all": [
+							{
+								"switch": [
+									"XV-1",
+									true
+								]
+							},
+							{
+								"switch": [
+									"XV-2",
+									true
+								]
+							}
+						]
+					},
+					"target": {
+						"ctrl": "XV-1"
+					}
+				},
+				{
+					"id": "draw",
+					"text": {
+						"zh": "② 增压保持打开，软管接主泵 PR 抽总管（5，按住 = 加速）",
+						"en": "② PRESSURISATION STAYS ON. HOSE ON PR, DRAW IT OFF (5)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"mod": [
+							"tanknet",
+							"fuel_left",
+							"<",
+							0.015
+						]
+					},
+					"target": {
+						"ctrl": "PR"
+					},
+					"warp": true
+				},
+				{
+					"id": "stop",
+					"text": {
+						"zh": "③ 抽完立刻摘下软管（再点一次 PR），别让泵干转",
+						"en": "③ DRY NOW: HOSE OFF PR AT ONCE, OR THE PUMP RUNS DRY"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"no_hose": "PR"
+					},
+					"out": [
+						"SX_safe_t"
+					],
+					"target": {
+						"ctrl": "PR"
+					}
+				},
+				{
+					"id": "free",
+					"text": {
+						"zh": "拆下罐 T-1（4）",
+						"en": "WRENCH (4): FREE TANK T-1"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "T-1"
+					},
+					"target": {
+						"piece": "T-1"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "空罐送进回收口",
+						"en": "THE EMPTY TANK TO A MOUTH"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"T-1",
+							"any"
+						]
+					},
+					"out": [
+						"SX_done"
+					],
+					"target": {
+						"piece": "T-1"
+					},
+					"lane": -7.2
+				}
+			]
+		}
+	],
+	"rings": [],
+	"long_ring": [],
+	"stop_box": []
+}

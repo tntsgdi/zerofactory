@@ -29,6 +29,9 @@ var rings_done := 0
 var dash_done := false
 var box_t := 0.0
 var assist_seen_off := false
+var panned := false           # the camera dragged away from the drone (right mouse)
+var overview_seen := false    # Z held: the whole section in view
+var hold_seen := false        # V held: hover lock
 var guard_used := {}          # lesson id -> the interlock already stopped one move
 var recovered := {}           # tag -> zone it went into
 var step_end_time := {}       # step id -> sim time it was completed
@@ -79,6 +82,18 @@ func step() -> Dictionary:
 	return l.steps[step_i]
 
 
+# the context tool (the tool follows what the pointer is on) is on in the course
+# from the lesson that teaches it, for the tools the step allows
+func context_ok(n: int) -> bool:
+	if done:
+		return true
+	for i in mini(lesson_i + 1, lessons().size()):
+		for st in lessons()[i].get("steps", []):
+			if st.get("context", false):
+				return tool_allowed(n)
+	return false
+
+
 func lockstep() -> bool:
 	return lesson().get("mode", "goal") == "lockstep"
 
@@ -105,8 +120,13 @@ func text(d) -> String:
 # ---------------------------------------------------------------- radio
 
 func say(id: String, once: bool = true) -> void:
-	if id != "":
-		game.radio.say(id, once)
+	if id == "":
+		return
+	# a line still to be written (the user's) is not played: the task list carries the step
+	var ln: Dictionary = game.radio.lines.get(id, {})
+	if str(ln.get("zh", "")).find("【待写】") >= 0:
+		return
+	game.radio.say(id, once)
 
 
 func lines_idle() -> bool:
@@ -165,6 +185,12 @@ func _watch_flight(dt: float) -> void:
 		box_t = 0.0
 	if not d.assist:
 		assist_seen_off = true
+	if game.cam_pan.length() > 2.5 * Geom.M:
+		panned = true
+	if game.overview:
+		overview_seen = true
+	if d.input.get("hold", false):
+		hold_seen = true
 
 
 # ---------------------------------------------------------------- predicates
@@ -219,6 +245,23 @@ func _check(pred: Dictionary) -> bool:
 				ok = box_t >= 1.0
 			"assist_cycle":
 				ok = assist_seen_off and game.drone.assist
+			"panned":
+				ok = panned
+			"overview":
+				ok = overview_seen
+			"hold":
+				ok = hold_seen
+			"liquid_seen":
+				ok = game.liquids != null and not game.liquids.blobs.is_empty()
+			"step_t":
+				ok = step_t >= float(a)
+			# a ship mechanism's state (the special courses): [module, method or field, op, value]
+			"mod":
+				ok = _cmp(float(_mod_value(a[0], a[1])), a[2], float(a[3]))
+			# a ship mechanism with nothing left to make safe
+			"mod_safe":
+				var m = game.get(str(a))
+				ok = m != null and m.has_method("unsafe") and m.unsafe().is_empty()
 			"inspected":
 				var p = _piece(a)
 				ok = p != null and s.readings.has("P:%d" % p.id)
@@ -236,6 +279,18 @@ func _check(pred: Dictionary) -> bool:
 				ok = s.on(a[0]) == bool(a[1])
 			"hose":
 				ok = s.hoses.has(a)
+			"no_hose":
+				ok = not s.hoses.has(a)
+			# a door or hatch open (its control's state; doors aren't switches)
+			"door":
+				var dc = game.world.ctrls.get(str(a[0]))
+				ok = dc != null and bool(dc.state) == bool(a[1])
+			# a tagged fixing (a locking pin, a pivot) no longer there
+			"joint_gone":
+				ok = true
+				for j in game.world.joints:
+					if j.alive and j.get_meta("tag", "") == str(a):
+						ok = false
 			"P":
 				ok = _cmp(s.P(a[0]), a[1], float(a[2]))
 			"charge":
@@ -265,6 +320,16 @@ func _check(pred: Dictionary) -> bool:
 		if not ok:
 			return false
 	return true
+
+
+func _mod_value(mod_name: String, what: String):
+	var m = game.get(mod_name)
+	if m == null:
+		return 0.0
+	if m.has_method(what):
+		return m.call(what)
+	var v = m.get(what)
+	return v if v != null else 0.0
 
 
 # ---------------------------------------------------------------- steps
@@ -321,10 +386,26 @@ func choice_open() -> bool:
 	return step().has("choice") and choice_pick == "" and lines_idle()
 
 
+var bonus := 0.0              # a special course passed for the first time: what it paid
+
+
+# the special course this is (scripts/codex.gd), "" for the base course
+func special() -> String:
+	return Codex.class_of_course(game.ship_id)
+
+
 func _finish() -> void:
 	done = true
 	celebrate_t = 0.0
 	_retract_rig()
+	if special() != "":
+		# the family's certificate; the first time, its bonus into the funds
+		bonus = Codex.certify(special(), "full")
+		if bonus > 0.0 and not Career.data.is_empty() and Career.usable():
+			Career.data.money = float(Career.data.money) + bonus
+			Career.save()
+		finished.emit()
+		return
 	say(course.get("exam_offer", ""))
 	finished.emit()
 	Txt.certified = true
@@ -394,6 +475,12 @@ func target_pos() -> Vector2:
 			return w.ctrl_world(c)
 	if tg.has("zone"):
 		return Dock.zpos(tg.zone)
+	if tg.has("line"):
+		var l = w.lines.get(tg.line)
+		if l != null:
+			var pts: PackedVector2Array = w.line_path_world(l)
+			if not pts.is_empty():
+				return pts[pts.size() / 2]
 	if tg.has("ring"):
 		var i := mini(int(tg.ring), rings.size())
 		if rings_done < rings.size():
@@ -447,6 +534,37 @@ func _reset_lesson(li: int) -> void:
 		return
 	var g: Dictionary = lessons()[li].get("guard", {})
 	reset_props(g.get("reset", []), g.get("restore", {}))
+	# a ship mechanism the mistake set off starts over (its own state, from the ship file)
+	for mod_name in g.get("remod", []):
+		var m = game.get(str(mod_name))
+		if m != null and m.has_method("setup"):
+			for k in ["quenched", "loose", "burnt", "_pending", "_dry", "rails_gone", "_said", "smoke", "dropped", "_done", "vented", "burst", "_venting", "buckled", "_last", "_c0", "released", "locked", "dropped", "chipped", "_warned"]:
+				var v = m.get(k)
+				if v is Dictionary:
+					v.clear()
+			for k in ["loads", "pending", "_push"]:
+				var va = m.get(k)
+				if va is Array:
+					va.clear()
+			for k in ["cover", "dusted"]:
+				var vf = m.get(k)
+				if vf is float:
+					m.set(k, 0.0)
+				elif vf is int:
+					m.set(k, 0)
+			for k in ["cracked", "boiled", "whipped", "blown", "ran_dry"]:
+				var v2 = m.get(k)
+				if v2 is bool:
+					m.set(k, false)
+				elif v2 is String:
+					m.set(k, "")
+			# (a small ship carried out whole starts whole again)
+			if m.get("whole") is bool:
+				m.set("whole", true)
+			for k in ["lurched", "out"]:
+				if m.get(k) is bool:
+					m.set(k, false)
+			m.setup(game, game.ship)
 
 
 # Rebuild these pieces (and anything cut from them) from the ship file, as they
@@ -484,7 +602,10 @@ func reset_props(keys: Array, restore: Dictionary = {}) -> void:
 		var b = find.call(jd.b) if jd.b != null else null
 		if a == null or (jd.b != null and b == null) or a.body != null or (b != null and b.body != null):
 			continue
-		w.add_joint(a, b, jd.type, Vector2(jd.at[0], jd.at[1]) * Geom.M)
+		var nj = w.add_joint(a, b, jd.type, Vector2(jd.at[0], jd.at[1]) * Geom.M)
+		# a tagged fixing (a locking pin, a pivot) keeps its tag: the mechanisms find it by it
+		if nj != null and str(jd.get("tag", "")) != "":
+			nj.set_meta("tag", str(jd.tag))
 	for ld in d.get("lines", []):
 		if not (ld.a in made or ld.b in made):
 			continue
@@ -518,6 +639,10 @@ func reset_props(keys: Array, restore: Dictionary = {}) -> void:
 			var kpa := float(gas.get("rooms", {}).get(v, gas.get("vessels", {}).get(v, {}).get("kpa", 0.0)))
 			s.vols[v].n = kpa * s.vols[v].V
 			s.vol_ver[v] = s.vol_ver.get(v, 0) + 1
+			# an oxygen-rich room gets its oxygen back too (scripts/atmos.gd)
+			var o2f = d.get("atmos", {}).get("o2", {}).get(v)
+			if o2f != null:
+				s.o2[v] = float(o2f) * s.vols[v].n
 	for cid in restore.get("ctrls", []):
 		var c = w.ctrls.get(cid)
 		for cd in d.get("ctrls", []):
@@ -584,7 +709,8 @@ func _react() -> void:
 
 func save_state() -> Dictionary:
 	return {"lesson": lesson_i, "step": step_i, "flags": flags, "guard": guard_used, "recovered": recovered, "said": game.radio.said,
-		"rings": rings_done, "dash": dash_done, "assist": assist_seen_off, "done": done, "ends": step_end_time}
+		"rings": rings_done, "dash": dash_done, "assist": assist_seen_off, "done": done, "ends": step_end_time,
+		"look": [panned, overview_seen, hold_seen]}
 
 
 func load_state(d: Dictionary) -> void:
@@ -597,6 +723,10 @@ func load_state(d: Dictionary) -> void:
 	rings_done = int(d.get("rings", 0))
 	dash_done = d.get("dash", false)
 	assist_seen_off = d.get("assist", false)
+	var lk: Array = d.get("look", [false, false, false])
+	panned = bool(lk[0])
+	overview_seen = bool(lk[1])
+	hold_seen = bool(lk[2])
 	done = d.get("done", false)
 	step_end_time = d.get("ends", {})
 	incidents_seen = game.incidents.size()

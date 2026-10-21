@@ -1,0 +1,435 @@
+{
+	"ship": "sp_energy",
+	"lines": {
+		"SE_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SE_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SE_safe_t": {
+			"who": "term",
+			"zh": "储能已降到安全值。",
+			"en": "STORED FIELD BELOW SAFE."
+		},
+		"SE_coil_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SE_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：线圈仍储有磁能。",
+			"en": "TRAINING INTERLOCK: THE COIL STILL HOLDS ITS FIELD."
+		},
+		"SE_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SE_quench": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SF_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SF_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SF_safe_t": {
+			"who": "term",
+			"zh": "飞轮转速已降到安全值。",
+			"en": "FLYWHEEL BELOW SAFE SPEED."
+		},
+		"SF_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SF_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：飞轮仍在高速旋转。",
+			"en": "TRAINING INTERLOCK: THE FLYWHEEL IS STILL SPINNING."
+		},
+		"SF_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SF_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SB_in": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		}
+	},
+	"lessons": [
+		{
+			"id": "SP_00",
+			"mode": "lockstep",
+			"title": {
+				"zh": "专项训练",
+				"en": "SPECIAL COURSE"
+			},
+			"done_flag": "SP_00_COMPLETE",
+			"steps": [
+				{
+					"id": "brief",
+					"text": {
+						"zh": "看一眼训练件：按 I 可以随时查图鉴",
+						"en": "LOOK OVER THE RIG: I OPENS THE CODEX ANY TIME"
+					},
+					"tools": [],
+					"done": {
+						"step_t": 4.0
+					},
+					"in": [
+						"SB_in"
+					]
+				}
+			]
+		},
+		{
+			"id": "SP_E1",
+			"mode": "lockstep",
+			"title": {
+				"zh": "超导线圈：先泄能，后断冷",
+				"en": "THE COIL: DUMP FIRST, WARM LATER"
+			},
+			"done_flag": "SP_E1_COMPLETE",
+			"guard": {
+				"pieces": [
+					"TC-1",
+					"TC-S"
+				],
+				"until": {
+					"mod_safe": "magnets"
+				},
+				"lock": [
+					"SE_lock_t",
+					"SE_lock_l"
+				],
+				"accident": [
+					"magnet_quench"
+				],
+				"reset": [
+					"TC-1",
+					"TC-S"
+				],
+				"remod": [
+					"magnets"
+				],
+				"say": "SE_quench",
+				"restore": {
+					"ctrls": [
+						"DUMP"
+					],
+					"readings": [
+						"FIELD",
+						"COILT"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "field",
+					"text": {
+						"zh": "测量（1）：读失超保护台的储能 FIELD",
+						"en": "MEASURE (1): READ THE STORED FIELD AT FIELD"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"FIELD"
+						]
+					},
+					"in": [
+						"SE_in1",
+						"SE_in2"
+					],
+					"target": {
+						"ctrl": "FIELD"
+					}
+				},
+				{
+					"id": "dump",
+					"text": {
+						"zh": "合上泄能开关 DUMP（4）；冷箱保持供电",
+						"en": "WRENCH (4): CLOSE THE DUMP SWITCH; KEEP THE COLD BOX POWERED"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"DUMP",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "DUMP"
+					}
+				},
+				{
+					"id": "wait",
+					"text": {
+						"zh": "等储能降到 5% 以下（按住 = 加速）",
+						"en": "WAIT: STORED FIELD UNDER 5 % (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"done": {
+						"mod": [
+							"magnets",
+							"field",
+							"<",
+							5.0
+						]
+					},
+					"out": [
+						"SE_safe_t"
+					],
+					"warp": true
+				},
+				{
+					"id": "free",
+					"text": {
+						"zh": "拆下线圈 TC-1 的螺栓（4）",
+						"en": "WRENCH (4): UNBOLT COIL TC-1"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "TC-1"
+					},
+					"target": {
+						"piece": "TC-1"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "线圈完整送进设备回收口",
+						"en": "THE COIL, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"TC-1",
+							"any"
+						]
+					},
+					"out": [
+						"SE_coil_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		},
+		{
+			"id": "SP_E2",
+			"mode": "lockstep",
+			"title": {
+				"zh": "飞轮：先冷却，后刹车",
+				"en": "THE FLYWHEEL: COOLING, THEN BRAKE"
+			},
+			"done_flag": "SP_E2_COMPLETE",
+			"guard": {
+				"pieces": [
+					"FW-1"
+				],
+				"until": {
+					"mod_safe": "flywheel"
+				},
+				"lock": [
+					"SF_lock_t",
+					"SF_lock_l"
+				],
+				"accident": [
+					"wheel_loose",
+					"brake_burn"
+				],
+				"reset": [
+					"FW-1",
+					"BRK-1"
+				],
+				"remod": [
+					"flywheel"
+				],
+				"say": "SF_bad",
+				"restore": {
+					"ctrls": [
+						"BR-1",
+						"CV-1"
+					],
+					"readings": [
+						"RPM-1"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "rpm",
+					"text": {
+						"zh": "测量（1）：读转速表 RPM-1",
+						"en": "MEASURE (1): READ THE TACHOMETER RPM-1"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"RPM-1"
+						]
+					},
+					"in": [
+						"SF_in1",
+						"SF_in2"
+					],
+					"target": {
+						"ctrl": "RPM-1"
+					}
+				},
+				{
+					"id": "cool",
+					"text": {
+						"zh": "先打开刹车冷却 CV-1（4）",
+						"en": "WRENCH (4): BRAKE COOLING CV-1 ON FIRST"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"CV-1",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "CV-1"
+					}
+				},
+				{
+					"id": "brake",
+					"text": {
+						"zh": "再上刹车 BR-1（4）",
+						"en": "WRENCH (4): THEN THE BRAKE BR-1"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"BR-1",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "BR-1"
+					}
+				},
+				{
+					"id": "wait",
+					"text": {
+						"zh": "等转速降到 300 rpm 以下（按住 = 加速）",
+						"en": "WAIT: UNDER 300 rpm (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"done": {
+						"mod": [
+							"flywheel",
+							"max_rpm",
+							"<",
+							300.0
+						]
+					},
+					"out": [
+						"SF_safe_t"
+					],
+					"warp": true
+				},
+				{
+					"id": "free",
+					"text": {
+						"zh": "拆下飞轮 FW-1 的螺栓（4）",
+						"en": "WRENCH (4): UNBOLT FLYWHEEL FW-1"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "FW-1"
+					},
+					"target": {
+						"piece": "FW-1"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "飞轮完整送进设备回收口",
+						"en": "THE FLYWHEEL, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"FW-1",
+							"any"
+						]
+					},
+					"out": [
+						"SF_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		}
+	],
+	"rings": [],
+	"long_ring": [],
+	"stop_box": []
+}

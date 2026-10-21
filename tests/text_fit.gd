@@ -47,6 +47,10 @@ func _all_strings() -> Array:
 		if v is Array:
 			for s in v:
 				out.append(str(s))
+	# the codex and the special courses (scripts/codex_txt.gd)
+	for k in CodexTxt.S:
+		for s in CodexTxt.S[k]:
+			out.append(str(s))
 	for f in DirAccess.get_files_at("res://ships"):
 		if f.ends_with(".json"):
 			_collect(JSON.parse_string(FileAccess.get_file_as_string("res://ships/" + f)), out)
@@ -95,6 +99,8 @@ func _w(s: String, size: int, weight: String = "Regular") -> float:
 
 func _both(key: String) -> Array:
 	var v = Txt.S.get(key)
+	if v == null:
+		v = CodexTxt.S.get(key)
 	return v if v is Array else []
 
 
@@ -133,7 +139,51 @@ func _prefixed(prefix: String) -> Array:
 	return out
 
 
+# the codex's cards and book, the special courses (2026-10-20)
+func _fit_codex() -> void:
+	_fit("menu (codex)", _keys(["m_codex"]), 20, 420)
+	_fit("settings label (codex)", _keys(["s_codex_cards"]), 18, 360)
+	_fit("key name (codex)", _keys(["key_codex"]), 16, 300)
+	var cats: Array = []
+	for c in Codex.CATS:
+		cats.append_array(_keys(["cxu_cat_" + c]))
+	_fit("codex tab", cats, 18, 150, "Medium")
+	_fit("codex head", _keys(["cxu_book_sub", "cxu_ship_only", "cxu_unmet_d", "cxu_keys", "cxu_ships"]), 15, 1200)
+	_fit("codex card foot", _keys(["cxu_more", "cxu_first"]), 12, 400)
+	var rows: Array = _keys(["cxu_row_base", "cxu_book"])
+	for c in Codex.CLASSES:
+		rows.append_array(_keys(["cxu_cls_" + c]))
+	_fit("training page row", rows, 18, 640, "Medium")
+	_fit("training page info", _keys(["cxu_row_base_d", "cxu_row_codex_d"]), 13, 900)
+	_fit("training page state", _keys(["cxu_cert_full", "cxu_cert_auto", "cxu_cert_none"]), 15, 260, "Medium")
+	_fit("terminal button (codex)", _keys(["cxu_sp_go", "cxu_open_book", "cxu_take_train"]), 20, 500, "Medium")
+	_fit("terminal note (codex)", _keys(["cxu_needs", "cxu_sp_bonus"]), 13, 560)
+	_fit("contract card brief", _keys(["cxu_brief", "cxu_brief_more"]), 16, 470)
+	_fit("special course head", _keys(["cxu_sp_course"]), 13, 400)
+	_fit("special course stamp sub", _keys(["cxu_sp_cert"]), 15, 210)
+	_fit("special course paid", _keys(["cxu_sp_paid"]), 18, 900, "Medium")
+	_fit("special course button", _keys(["cxu_sp_next", "cxu_sp_to_contract", "cxu_sp_back"]), 17, 380, "Medium")
+	var stamp: Array = []
+	for c in Codex.CLASSES:
+		stamp.append_array(_keys(["cxu_stamp_" + c]))
+	_fit("special course stamp", stamp, 30, 200, "Medium")
+	# every task line of the base course and the seven special courses
+	var steps: Array = []
+	for f in DirAccess.get_files_at("res://ships"):
+		if not f.ends_with("_course.json"):
+			continue
+		var cj: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://ships/" + f))
+		for l in cj.get("lessons", []):
+			steps.append(l.title.zh)
+			steps.append(l.title.en)
+			for st in l.get("steps", []):
+				steps.append(st.text.zh)
+				steps.append(st.text.en)
+	_fit("course task line", steps, 17, 560)
+
+
 func _fit_all() -> void:
+	_fit_codex()
 	# pause menu items, 440 px buttons at 20 px
 	var tiers: Array = []
 	for tr in Txt.TIERS:

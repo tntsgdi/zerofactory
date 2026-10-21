@@ -1,0 +1,383 @@
+{
+	"ship": "sp_load",
+	"lines": {
+		"SL_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SL_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SL_safe_t": {
+			"who": "term",
+			"zh": "预紧已解除。",
+			"en": "PRELOAD RELEASED."
+		},
+		"SL_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SL_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：蓄能器仍有压力。",
+			"en": "TRAINING INTERLOCK: THE ACCUMULATOR IS STILL CHARGED."
+		},
+		"SL_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SL_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SG_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SG_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SG_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SG_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：轨道上仍锁着货物。",
+			"en": "TRAINING INTERLOCK: CARGO STILL LOCKED ON THE RAIL."
+		},
+		"SG_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SG_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SB_in": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		}
+	},
+	"lessons": [
+		{
+			"id": "SP_00",
+			"mode": "lockstep",
+			"title": {
+				"zh": "专项训练",
+				"en": "SPECIAL COURSE"
+			},
+			"done_flag": "SP_00_COMPLETE",
+			"steps": [
+				{
+					"id": "brief",
+					"text": {
+						"zh": "看一眼训练件：按 I 可以随时查图鉴",
+						"en": "LOOK OVER THE RIG: I OPENS THE CODEX ANY TIME"
+					},
+					"tools": [],
+					"done": {
+						"step_t": 4.0
+					},
+					"in": [
+						"SB_in"
+					]
+				}
+			]
+		},
+		{
+			"id": "SP_L1",
+			"mode": "lockstep",
+			"title": {
+				"zh": "预紧的折叠臂：能量、锁、结构",
+				"en": "A PRELOADED ARM: ENERGY, LOCKS, STRUCTURE"
+			},
+			"done_flag": "SP_L1_COMPLETE",
+			"guard": {
+				"pieces": [
+					"ARM-1"
+				],
+				"until": {
+					"P": [
+						"ACC",
+						"<",
+						30.0
+					]
+				},
+				"lock": [
+					"SL_lock_t",
+					"SL_lock_l"
+				],
+				"accident": [
+					"preload"
+				],
+				"reset": [
+					"ARM-1"
+				],
+				"remod": [
+					"mech"
+				],
+				"say": "SL_bad",
+				"restore": {
+					"gas": [
+						"ACC"
+					],
+					"hoses": [
+						"G-ACC"
+					],
+					"readings": [
+						"TN-1",
+						"G-ACC"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "tension",
+					"text": {
+						"zh": "测量（1）：读枢轴张力 TN-1",
+						"en": "MEASURE (1): PIVOT TENSION TN-1"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"TN-1"
+						]
+					},
+					"in": [
+						"SL_in1",
+						"SL_in2"
+					],
+					"target": {
+						"ctrl": "TN-1"
+					}
+				},
+				{
+					"id": "bleed",
+					"text": {
+						"zh": "① 能量：软管接 G-ACC，蓄能器泄到 30 kPa 以下（5）",
+						"en": "① ENERGY: HOSE ON G-ACC, THE ACCUMULATOR BELOW 30 kPa (5)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"P": [
+							"ACC",
+							"<",
+							30.0
+						]
+					},
+					"target": {
+						"ctrl": "G-ACC"
+					},
+					"warp": true
+				},
+				{
+					"id": "pins",
+					"text": {
+						"zh": "② 锁：拔掉两根锁销 PIN-1、PIN-2（4）",
+						"en": "② LOCKS: PULL BOTH PINS, PIN-1 AND PIN-2 (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"all": [
+							{
+								"joint_gone": "PIN-1"
+							},
+							{
+								"joint_gone": "PIN-2"
+							}
+						]
+					},
+					"out": [
+						"SL_safe_t"
+					],
+					"target": {
+						"piece": "ARM-1"
+					}
+				},
+				{
+					"id": "pivot",
+					"text": {
+						"zh": "③ 结构：最后拆枢轴 PIV-1（4）",
+						"en": "③ STRUCTURE: THE PIVOT PIV-1 LAST (4)"
+					},
+					"tools": [
+						1,
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"joint_gone": "PIV-1"
+					},
+					"target": {
+						"piece": "ARM-1"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "折叠臂完整送进设备回收口",
+						"en": "THE ARM, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"ARM-1",
+							"any"
+						]
+					},
+					"out": [
+						"SL_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		},
+		{
+			"id": "SP_L2",
+			"mode": "lockstep",
+			"title": {
+				"zh": "锁轨货物：开门、解锁、让它滑出来",
+				"en": "RAIL-LOCKED CARGO: GATE, LOCK, LET IT RUN OUT"
+			},
+			"done_flag": "SP_L2_COMPLETE",
+			"guard": {
+				"pieces": [
+					"RL-1",
+					"RP-1",
+					"RP-2"
+				],
+				"until": {
+					"switch": [
+						"LK-1",
+						false
+					]
+				},
+				"lock": [
+					"SG_lock_t",
+					"SG_lock_l"
+				],
+				"accident": [
+					"rail_cut"
+				],
+				"reset": [
+					"RL-1",
+					"BOX-1"
+				],
+				"remod": [
+					"rails"
+				],
+				"say": "SG_bad",
+				"restore": {
+					"ctrls": [
+						"LK-1"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "gate",
+					"text": {
+						"zh": "① 先打开轨道尽头的挡门 GATE（4，要有电）",
+						"en": "① OPEN THE GATE AT THE RAIL'S END FIRST: GATE (4, NEEDS POWER)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"door": [
+							"GATE",
+							true
+						]
+					},
+					"in": [
+						"SG_in1",
+						"SG_in2"
+					],
+					"target": {
+						"ctrl": "GATE"
+					}
+				},
+				{
+					"id": "release",
+					"text": {
+						"zh": "② 松开轨道锁 LK-1（4）：货箱沿轨道自己滑出",
+						"en": "② RELEASE THE RAIL LOCK LK-1 (4): THE CRATE RUNS OUT BY ITSELF"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"LK-1",
+							false
+						]
+					},
+					"target": {
+						"ctrl": "LK-1"
+					}
+				},
+				{
+					"id": "catch",
+					"text": {
+						"zh": "接住货箱，完整送进设备回收口",
+						"en": "CATCH THE CRATE, DELIVER IT WHOLE TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"BOX-1",
+							"any"
+						]
+					},
+					"out": [
+						"SG_done"
+					],
+					"target": {
+						"piece": "BOX-1"
+					}
+				}
+			]
+		}
+	],
+	"rings": [],
+	"long_ring": [],
+	"stop_box": []
+}

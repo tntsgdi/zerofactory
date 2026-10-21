@@ -62,6 +62,15 @@ func load_state(d: Dictionary) -> void:
 		rails_gone[str(t)] = true
 
 
+# the fastest wheel still turning (the special course's tachometer test)
+func max_rpm() -> float:
+	var m := 0.0
+	for w in rpm:
+		if not loose.has(w):
+			m = maxf(m, float(rpm[w]))
+	return m
+
+
 func spinning(w: String) -> bool:
 	return float(rpm.get(w, 0.0)) > float(cfg.get("safe", 300.0))
 

@@ -164,6 +164,11 @@ static func load_or_new() -> Dictionary:
 		_normalize()
 		_open_market_early()
 		sync_story()
+		# a save from before the special courses: the families of ship it has already
+		# worked through come certified, without the bonus (scripts/codex.gd)
+		if not data.get("certs_checked", false):
+			Codex.grant_veteran()
+			data["certs_checked"] = true
 	return data
 
 

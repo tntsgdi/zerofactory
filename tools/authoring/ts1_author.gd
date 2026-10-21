@@ -13,6 +13,9 @@ class_name TS1Author
 #               still holds residue, drain DR-T), a cable       lesson 5
 #   23.3–27.0   frame: armour ARM-T, struts, a 4.8 t beam of two
 #               welded modules, residue tank RT-T               lesson 6
+#   (2026-10-20) the furnace lesson's three practice pieces: scrap SC-T1 under
+#   P-001, sensor EQ-T1 and a chemical bottle HZ-T1 above it, all on the left wall; the liquids lesson's
+#   coolant tank LQ-T on a bracket over the pump bay, drain DR-L, pipe LQ-1
 #
 # The shell (walls, plates, manifold) is the training rig: it stays clamped
 # and retracts when the course is over ("rig" in the ship file).
@@ -117,6 +120,25 @@ static func build(world) -> void:
 	var pump = _equip("CP-T", "pump", [21.4, 1.0, 22.4, 1.8], {"mass": 0.45, "value": 2450.0, "fragile": 0.4, "name_key": "p_ts_pump"})
 	for x in [21.55, 21.9, 22.25]:
 		_j(pump, b2, "bolt", x, 1.8)
+	# ---- the furnace lesson: one practice piece for each mouth (scrap, equipment, hazard)
+	var scr = _equip("SC-T1", "", [14.75, 0.85, 15.0, 1.75], {"cls": "metal", "dest": "metal", "mass": 0.12, "density": 0.6, "cut_speed": 260.0, "name_key": "p_ts_scrap"})
+	_j(scr, lw, "bolt", 14.9, 0.95)
+	_j(scr, lw, "bolt", 14.9, 1.65)
+	var sen = _equip("EQ-T1", "sensor", [14.68, -1.78, 15.0, -1.3], {"mass": 0.06, "value": 400.0, "fragile": 0.4, "name_key": "p_ts_sensor"})
+	_j(sen, lw, "bolt", 14.9, -1.7)
+	_j(sen, lw, "bolt", 14.9, -1.38)
+	var cell = _equip("HZ-T1", "gastank", [14.68, -1.22, 15.0, -0.78], {"mass": 0.08, "value": 300.0, "fragile": 0.4, "hazard": "chem", "dest": "hazard", "name_key": "p_ts_cell"})
+	_j(cell, lw, "bolt", 14.9, -1.12)
+	_j(cell, lw, "bolt", 14.9, -0.86)
+	# ---- the liquids lesson: a small coolant tank on a bracket over the pump bay, its
+	# drain port, and a short full pipe of its own to cut on purpose
+	var brk = _equip("LQ-B", "module", [22.4, -1.55, 23.0, -1.15], {"cls": "metal", "dest": "metal", "mass": 0.05, "cut_speed": 240.0, "name_key": "p_ts_bracket"})
+	brk.set_meta("rig", true)
+	_j(brk, rw, "weld", 22.98, -1.45)
+	_j(brk, rw, "weld", 22.98, -1.25)
+	var lqt = _equip("LQ-T", "water", [21.5, -1.75, 22.4, -0.95], {"mass": 0.12, "value": 600.0, "fragile": 0.35, "name_key": "p_ts_lqtank"})
+	_j(lqt, brk, "bolt", 22.36, -1.5)
+	_j(lqt, brk, "bolt", 22.36, -1.2)
 	# ---- lesson 6: the frame
 	var arm = _piece("beam", [23.3, -2.2, 27.0, -1.8], {"density": 0.81, "cut_speed": 170.0, "tag": "ARM-T", "name_key": "p_ts_armor", "mass": 1.2})
 	_j(arm, rw, "weld", 23.32, -2.1)
@@ -143,6 +165,8 @@ static func build(world) -> void:
 	_line("c-p", "cable", "power", "BUS-T", Vector2(19.48, -0.6), "CP-T", Vector2(21.45, 1.05), [Vector2(21.0, -0.6), Vector2(21.0, 0.7), Vector2(21.45, 0.7)])
 	_line("r1", "pipe", "none", "CP-T", Vector2(21.7, 1.0), "MAN-T", Vector2(22.55, 0.4), [Vector2(21.7, 0.4)])
 	_line("r2", "pipe", "res", "CP-T", Vector2(22.35, 1.2), "MAN-T", Vector2(22.55, 0.85), [Vector2(22.45, 1.2), Vector2(22.45, 0.85)])
+	# (over the tank, well away from the pump bay: what it spills fouls nothing the course needs)
+	_line("LQ-1", "pipe", "lq1", "LQ-B", Vector2(22.55, -1.55), "TS-RW", Vector2(23.15, -2.1), [Vector2(22.55, -1.95), Vector2(23.15, -1.95)])
 	# ---- controls
 	w.add_ctrl("PT-02", "port", t1, p(15.55, -2.25), {"medium": "gas", "target": "SC-T"})
 	w.add_ctrl("V-02", "valve", t1, p(15.85, -2.25), {"target": "V-02"})
@@ -151,6 +175,7 @@ static func build(world) -> void:
 	w.add_ctrl("E-T01", "test", bus, p(19.33, -1.15), {"medium": "volt", "target": "bus"})
 	w.add_ctrl("E-T02", "discharge", bus, p(19.05, -0.72), {"target": "cap"})
 	w.add_ctrl("DR-T", "port", man, p(22.75, 0.62), {"medium": "coolant", "target": "res"})
+	w.add_ctrl("DR-L", "port", lqt, p(21.56, -1.35), {"medium": "coolant", "target": "lq"})
 	# ---- the one sealed room
 	w.add_room("TC", R(15.4, -1.8, 18.6, 1.8))
 
@@ -161,7 +186,7 @@ static func meta() -> Dictionary:
 		"name": "TS-1 TRAINING SECTION",
 		"title": ["TS-1 训练舱段 · 12 m", "TS-1 TRAINING SECTION · 12 m"],
 		"length": 12.0,
-		"value": {"total": 10200.0, "metal": 4000.0},
+		"value": {"total": 11500.0, "metal": 4000.0},
 		"clamps": [[15.7, 2.2], [18.2, 2.2]],
 		"room_names": {"TC": "room_TC"},
 		"gas": {
@@ -183,6 +208,8 @@ static func meta() -> Dictionary:
 			"volumes": {
 				"res": {"fluid": "coolant", "amount": 0.03, "full": 0.03, "nets": ["res"], "leak": 0.2, "port": "DR-T", "pump": [0.6, 0.01]},
 				"rt": {"fluid": "fuel", "amount": 0.06, "piece": "RT-T", "content": 2.0, "leak": 0.1, "hazard": 0.01},
+				"lq": {"fluid": "coolant", "amount": 0.04, "full": 0.04, "piece": "LQ-T", "leak": 0.25, "port": "DR-L", "pump": [0.6, 0.01]},
+				"lq1": {"fluid": "coolant", "amount": 0.05, "full": 0.05, "nets": ["lq1"], "leak": 0.6},
 			},
 			"value": {"coolant": 50.0, "fuel": 0.0},
 		},
@@ -217,6 +244,20 @@ static func meta() -> Dictionary:
 				{"do": "wait", "until": {"fluid": ["res", "<", 0.01]}, "max": 60.0},
 				{"do": "free", "piece": "CP-T"},
 				{"do": "deliver", "piece": "CP-T", "zone": "equip"},
+			],
+			"LQ-T": [
+				{"do": "hose", "ctrl": "DR-L"},
+				{"do": "wait", "until": {"fluid": ["lq", "<", 0.002]}, "max": 60.0},
+				{"do": "free", "piece": "LQ-T"},
+				{"do": "deliver", "piece": "LQ-T", "zone": "equip"},
+			],
+			"EQ-T1": [
+				{"do": "free", "piece": "EQ-T1"},
+				{"do": "deliver", "piece": "EQ-T1", "zone": "equip"},
+			],
+			"HZ-T1": [
+				{"do": "free", "piece": "HZ-T1"},
+				{"do": "deliver", "piece": "HZ-T1", "zone": "hazard"},
 			],
 			"RT-T": [
 				{"do": "free", "piece": "RT-T"},

@@ -169,9 +169,9 @@ func _rules() -> void:
 			game.radio.say_text("as:port", "liang", _f("as_port_g"), _f("as_port_g"))
 	# recall: the bent guard in front of a port
 	if hv.get("reason", "") == "blocked_guard":
-		_recall(3, "rc_s_guard", "rc_guard")
+		_recall(4, "rc_s_guard", "rc_guard")
 	if tl.overweight and hp != null:
-		_recall(6, "rc_s_heavy", "rc_heavy")
+		_recall(8, "rc_s_heavy", "rc_heavy")
 
 
 func _pressure_warning(room: String) -> void:
@@ -230,16 +230,16 @@ func _rooms_beside(p) -> Array:
 func on_measure(key: String, r: Dictionary) -> void:
 	var c = r.get("ctrl")
 	if c != null and c.medium == "gas" and game.sys.dead_leg_closed(c):
-		_recall(3, "rc_s_path", "rc_v02")
+		_recall(4, "rc_s_path", "rc_v02")
 	if r.kind == "volts" and c != null and c.kind == "test" and float(r.val) > 30.0:
-		_recall(4, "rc_s_backup", "rc_volts")
+		_recall(5, "rc_s_backup", "rc_volts")
 	if r.kind == "temp" and float(r.val) > 60.0:
-		_recall(5, "rc_s_hot", "rc_hot")
+		_recall(7, "rc_s_hot", "rc_hot")
 
 
 func on_incident(kind: String) -> void:
 	if kind == "blowout":
-		_recall(3, "rc_s_blow", "rc_blow")
+		_recall(4, "rc_s_blow", "rc_blow")
 
 
 func on_reveal(room: String) -> void:
@@ -248,4 +248,4 @@ func on_reveal(room: String) -> void:
 		var vc: Dictionary = s.vessel_cfg[v]
 		var p = game.world.tag(vc.get("piece", ""))
 		if p != null and p.room == room and s.bursts(p):
-			_recall(3, "rc_s_tank", "rc_tank")
+			_recall(4, "rc_s_tank", "rc_tank")

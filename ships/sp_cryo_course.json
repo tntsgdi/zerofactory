@@ -1,0 +1,579 @@
+{
+	"ship": "sp_cryo",
+	"lines": {
+		"SC_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SC_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SC_frozen": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SC_safe_t": {
+			"who": "term",
+			"zh": "罐已抽空，安全阀已解冻。",
+			"en": "TANK EMPTY, RELIEF VALVE THAWED."
+		},
+		"SC_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SC_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：罐内仍有货物，安全阀未确认。",
+			"en": "TRAINING INTERLOCK: CARGO STILL ABOARD, RELIEF VALVE NOT VERIFIED."
+		},
+		"SC_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SC_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SD_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SD_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SD_safe_t": {
+			"who": "term",
+			"zh": "回温完成，隔振台已锁定。",
+			"en": "WARM-UP COMPLETE, TABLE LOCKED."
+		},
+		"SD_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SD_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：制冷机未完成回温。",
+			"en": "TRAINING INTERLOCK: THE FRIDGE IS NOT WARMED UP."
+		},
+		"SD_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SD_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SB_in": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		}
+	},
+	"lessons": [
+		{
+			"id": "SP_00",
+			"mode": "lockstep",
+			"title": {
+				"zh": "专项训练",
+				"en": "SPECIAL COURSE"
+			},
+			"done_flag": "SP_00_COMPLETE",
+			"steps": [
+				{
+					"id": "brief",
+					"text": {
+						"zh": "看一眼训练件：按 I 可以随时查图鉴",
+						"en": "LOOK OVER THE RIG: I OPENS THE CODEX ANY TIME"
+					},
+					"tools": [],
+					"done": {
+						"step_t": 4.0
+					},
+					"in": [
+						"SB_in"
+					]
+				}
+			]
+		},
+		{
+			"id": "SP_C1",
+			"mode": "lockstep",
+			"title": {
+				"zh": "冻住的安全阀：边制冷边抽",
+				"en": "A FROZEN RELIEF: DRAW IT DOWN COLD"
+			},
+			"done_flag": "SP_C1_COMPLETE",
+			"guard": {
+				"pieces": [
+					"TK-1",
+					"RV-1"
+				],
+				"until": {
+					"mod_safe": "boiloff"
+				},
+				"lock": [
+					"SC_lock_t",
+					"SC_lock_l"
+				],
+				"accident": [
+					"tank_burst",
+					"tank_vent"
+				],
+				"reset": [
+					"TK-1",
+					"RV-1"
+				],
+				"remod": [
+					"boiloff"
+				],
+				"say": "SC_bad",
+				"restore": {
+					"ctrls": [
+						"RVH-1"
+					],
+					"hoses": [
+						"PT-1"
+					],
+					"readings": [
+						"TP-1",
+						"VT-1"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "kpa",
+					"text": {
+						"zh": "测量（1）：读罐压 TP-1（它自己在升）",
+						"en": "MEASURE (1): TANK PRESSURE TP-1 (IT CLIMBS BY ITSELF)"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"TP-1"
+						]
+					},
+					"in": [
+						"SC_in1",
+						"SC_in2"
+					],
+					"target": {
+						"ctrl": "TP-1"
+					}
+				},
+				{
+					"id": "valve",
+					"text": {
+						"zh": "测量（1）：读安全阀温度 VT-1",
+						"en": "MEASURE (1): RELIEF VALVE TEMPERATURE VT-1"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"VT-1"
+						]
+					},
+					"out": [
+						"SC_frozen"
+					],
+					"target": {
+						"ctrl": "VT-1"
+					}
+				},
+				{
+					"id": "thaw",
+					"text": {
+						"zh": "阀冻住了：打开安全阀加热 RVH-1（4），冷头保持供电",
+						"en": "FROZEN: VALVE HEATER RVH-1 ON (4); CRYOCOOLER STAYS POWERED"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"RVH-1",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "RVH-1"
+					}
+				},
+				{
+					"id": "hose",
+					"text": {
+						"zh": "气液回收（5）：软管接 PT-1 抽液",
+						"en": "HOSE (5): ON PT-1, DRAW THE CARGO OFF"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"hose": "PT-1"
+					},
+					"target": {
+						"ctrl": "PT-1"
+					}
+				},
+				{
+					"id": "draw",
+					"text": {
+						"zh": "等罐抽空（按住 = 加速）",
+						"en": "WAIT: THE TANK EMPTY (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"mod_safe": "boiloff"
+					},
+					"out": [
+						"SC_safe_t"
+					],
+					"warp": true
+				},
+				{
+					"id": "free",
+					"text": {
+						"zh": "拆下罐 TK-1 的螺栓（4）",
+						"en": "WRENCH (4): UNBOLT TANK TK-1"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "TK-1"
+					},
+					"target": {
+						"piece": "TK-1"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "空罐送进回收口",
+						"en": "THE EMPTY TANK TO A MOUTH"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"TK-1",
+							"any"
+						]
+					},
+					"out": [
+						"SC_done"
+					],
+					"target": {
+						"piece": "TK-1"
+					}
+				}
+			]
+		},
+		{
+			"id": "SP_C2",
+			"mode": "lockstep",
+			"title": {
+				"zh": "稀释制冷机：按序回温",
+				"en": "THE DILUTION FRIDGE: WARM IT IN ORDER"
+			},
+			"done_flag": "SP_C2_COMPLETE",
+			"guard": {
+				"pieces": [
+					"QPU",
+					"STG-MXC",
+					"STG-4K",
+					"STG-50K"
+				],
+				"until": {
+					"mod_safe": "dilution"
+				},
+				"lock": [
+					"SD_lock_t",
+					"SD_lock_l"
+				],
+				"accident": [
+					"mix_boil",
+					"qpu_shock",
+					"qpu_brittle",
+					"qpu_vibration"
+				],
+				"reset": [
+					"QPU",
+					"STG-MXC",
+					"STG-4K",
+					"STG-50K"
+				],
+				"remod": [
+					"dilution"
+				],
+				"say": "SD_bad",
+				"restore": {
+					"gas": [
+						"MIX"
+					],
+					"ctrls": [
+						"CIRC",
+						"PT",
+						"HEAT",
+						"VI-LOCK"
+					],
+					"hoses": [
+						"MIXP"
+					],
+					"readings": [
+						"MXT",
+						"MIXP"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "mxt",
+					"text": {
+						"zh": "测量（1）：读混合室温度 MXT",
+						"en": "MEASURE (1): MIXING CHAMBER MXT"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"MXT"
+						]
+					},
+					"in": [
+						"SD_in1",
+						"SD_in2"
+					],
+					"target": {
+						"ctrl": "MXT"
+					}
+				},
+				{
+					"id": "circ",
+					"text": {
+						"zh": "① 停循环泵 CIRC（4）",
+						"en": "① CIRCULATION CIRC OFF (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"CIRC",
+							false
+						]
+					},
+					"target": {
+						"ctrl": "CIRC"
+					}
+				},
+				{
+					"id": "mix",
+					"text": {
+						"zh": "② 软管接 MIXP 回收混合气，压力降到 20 kPa 以下（5）",
+						"en": "② HOSE ON MIXP: RECOVER THE MIXTURE BELOW 20 kPa (5)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"P": [
+							"MIX",
+							"<",
+							20.0
+						]
+					},
+					"target": {
+						"ctrl": "MIXP"
+					},
+					"warp": true
+				},
+				{
+					"id": "pt",
+					"text": {
+						"zh": "③ 停脉管冷头 PT（4）",
+						"en": "③ PULSE TUBE PT OFF (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"PT",
+							false
+						]
+					},
+					"target": {
+						"ctrl": "PT"
+					}
+				},
+				{
+					"id": "warm",
+					"text": {
+						"zh": "④ 等混合室自己回温过 30 K（按住 = 加速）",
+						"en": "④ WAIT: IT WARMS PAST 30 K BY ITSELF (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"mod": [
+							"dilution",
+							"mxc_temp",
+							">",
+							32.0
+						]
+					},
+					"warp": true
+				},
+				{
+					"id": "heat",
+					"text": {
+						"zh": "⑤ 现在才开加热 HEAT（4）",
+						"en": "⑤ ONLY NOW THE HEATERS HEAT ON (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"HEAT",
+							true
+						]
+					},
+					"target": {
+						"ctrl": "HEAT"
+					}
+				},
+				{
+					"id": "room",
+					"text": {
+						"zh": "⑥ 等回到 250 K 以上（按住 = 加速）",
+						"en": "⑥ WAIT: ABOVE 250 K (HOLD = TO SPEED UP)"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"mod": [
+							"dilution",
+							"mxc_temp",
+							">",
+							252.0
+						]
+					},
+					"warp": true
+				},
+				{
+					"id": "lock",
+					"text": {
+						"zh": "⑦ 锁住隔振台 VI-LOCK（4）",
+						"en": "⑦ LOCK THE ISOLATION TABLE VI-LOCK (4)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"switch": [
+							"VI-LOCK",
+							true
+						]
+					},
+					"out": [
+						"SD_safe_t"
+					],
+					"target": {
+						"ctrl": "VI-LOCK"
+					}
+				},
+				{
+					"id": "free",
+					"text": {
+						"zh": "拆下芯片封装 QPU（4）",
+						"en": "WRENCH (4): UNBOLT THE CHIP PACKAGE QPU"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "QPU"
+					},
+					"target": {
+						"piece": "QPU"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "芯片完整送进设备回收口",
+						"en": "THE CHIP, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"QPU",
+							"any"
+						]
+					},
+					"out": [
+						"SD_done"
+					],
+					"target": {
+						"zone": "equip"
+					},
+					"exit": [
+						2.0,
+						0.0
+					]
+				}
+			]
+		}
+	],
+	"rings": [],
+	"long_ring": [],
+	"stop_box": []
+}

@@ -1,0 +1,144 @@
+{
+	"id": "sp_isolate",
+	"name": "SP-ISOLATE",
+	"title": ["专项训练件 · 隔离与取出","SPECIAL COURSE RIG · ISOLATE"],
+	"length": 12.8,
+	"clamps": [[16.0,2.3],[26.0,2.3]],
+	"room_names": {},
+	"gas": {
+		"rooms": {},
+		"vessels": {},
+		"valves": [],
+		"value": 0.0
+	},
+	"power": {
+		"bus": "SWB",
+		"sources": [
+			{"cable":"pb","charge":1.0,"drain":0.0,"kind":"battery","local_volts":48.0,"piece":"BAT","switch":"K-B","volts":48.0}
+		],
+		"lamps": {},
+		"isolated": [
+			{"charge":0.95,"piece":"LB","switch":"K-LB","volts":220.0}
+		]
+	},
+	"fluids": {
+		"volumes": {},
+		"value": {"coolant":50.0}
+	},
+	"ctrls_cfg": {},
+	"labels": {},
+	"procedures": {
+		"SS-ENG": [
+			{"ctrl":"SK","do":"operate"},
+			{"ctrl":"CL-1","do":"operate"},
+			{"ctrl":"CL-2","do":"operate"},
+			{"ctrl":"BOW","do":"operate"},
+			{"ctrl":"WINCH","do":"operate"},
+			{"do":"wait","max":10.0,"until":{"mod":["nested","is_out",">",0.5]}}
+		],
+		"SDB-1": [
+			{"ctrl":"K-B","do":"operate"},
+			{"ctrl":"K-LB","do":"operate"},
+			{"ctrl":"MR-1","do":"operate"},
+			{"ctrl":"VD-1","do":"operate"},
+			{"do":"free","piece":"SDB-1"},
+			{"do":"deliver","piece":"SDB-1","zone":"equip"}
+		]
+	},
+	"blueprint": {},
+	"training": true,
+	"value": {"bonus":30000.0,"metal":3000.0,"total":76500.0},
+	"nested": {"battery":"SK","bonus":30000.0,"door":"BOW","door_ctrl":"BOW","exit":[6.0,0.0],"fuel":"","hold":"","hull":["SS-H1","SS-H2","SS-N","SS-T"],"locks":["CL-1","CL-2"],"lurch_dent":0.5,"lurch_keep":0.5,"pieces":["SS-H1","SS-H2","SS-N","SS-T","SS-BAT","SS-ENG"],"room":"","time":5.0,"winch":"WINCH","winch_piece":"WCH"},
+	"vaults": {
+		"VD-1": {"locks":["LS-1"],"release":"MR-1"}
+	},
+	"pieces": [
+		{"barrier":true,"cut_speed":200.0,"density":1.6,"key":"RIG-F","kind":"hull","mass":10.24,"name_key":"p_sp_floor","poly":[[14.6,1.8],[27.4,1.8],[27.4,2.3],[14.6,2.3]],"rig":true,"tag":"RIG-F"},
+		{"art":"swb","art_size":[1.0,1.5],"art_xf":[1.0,0.0,0.0,1.0,15.0,0.300000011920929],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"key":"SWB","kind":"equip","mass":0.3,"name_key":"p_swb","poly":[[15.0,0.3],[16.0,0.3],[16.0,1.8],[15.0,1.8]],"tag":"SWB","value":3000.0},
+		{"art":"battery","art_size":[0.8,0.8],"art_xf":[1.0,0.0,0.0,1.0,16.2000007629395,1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.4,"hazard":"battery","key":"BAT","kind":"equip","mass":0.3,"name_key":"p_battery","poly":[[16.2,1.0],[17.0,1.0],[17.0,1.8],[16.2,1.8]],"tag":"BAT","value":2500.0},
+		{"cut_speed":220.0,"density":1.0,"key":"CR-1","kind":"fixture","mass":0.1,"name_key":"p_sp_cradle","poly":[[21.8,1.3],[22.4,1.3],[22.4,1.8],[21.8,1.8]],"rig":true,"tag":"CR-1"},
+		{"cut_speed":220.0,"density":1.0,"key":"CR-2","kind":"fixture","mass":0.1,"name_key":"p_sp_cradle","poly":[[24.2,1.3],[24.8,1.3],[24.8,1.8],[24.2,1.8]],"rig":true,"tag":"CR-2"},
+		{"barrier":true,"cut_speed":200.0,"density":1.0,"key":"SS-H1","kind":"hull","mass":0.68,"name_key":"p_sp_small_hull","poly":[[21.6,1.1],[25.0,1.1],[25.0,1.3],[21.6,1.3]],"tag":"SS-H1"},
+		{"barrier":true,"cut_speed":200.0,"density":1.0,"key":"SS-H2","kind":"hull","mass":0.68,"name_key":"p_sp_small_hull","poly":[[21.6,-0.6],[25.0,-0.6],[25.0,-0.4],[21.6,-0.4]],"tag":"SS-H2"},
+		{"barrier":true,"cut_speed":200.0,"density":1.0,"key":"SS-N","kind":"hull","mass":0.95,"name_key":"p_sp_small_hull","poly":[[25.0,-0.6],[25.5,-0.6],[25.5,1.3],[25.0,1.3]],"tag":"SS-N"},
+		{"barrier":true,"cut_speed":200.0,"density":1.0,"key":"SS-T","kind":"hull","mass":0.38,"name_key":"p_sp_small_hull","poly":[[21.4,-0.6],[21.6,-0.6],[21.6,1.3],[21.4,1.3]],"tag":"SS-T"},
+		{"art":"battery","art_size":[0.7,0.6],"art_xf":[1.0,0.0,0.0,1.0,21.7999979654948,0.5],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","hazard":"battery","key":"SS-BAT","kind":"equip","mass":0.1,"name_key":"p_battery","poly":[[21.8,0.5],[22.5,0.5],[22.5,1.1],[21.8,1.1]],"tag":"SS-BAT","value":2500.0},
+		{"art":"engine_s","art_size":[1.9,0.9],"art_xf":[1.0,0.0,0.0,1.0,22.7000020345052,0.200000007947286],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"SS-ENG","kind":"equip","mass":0.3,"name_key":"p_sp_small_engine","poly":[[22.7,0.2],[24.6,0.2],[24.6,1.1],[22.7,1.1]],"tag":"SS-ENG","value":9000.0},
+		{"cut_speed":220.0,"density":1.0,"key":"BP","kind":"fixture","mass":0.05,"name_key":"p_sp_post","poly":[[25.9,1.6],[26.1,1.6],[26.1,1.8],[25.9,1.8]],"rig":true,"tag":"BP"},
+		{"barrier":true,"cut_speed":200.0,"density":1.2,"door":true,"door_open":false,"key":"BOW","kind":"door","mass":0.6,"name_key":"p_sp_bow_door","open_dir":[0.0,-2.7],"poly":[[25.9,-0.9],[26.1,-0.9],[26.1,1.6],[25.9,1.6]],"tag":"BOW"},
+		{"art":"reel","art_size":[0.8,0.8],"art_xf":[1.0,0.0,0.0,1.0,26.3999989827474,1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"WCH","kind":"equip","mass":0.2,"name_key":"p_sp_winch","poly":[[26.4,1.0],[27.2,1.0],[27.2,1.8],[26.4,1.8]],"tag":"WCH","value":4000.0},
+		{"art":"panel","art_size":[0.6,1.6],"art_xf":[1.0,0.0,0.0,1.0,20.6000010172526,0.200000007947286],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"NP","kind":"equip","mass":0.06,"name_key":"p_sp_cradle_panel","poly":[[20.6,0.2],[21.2,0.2],[21.2,1.8],[20.6,1.8]],"tag":"NP","value":1200.0},
+		{"barrier":true,"cut_speed":120.0,"density":1.4,"key":"V-L","kind":"hull","mass":0.728,"name_key":"k_hull","poly":[[17.0,-2.6],[17.2,-2.6],[17.2,0.0],[17.0,0.0]],"rig":true,"tag":"V-L"},
+		{"barrier":true,"cut_speed":120.0,"density":1.4,"key":"V-T","kind":"hull","mass":0.84,"name_key":"k_hull","poly":[[17.0,-2.8],[20.0,-2.8],[20.0,-2.6],[17.0,-2.6]],"rig":true,"tag":"V-T"},
+		{"barrier":true,"cut_speed":120.0,"density":1.4,"key":"V-B","kind":"hull","mass":0.84,"name_key":"k_hull","poly":[[17.0,0.0],[20.0,0.0],[20.0,0.2],[17.0,0.2]],"rig":true,"tag":"V-B"},
+		{"cut_speed":220.0,"density":1.0,"key":"V-P","kind":"fixture","mass":0.1,"name_key":"p_sp_post","poly":[[17.0,0.2],[17.2,0.2],[17.2,1.8],[17.0,1.8]],"rig":true,"tag":"V-P"},
+		{"art":"vault","art_size":[0.2,2.6],"art_xf":[1.0,0.0,0.0,1.0,19.8000005086263,-2.60000006357829],"barrier":true,"cut_speed":30.0,"density":2.0,"door":true,"door_open":false,"key":"VD-1","kind":"door","mass":1.04,"name_key":"p_vault_door","open_dir":[0.0,-2.7],"poly":[[19.8,-2.6],[20.0,-2.6],[20.0,0.0],[19.8,0.0]],"tag":"VD-1"},
+		{"art":"safe_deposit","art_size":[2.0,2.2],"art_xf":[1.0,0.0,0.0,1.0,17.3999989827474,-2.20000012715658],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"SDB-1","kind":"equip","mass":0.5,"name_key":"p_safe_box","poly":[[17.4,-2.2],[19.4,-2.2],[19.4,0.0],[17.4,0.0]],"tag":"SDB-1","value":15000.0},
+		{"art":"swb","art_size":[0.3,1.2],"art_xf":[1.0,0.0,0.0,1.0,20.2000007629395,0.600000023841858],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"LS-1","kind":"equip","mass":0.1,"name_key":"p_lock_solenoid","poly":[[20.2,0.6],[20.5,0.6],[20.5,1.8],[20.2,1.8]],"tag":"LS-1","value":3000.0},
+		{"art":"battery","art_size":[0.8,0.8],"art_xf":[1.0,0.0,0.0,1.0,17.3999989827474,1.0],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","hazard":"battery","key":"LB","kind":"equip","mass":0.2,"name_key":"p_sp_lock_backup","poly":[[17.4,1.0],[18.2,1.0],[18.2,1.8],[17.4,1.8]],"tag":"LB","value":2000.0},
+		{"art":"panel","art_size":[0.6,1.2],"art_xf":[1.0,0.0,0.0,1.0,18.3999989827474,0.600000023841858],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","key":"MRP","kind":"equip","mass":0.05,"name_key":"p_sp_release_panel","poly":[[18.4,0.6],[19.0,0.6],[19.0,1.8],[18.4,1.8]],"tag":"MRP","value":1200.0}
+	],
+	"joints": [
+		{"a":"RIG-F","at":[16.0,2.25],"b":null,"tag":"CL-01","type":"clamp"},
+		{"a":"RIG-F","at":[26.0,2.25],"b":null,"tag":"CL-02","type":"clamp"},
+		{"a":"SWB","at":[15.12,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"SWB","at":[15.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BAT","at":[16.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BAT","at":[16.88,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"CR-1","at":[21.92,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"CR-1","at":[22.28,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"CR-2","at":[24.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"CR-2","at":[24.68,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"SS-H1","at":[21.65,1.2],"b":"SS-T","type":"weld"},
+		{"a":"SS-H1","at":[24.95,1.2],"b":"SS-N","type":"weld"},
+		{"a":"SS-H2","at":[21.65,-0.5],"b":"SS-T","type":"weld"},
+		{"a":"SS-H2","at":[24.95,-0.5],"b":"SS-N","type":"weld"},
+		{"a":"SS-H1","at":[22.1,1.3],"b":"CR-1","type":"bolt"},
+		{"a":"SS-H1","at":[24.5,1.3],"b":"CR-2","type":"bolt"},
+		{"a":"SS-BAT","at":[21.9,1.1],"b":"SS-H1","type":"bolt"},
+		{"a":"SS-BAT","at":[22.4,1.1],"b":"SS-H1","type":"bolt"},
+		{"a":"SS-ENG","at":[22.9,1.1],"b":"SS-H1","type":"bolt"},
+		{"a":"SS-ENG","at":[24.4,1.1],"b":"SS-H1","type":"bolt"},
+		{"a":"BP","at":[26.02,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BP","at":[25.98,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"BOW","at":[26.0,1.62],"b":"BP","type":"weld"},
+		{"a":"WCH","at":[26.52,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"WCH","at":[27.08,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"NP","at":[20.72,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"NP","at":[21.08,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"V-L","at":[17.1,-2.65],"b":"V-T","type":"weld"},
+		{"a":"V-L","at":[17.1,0.05],"b":"V-B","type":"weld"},
+		{"a":"V-P","at":[17.12,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"V-P","at":[17.08,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"V-B","at":[17.1,0.18],"b":"V-P","type":"weld"},
+		{"a":"VD-1","at":[19.9,-0.02],"b":"V-B","type":"weld"},
+		{"a":"SDB-1","at":[17.25,-1.3],"b":"V-L","type":"bolt"},
+		{"a":"SDB-1","at":[18.4,0.02],"b":"V-B","type":"bolt"},
+		{"a":"LS-1","at":[20.32,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"LS-1","at":[20.38,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"LB","at":[17.52,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"LB","at":[18.08,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"MRP","at":[18.52,1.8],"b":"RIG-F","type":"bolt"},
+		{"a":"MRP","at":[18.88,1.8],"b":"RIG-F","type":"bolt"}
+	],
+	"lines": [
+		{"a":"BAT","b":"SWB","id":"pb","kind":"cable","net":"power","pa":[16.6,1.0],"path":[[16.6,1.0],[16.0,1.0]],"pb":[16.0,1.0]},
+		{"a":"SWB","b":"WCH","id":"pw","kind":"cable","net":"power","pa":[15.6,0.3],"path":[[15.6,0.3],[15.6,-1.4],[26.8,-1.4],[26.8,1.0]],"pb":[26.8,1.0]},
+		{"a":"SWB","b":"LS-1","id":"la","kind":"cable","net":"power","pa":[16.0,0.6],"path":[[16.0,0.6],[16.2,0.6],[16.2,0.4],[20.1,0.4],[20.1,0.9],[20.2,0.9]],"pb":[20.2,0.9]},
+		{"a":"LB","b":"LS-1","id":"lb","kind":"cable","net":"power","pa":[18.0,1.0],"path":[[18.0,1.0],[18.0,0.45],[20.3,0.45],[20.3,0.6]],"pb":[20.3,0.6]}
+	],
+	"ctrls": [
+		{"at":[15.3,0.6],"id":"K-B","kind":"switch","piece":"SWB","state":true,"target":"K-B"},
+		{"at":[15.7,0.6],"id":"E-B","kind":"test","medium":"volt","piece":"SWB","target":"bus"},
+		{"at":[22.15,0.75],"id":"SK","kind":"switch","piece":"SS-BAT","state":true,"target":"SK"},
+		{"at":[26.0,0.35],"id":"BOW","kind":"door","piece":"BOW","target":"BOW"},
+		{"at":[20.75,0.5],"id":"CL-1","kind":"switch","piece":"NP","state":true,"target":"CL-1"},
+		{"at":[21.05,0.5],"id":"CL-2","kind":"switch","piece":"NP","state":true,"target":"CL-2"},
+		{"at":[20.9,0.9],"id":"WINCH","kind":"switch","piece":"NP","target":"WINCH"},
+		{"at":[19.9,-1.3],"id":"VD-1","kind":"door","piece":"VD-1","target":"VD-1"},
+		{"at":[17.8,1.3],"id":"K-LB","kind":"switch","piece":"LB","state":true,"target":"K-LB"},
+		{"at":[20.35,1.1],"id":"E-L","kind":"test","medium":"volt","piece":"LS-1","target":"LS-1"},
+		{"at":[18.7,0.9],"id":"MR-1","kind":"switch","piece":"MRP","target":"MR-1"}
+	],
+	"rooms": []
+}

@@ -1,0 +1,501 @@
+{
+	"ship": "sp_precise",
+	"lines": {
+		"SPM_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SPM_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SPM_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SP_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：防尘罩未放下。",
+			"en": "TRAINING INTERLOCK: THE DUST COVER IS NOT DOWN."
+		},
+		"SP_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SP_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SW_in1": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SW_in2": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SW_safe_t": {
+			"who": "term",
+			"zh": "舱压已降到安全值。",
+			"en": "HALL PRESSURE BELOW SAFE."
+		},
+		"SW_done": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SW_lock_t": {
+			"who": "term",
+			"zh": "训练安全联锁启动：玻璃背后仍有压力。",
+			"en": "TRAINING INTERLOCK: THERE IS STILL PRESSURE BEHIND THE GLASS."
+		},
+		"SW_lock_l": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SW_bad": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		},
+		"SB_in": {
+			"who": "liang",
+			"zh": "【待写】",
+			"en": "[TO BE WRITTEN]"
+		}
+	},
+	"lessons": [
+		{
+			"id": "SP_00",
+			"mode": "lockstep",
+			"title": {
+				"zh": "专项训练",
+				"en": "SPECIAL COURSE"
+			},
+			"done_flag": "SP_00_COMPLETE",
+			"steps": [
+				{
+					"id": "brief",
+					"text": {
+						"zh": "看一眼训练件：按 I 可以随时查图鉴",
+						"en": "LOOK OVER THE RIG: I OPENS THE CODEX ANY TIME"
+					},
+					"tools": [],
+					"done": {
+						"step_t": 4.0
+					},
+					"in": [
+						"SB_in"
+					]
+				}
+			]
+		},
+		{
+			"id": "SP_P1",
+			"mode": "lockstep",
+			"title": {
+				"zh": "主镜：防尘罩、促动器锁、外圈先拆",
+				"en": "THE MIRROR: COVER, LOCKS, OUTER RING FIRST"
+			},
+			"done_flag": "SP_P1_COMPLETE",
+			"guard": {
+				"pieces": [
+					"PM-1",
+					"PM-2",
+					"INS",
+					"IP"
+				],
+				"until": {
+					"mod": [
+						"optics",
+						"cover_down",
+						">",
+						0.5
+					]
+				},
+				"lock": [
+					"SP_lock_t",
+					"SP_lock_l"
+				],
+				"accident": [
+					"mirror_dust",
+					"mirror_drop",
+					"mirror_unsupported"
+				],
+				"reset": [
+					"PM-1",
+					"PM-2",
+					"INS"
+				],
+				"remod": [
+					"optics"
+				],
+				"say": "SP_bad",
+				"restore": {
+					"ctrls": [
+						"CVR",
+						"LK-1",
+						"LK-2"
+					],
+					"readings": [
+						"OPT"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "opt",
+					"text": {
+						"zh": "测量（1）：读主镜反射率 OPT",
+						"en": "MEASURE (1): THE MIRROR'S REFLECTANCE OPT"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"OPT"
+						]
+					},
+					"in": [
+						"SPM_in1",
+						"SPM_in2"
+					],
+					"target": {
+						"ctrl": "OPT"
+					}
+				},
+				{
+					"id": "cover",
+					"text": {
+						"zh": "① 放下防尘罩：CVR（4），等它完全落下",
+						"en": "① RUN THE DUST COVER DOWN: CVR (4), ALL THE WAY"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"mod": [
+							"optics",
+							"cover_down",
+							">",
+							0.5
+						]
+					},
+					"target": {
+						"ctrl": "CVR"
+					}
+				},
+				{
+					"id": "cut",
+					"text": {
+						"zh": "② 激光（2）切开仪器 INS 和立柱之间的焊缝",
+						"en": "② LASER (2): CUT THE WELDS BETWEEN INSTRUMENT INS AND ITS POST"
+					},
+					"tools": [
+						2,
+						3,
+						4
+					],
+					"done": {
+						"free": "INS"
+					},
+					"target": {
+						"piece": "INS"
+					}
+				},
+				{
+					"id": "ins",
+					"text": {
+						"zh": "仪器完整送进设备回收口",
+						"en": "THE INSTRUMENT, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"INS",
+							"any"
+						]
+					},
+					"target": {
+						"zone": "equip"
+					}
+				},
+				{
+					"id": "locks",
+					"text": {
+						"zh": "③ 锁住两圈促动器 LK-1、LK-2（4，控制柜要有电）",
+						"en": "③ LOCK BOTH RINGS: LK-1, LK-2 (4, CABINET POWERED)"
+					},
+					"tools": [
+						1,
+						4
+					],
+					"context": true,
+					"done": {
+						"all": [
+							{
+								"switch": [
+									"LK-1",
+									true
+								]
+							},
+							{
+								"switch": [
+									"LK-2",
+									true
+								]
+							}
+						]
+					},
+					"target": {
+						"ctrl": "LK-1"
+					}
+				},
+				{
+					"id": "outer",
+					"text": {
+						"zh": "④ 先拆外圈镜片 PM-2（4）",
+						"en": "④ THE OUTER SEGMENT PM-2 FIRST (4)"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "PM-2"
+					},
+					"target": {
+						"piece": "PM-2"
+					}
+				},
+				{
+					"id": "outer_in",
+					"text": {
+						"zh": "PM-2 送进设备回收口",
+						"en": "PM-2 TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"PM-2",
+							"any"
+						]
+					},
+					"target": {
+						"zone": "equip"
+					},
+					"exit": [
+						1.8,
+						0.0
+					]
+				},
+				{
+					"id": "inner",
+					"text": {
+						"zh": "⑤ 再拆内圈 PM-1（4）",
+						"en": "⑤ THEN THE INNER PM-1 (4)"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "PM-1"
+					},
+					"target": {
+						"piece": "PM-1"
+					}
+				},
+				{
+					"id": "inner_in",
+					"text": {
+						"zh": "PM-1 送进设备回收口",
+						"en": "PM-1 TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"PM-1",
+							"any"
+						]
+					},
+					"out": [
+						"SPM_done"
+					],
+					"target": {
+						"zone": "equip"
+					},
+					"exit": [
+						0.0,
+						-2.0
+					]
+				}
+			]
+		},
+		{
+			"id": "SP_P2",
+			"mode": "lockstep",
+			"title": {
+				"zh": "承压玻璃：先泄压，再拧压条",
+				"en": "GLASS UNDER PRESSURE: VENT, THEN THE STRIPS"
+			},
+			"done_flag": "SP_P2_COMPLETE",
+			"guard": {
+				"pieces": [
+					"OBS-1"
+				],
+				"until": {
+					"P": [
+						"O",
+						"<",
+						20.0
+					]
+				},
+				"lock": [
+					"SW_lock_t",
+					"SW_lock_l"
+				],
+				"accident": [
+					"glass_blown"
+				],
+				"reset": [
+					"OBS-1"
+				],
+				"remod": [
+					"liner"
+				],
+				"say": "SW_bad",
+				"restore": {
+					"gas": [
+						"O"
+					],
+					"hoses": [
+						"G-O"
+					],
+					"readings": [
+						"G-O"
+					]
+				}
+			},
+			"steps": [
+				{
+					"id": "kpa",
+					"text": {
+						"zh": "测量（1）：读观景舱舱压 G-O",
+						"en": "MEASURE (1): THE HALL'S PRESSURE AT G-O"
+					},
+					"tools": [
+						1
+					],
+					"done": {
+						"reading": [
+							"G-O"
+						]
+					},
+					"in": [
+						"SW_in1",
+						"SW_in2"
+					],
+					"target": {
+						"ctrl": "G-O"
+					}
+				},
+				{
+					"id": "vent",
+					"text": {
+						"zh": "① 软管接 G-O，抽到 5 kPa 以下（5）",
+						"en": "① HOSE ON G-O, BELOW 5 kPa (5)"
+					},
+					"tools": [
+						1,
+						5
+					],
+					"done": {
+						"P": [
+							"O",
+							"<",
+							5.0
+						]
+					},
+					"target": {
+						"ctrl": "G-O"
+					},
+					"warp": true,
+					"out": [
+						"SW_safe_t"
+					]
+				},
+				{
+					"id": "strips",
+					"text": {
+						"zh": "② 拧下玻璃 OBS-1 的压条螺栓（4）",
+						"en": "② UNBOLT THE CLAMPING STRIPS OF PANE OBS-1 (4)"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"free": "OBS-1"
+					},
+					"target": {
+						"piece": "OBS-1"
+					}
+				},
+				{
+					"id": "deliver",
+					"text": {
+						"zh": "整块玻璃送进设备回收口",
+						"en": "THE PANE, WHOLE, TO THE EQUIPMENT BAY"
+					},
+					"tools": [
+						3,
+						4
+					],
+					"context": true,
+					"done": {
+						"recovered": [
+							"OBS-1",
+							"any"
+						]
+					},
+					"out": [
+						"SW_done"
+					],
+					"target": {
+						"zone": "equip"
+					}
+				}
+			]
+		}
+	],
+	"rings": [],
+	"long_ring": [],
+	"stop_box": []
+}

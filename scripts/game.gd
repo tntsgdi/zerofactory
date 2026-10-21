@@ -65,6 +65,8 @@ var bot = null               # tests drive the game through this dict
 var ship_id := "gr7"         # which ship file this contract is about
 var ship: Dictionary = {}
 static var start_ship := ""  # the title screen picks the next ship (training, exam, contract)
+static var course_chain: Array = []   # special courses still to run, back to back (scripts/codex.gd)
+static var course_then := ""          # after them: "contract" (the one waiting on them) or "terminal"
 static var contract: Dictionary = {}   # the career's contract to play next (empty: a contract outside any career)
 var job: Dictionary = {}     # the career contract this scene plays
 var fee := CONTRACT_FEE
@@ -100,6 +102,8 @@ var overview := false
 var training := false        # the ship file is a training course, not a contract
 var tutorial: Tutorial
 var assist: Assist
+var codex: Codex              # first meetings and the book (scripts/codex.gd)
+var codex_hud: CodexHud
 var story: Story
 var exam: Exam
 var settings_panel: SettingsPanel
@@ -445,6 +449,13 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
+	codex = Codex.new()
+	codex.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(codex)
+	codex.setup(self)
+	codex_hud = CodexHud.new()
+	codex_hud.game = self
+	add_child(codex_hud)
 	# the industrial recovery arm on the boom, once the berth has bought it
 	if has_upgrade("hauler"):
 		hauler = Hauler.new()
@@ -1718,9 +1729,47 @@ func _to_berth() -> void:
 	Wipe.go(tree, func(): tree.change_scene_to_file("res://scenes/main.tscn"))
 
 
+# the special courses (design/新手教程与图鉴定案.md): the first of them now, the rest
+# after it, then the contract waiting on them (or back to the terminal)
+static func start_courses(classes: Array, then: String) -> void:
+	course_chain = classes.duplicate()
+	course_then = then
+	start_ship = Codex.course_ship(str(course_chain.pop_front()))
+	contract = {}
+
+
+# a special course passed: the next one, the contract, or the terminal
+func after_special() -> void:
+	Engine.time_scale = 1.0
+	get_tree().paused = false
+	var tree := get_tree()
+	if not course_chain.is_empty():
+		start_ship = Codex.course_ship(str(course_chain.pop_front()))
+		SaveGame.load_requested = false
+		tree.reload_current_scene()
+		return
+	var then := course_then
+	course_then = ""
+	if then == "contract" and Career.usable():
+		play_career(tree)
+		return
+	if Career.usable():
+		tree.change_scene_to_file("res://scenes/terminal.tscn")
+	else:
+		tree.change_scene_to_file("res://scenes/title.tscn")
+
+
 # the career's contract in hand (the first one after training), or the terminal when there is none
 static func play_career(tree: SceneTree) -> void:
 	Career.load_or_new()
+	var waiting: Dictionary = Career.active()
+	var miss := Codex.missing(str(waiting.get("ship", ""))) if not waiting.is_empty() else []
+	if not miss.is_empty():
+		# a contract taken on a family of ship never trained for: its courses first
+		start_courses(miss, "contract")
+		SaveGame.load_requested = false
+		tree.change_scene_to_file("res://scenes/main.tscn")
+		return
 	var a: Dictionary = Career.sign_active()
 	if a.is_empty():
 		start_ship = "berth"

@@ -75,6 +75,12 @@ func _input(ev: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 					return
 		if game.tutorial.done and stamp_t > 1.2:
+			# a special course: one way on (the next course, the contract, the terminal)
+			if game.tutorial.special() != "":
+				if _go_rect().has_point(m):
+					get_viewport().set_input_as_handled()
+					game.after_special()
+				return
 			for i in 2:
 				if _choice_rect(i).has_point(m):
 					get_viewport().set_input_as_handled()
@@ -132,7 +138,8 @@ func _task_list() -> void:
 	var tut := game.tutorial
 	var x := 40.0
 	var y := 46.0
-	_text(game.txt("tut_course"), Vector2(x, y), 13, Pal.ink(0.45))
+	var sp: String = tut.special()
+	_text(game.txt("tut_course") if sp == "" else Txt.t("cxu_sp_course") % Txt.t("cxu_cls_" + sp).split(" · ")[-1], Vector2(x, y), 13, Pal.ink(0.45))
 	var ls: Array = tut.lessons()
 	var li: int = mini(tut.lesson_i, ls.size() - 1)
 	var l: Dictionary = ls[li] if li >= 0 else {}
@@ -223,6 +230,11 @@ func _tool_locks() -> void:
 		c.draw_arc(lc + Vector2(0, -3), 5.0, PI, TAU, 10, Pal.ink(0.45), 1.4, true)
 
 
+func _go_rect() -> Rect2:
+	var s := c.size
+	return Rect2(s.x * 0.5 - 200, s.y * 0.66, 400, 64)
+
+
 func _choice_rect(i: int) -> Rect2:
 	var s := c.size
 	return Rect2(s.x * 0.5 - 330 + i * 340, s.y * 0.5 + 10, 320, 64)
@@ -259,13 +271,27 @@ func _certificate(s: Vector2) -> void:
 	var col := Pal.heat(0.95 * a, 1.2) if Txt.cert_kind != "skipped" else Pal.ink(0.7 * a)
 	c.draw_arc(Vector2.ZERO, 118.0, 0.0, TAU, 72, col, 4.0, true)
 	c.draw_arc(Vector2.ZERO, 104.0, 0.0, TAU, 72, col, 1.5, true)
-	var title: String = game.txt("tut_cert")
+	var sp: String = game.tutorial.special()
+	var title: String = game.txt("tut_cert") if sp == "" else Txt.t("cxu_stamp_" + sp)
 	var tw := font_b.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x
 	c.draw_string(font_b, Vector2(-tw * 0.5, -6), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, col)
-	var sub := "BERTH 07  ·  OP-7"
+	var sub := "BERTH 07  ·  OP-7" if sp == "" else Txt.t("cxu_sp_cert")
 	var sw := font.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 	c.draw_string(font, Vector2(-sw * 0.5, 26), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, col)
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if e > 1.2 and sp != "":
+		# one button: on to what is waiting; the bonus, the first time
+		var b0 := clampf((e - 1.2) / 0.3, 0.0, 1.0)
+		if game.tutorial.bonus > 0.0:
+			_text(Txt.t("cxu_sp_paid") % Pal.money(game.tutorial.bonus), Vector2(s.x * 0.5, s.y * 0.62), 18, Pal.tint(Pal.FLUID, 0.95 * b0, 1.1), font_b, 0)
+		var gr := _go_rect()
+		gr.position.y += (1.0 - Pal.back(b0, 2.0)) * 20.0
+		var hot0 := gr.has_point(c.get_local_mouse_position())
+		c.draw_rect(gr, Color(0.03, 0.032, 0.037, 0.92 * b0))
+		c.draw_rect(gr, Pal.ink((0.6 if hot0 else 0.22) * b0), false, 1.2)
+		var nxt := "cxu_sp_next" if not Game.course_chain.is_empty() else ("cxu_sp_to_contract" if Game.course_then == "contract" else "cxu_sp_back")
+		_text(Txt.t(nxt), gr.get_center() + Vector2(0, 6), 17, Pal.ink(0.92 * b0), font_b, 0)
+		return
 	if e > 1.2:
 		var b := clampf((e - 1.2) / 0.3, 0.0, 1.0)
 		var m := c.get_local_mouse_position()

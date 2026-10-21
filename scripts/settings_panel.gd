@@ -6,7 +6,7 @@ extends CanvasLayer
 
 signal closed
 
-const ROWS := ["vol_master", "vol_music", "vol_sfx", "quality", "window", "anim", "calm", "lang", "context", "keys_row", "back"]
+const ROWS := ["vol_master", "vol_music", "vol_sfx", "quality", "window", "anim", "calm", "lang", "context", "codex_cards", "keys_row", "back"]
 
 var testing := false
 var is_open := false
@@ -158,6 +158,8 @@ func change(row: String, dir: int) -> void:
 			Txt.zh = not Txt.zh
 		"context":
 			Txt.context = not Txt.context
+		"codex_cards":
+			Txt.codex_cards = not Txt.codex_cards
 		"window":
 			Txt.fullscreen = not Txt.fullscreen
 		"calm":
@@ -186,6 +188,8 @@ func value(row: String) -> String:
 			return "中文" if Txt.zh else "ENGLISH"
 		"context":
 			return Txt.t("s_on") if Txt.context else Txt.t("s_off")
+		"codex_cards":
+			return Txt.t("s_on") if Txt.codex_cards else Txt.t("s_off")
 		"window":
 			return Txt.t("s_win_full") if Txt.fullscreen else Txt.t("s_win_window")
 		"calm":
