@@ -34,6 +34,11 @@ const MY := 10.1                 # the manifold (to 10.5)
 const SPHERES := [23.7, 28.7, 40.8, 45.8, 57.9, 62.9]
 const FILL := [1.4, 0.2, 2.4]    # each tank's propellant (of 4.0)
 const CAP := 4.0
+# a bipropellant cargo: monomethylhydrazine fore and aft, nitrogen tetroxide in the
+# middle. The two light on contact, so the oxidiser tank is kept off the fuel manifold:
+# its sump drains at its own low-point port (XV-2 / LD-2 on SUMP-2)
+const CHEM := ["mmh", "nto", "mmh"]
+const OX := 1                    # the oxidiser tank's index
 
 static var w
 static var by_tag := {}
@@ -198,7 +203,7 @@ static func _tanks() -> void:
 		var n := str(i + 1)
 		var x0: float = TX0[i]
 		var x1: float = TX1[i]
-		var tk = K.equip("T-" + n, "fueltank", K.mbox(_capsule(x0, TY0, x1, TY1)), {"mass": 6.0, "value": 18000.0, "fragile": 0.25, "hazard": "fuel_tank", "name_key": "p_prop_tank"}, _capsule(x0, TY0, x1, TY1))
+		var tk = K.equip("T-" + n, "fueltank", K.mbox(_capsule(x0, TY0, x1, TY1)), {"mass": 6.0, "value": 18000.0, "fragile": 0.25, "hazard": "fuel_tank", "name_key": "p_nto_tank" if i == OX else "p_mmh_tank"}, _capsule(x0, TY0, x1, TY1))
 		var third := (x1 - x0) / 3.0
 		tk.set_meta("segments", [[x0 + third, TY0, x0 + third, TY1], [x1 - third, TY0, x1 - third, TY1]])
 		# slung from the spine on two hangers, each strapped with two locks
@@ -215,7 +220,9 @@ static func _tanks() -> void:
 		K.bolt(sp, tk, x1 - 3.6, TY1 - 0.05)
 	var xm = K.equip("XMAN", "pipe", K.rect(19.0, MY, 78.0, MY + 0.4), {"mass": 1.2, "value": 3000.0, "fragile": 0.3, "name_key": "p_cross_manifold"})
 	for i in 3:
-		K.bolt(xm, by_tag["SUMP-%d" % (i + 1)], TX1[i] - 3.8, MY)
+		# the fuel manifold runs past the oxidiser tank's sump without a connection to it
+		if i != OX:
+			K.bolt(xm, by_tag["SUMP-%d" % (i + 1)], TX1[i] - 3.8, MY)
 	var rf = K.equip("RISER-F", "pipe", K.rect(19.0, 6.7, 19.4, MY), {"mass": 0.1, "value": 400.0, "fragile": 0.3, "name_key": "p_riser"})
 	K.bolt(rf, K.at(19.2, 6.5, ["hull"]), 19.2, 6.7)
 	K.bolt(rf, xm, 19.2, MY)
@@ -347,8 +354,13 @@ static func _controls() -> void:
 		var x0: float = TX0[i]
 		var x1: float = TX1[i]
 		var tk = by_tag["T-" + n]
-		K.ctrl("XV-" + n, "valve", by_tag["XMAN"], Vector2(x1 - 2.6, MY + 0.2), {"target": "XV-" + n, "state": false})
-		K.ctrl("LD-" + n, "port", by_tag["XMAN"], Vector2(x1 - 1.3, MY + 0.3), {"medium": "fuel", "target": "b" + n})
+		if i == OX:
+			# the oxidiser's own valve and drain, on its sump
+			K.ctrl("XV-" + n, "valve", by_tag["SUMP-" + n], Vector2(x1 - 4.1, MY - 0.3), {"target": "XV-" + n, "state": false})
+			K.ctrl("LD-" + n, "port", by_tag["SUMP-" + n], Vector2(x1 - 3.5, MY - 0.25), {"medium": "fuel", "target": "b" + n})
+		else:
+			K.ctrl("XV-" + n, "valve", by_tag["XMAN"], Vector2(x1 - 2.6, MY + 0.2), {"target": "XV-" + n, "state": false})
+			K.ctrl("LD-" + n, "port", by_tag["XMAN"], Vector2(x1 - 1.3, MY + 0.3), {"medium": "fuel", "target": "b" + n})
 		K.ctrl("L-" + n, "probe", tk, Vector2(x0 + 1.0, 5.8), {"medium": "level", "target": "t" + n})
 		K.ctrl("TV-" + n, "port", tk, Vector2(x0 + 6.0, TY0 + 0.3), {"medium": "gas", "target": "TU-" + n})
 		K.ctrl("PV-" + n, "valve", by_tag["NHDR"], Vector2((x0 + x1) * 0.5 + 1.2, -5.4), {"target": "PV-" + n, "state": true})
@@ -382,10 +394,15 @@ static func meta() -> Dictionary:
 	var valves: Array = []
 	for i in 3:
 		var n := str(i + 1)
-		vols["t" + n] = {"fluid": "fuel", "amount": FILL[i], "piece": "T-" + n, "port": "L-" + n, "full": CAP, "content": 1.0, "leak": 0.15}
-		vols["b" + n] = {"fluid": "fuel", "amount": 0.02 if FILL[i] > 0.0 else 0.0, "nets": ["pb" + n], "leak": 0.06, "leak_min": 0.004, "port": "LD-" + n, "full": 0.02}
+		vols["t" + n] = {"fluid": "fuel", "look": CHEM[i], "amount": FILL[i], "piece": "T-" + n, "port": "L-" + n, "full": CAP, "content": 1.0, "leak": 0.15}
+		vols["b" + n] = {"fluid": "fuel", "look": CHEM[i], "amount": 0.02 if FILL[i] > 0.0 else 0.0, "nets": ["pb" + n], "leak": 0.06, "leak_min": 0.004, "port": "LD-" + n, "full": 0.02}
 		joins.append({"a": "t" + n, "b": "b" + n, "valves": ["XV-" + n], "mode": "fill", "cap": 0.02, "leak_through": 0.05})
 		tanks["T-" + n] = {"vol": "t" + n, "valve": "XV-" + n, "cap": CAP, "ullage": "TU-" + n, "pv": "PV-" + n, "branch": "b" + n}
+		if i == OX:
+			# drawn at its own drain, not through the fuel manifold
+			vols["b" + n]["pump"] = [0.5, 0.03]
+			tanks["T-" + n]["own"] = true
+			tanks["T-" + n]["drain"] = "LD-" + n
 		gas_v["TU-" + n] = {"V": CAP - FILL[i], "kpa": 320.0, "piece": "T-" + n, "burst": 200.0}
 		valves.append({"ctrl": "PV-" + n, "a": "NH", "b": "TU-" + n, "g": 1.2})
 	# the pressurisation pipes hold the bank's gas, no liquid
@@ -423,7 +440,7 @@ static func meta() -> Dictionary:
 			"TV-1": {"rate": 0.8}, "TV-2": {"rate": 0.8}, "TV-3": {"rate": 0.8},
 			"NP-1": {"rate": 0.5}, "NP-2": {"rate": 0.5}, "NP-3": {"rate": 0.5}, "NP-4": {"rate": 0.5}, "NP-5": {"rate": 0.5}, "NP-6": {"rate": 0.5},
 			"PO": {"rate": 0.3}, "CP-1": {"rate": 0.3}, "CP-2": {"rate": 0.3}},
-		"labels": {"BAT": "BAT", "PWR-P": "PUMP PWR", "T-1": "T1", "T-2": "T2", "T-3": "T3", "XMAN": "XCONN", "PUMP-M": "MAIN PUMP", "PUMP-2": "PUMP 2", "PUMP-R": "RETURN",
+		"labels": {"BAT": "BAT", "PWR-P": "PUMP PWR", "T-1": "T1 MMH", "T-2": "T2 N2O4", "T-3": "T3 MMH", "XMAN": "XCONN", "PUMP-M": "MAIN PUMP", "PUMP-2": "PUMP 2", "PUMP-R": "RETURN",
 			"MV": "MAIN VALVES", "FMON": "FLUID MON", "VMAP": "VALVE MAP", "APU": "APU", "NHDR": "N2 HDR",
 			"NS-1": "N2", "NS-2": "N2", "NS-3": "N2", "NS-4": "N2", "NS-5": "N2", "NS-6": "N2", "CO2-1": "CO2", "CO2-2": "CO2", "O2B": "O2"},
 		"hints": {},
@@ -437,7 +454,7 @@ static func meta() -> Dictionary:
 			"section_x": 45.0,
 			"slots": {"hidden_damage": {"plates": ["HF3-0", "HF3-2", "HA0-0", "HA0-2"]},
 				"fire_system": {"x": 80.6, "y0": 5.6, "y1": 6.95, "base": ["HA2-0", 6.95], "room": "P", "port": [81.0, 5.67]},
-				"valve_leak": {"tanks": ["T-1", "T-2", "T-3"]}},
+				"valve_leak": {"tanks": ["T-1", "T-3"]}},
 			"mechanisms": true,
 		},
 		"procedures": {

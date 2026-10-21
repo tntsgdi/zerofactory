@@ -97,12 +97,14 @@ func _run() -> void:
 		g.do_wrench(_ctrl(g, "XV-" + n))
 	g.world.reveal("P", g.world.rooms["P"].from)
 	g.do_hose(_ctrl(g, "PR"))
+	# the oxidiser tank is off the fuel manifold: drawn at its own drain
+	g.do_hose(_ctrl(g, "LD-2"))
 	var t := 0.0
 	var held := func() -> float: return s.fluid("t1") + s.fluid("t2") + s.fluid("t3") + s.fluid("xm")
 	while held.call() > 0.03 and t < 400.0:
 		await _secs(1.0)
 		t += 1.0
-	check(held.call() <= 0.03, "every cross valve open, pressurised: the tanks and the manifold are drawn off (%.0f s)" % t)
+	check(held.call() <= 0.03, "every cross valve open, pressurised: the fuel tanks and the manifold drawn at the pump, the oxidiser at its own drain (%.0f s)" % t)
 	check(_count(g, "tank_buckled") == 0, "and no tank buckles")
 	await _secs(24.0)
 	check(_count(g, "pump_dry") == 1 and g.world.tag("PUMP-M").cond <= 0.5, "left drawing a dry manifold: the main pump runs dry (%.2f)" % g.world.tag("PUMP-M").cond)

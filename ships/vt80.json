@@ -40,7 +40,7 @@
 	"tanknet": {
 		"tanks": {
 			"T-1": {"branch":"b1","cap":4.0,"pv":"PV-1","ullage":"TU-1","valve":"XV-1","vol":"t1"},
-			"T-2": {"branch":"b2","cap":4.0,"pv":"PV-2","ullage":"TU-2","valve":"XV-2","vol":"t2"},
+			"T-2": {"branch":"b2","cap":4.0,"drain":"LD-2","own":true,"pv":"PV-2","ullage":"TU-2","valve":"XV-2","vol":"t2"},
 			"T-3": {"branch":"b3","cap":4.0,"pv":"PV-3","ullage":"TU-3","valve":"XV-3","vol":"t3"}
 		},
 		"manifold": "xm",
@@ -60,12 +60,12 @@
 	},
 	"fluids": {
 		"volumes": {
-			"t1": {"amount":1.4,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"piece":"T-1","port":"L-1"},
-			"b1": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"nets":["pb1"],"port":"LD-1"},
-			"t2": {"amount":0.2,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"piece":"T-2","port":"L-2"},
-			"b2": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"nets":["pb2"],"port":"LD-2"},
-			"t3": {"amount":2.4,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"piece":"T-3","port":"L-3"},
-			"b3": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"nets":["pb3"],"port":"LD-3"},
+			"t1": {"amount":1.4,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"look":"mmh","piece":"T-1","port":"L-1"},
+			"b1": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"look":"mmh","nets":["pb1"],"port":"LD-1"},
+			"t2": {"amount":0.2,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"look":"nto","piece":"T-2","port":"L-2"},
+			"b2": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"look":"nto","nets":["pb2"],"port":"LD-2","pump":[0.5,0.03]},
+			"t3": {"amount":2.4,"content":1.0,"fluid":"fuel","full":4.0,"leak":0.15,"look":"mmh","piece":"T-3","port":"L-3"},
+			"b3": {"amount":0.02,"fluid":"fuel","full":0.02,"leak":0.06,"leak_min":0.004,"look":"mmh","nets":["pb3"],"port":"LD-3"},
 			"n2_line": {"amount":0.0,"fluid":"n2","nets":["n2"]},
 			"xm": {"amount":0.15,"fluid":"fuel","full":0.4,"leak":0.1,"leak_min":0.004,"nets":["pxm"],"piece":"XMAN","port":"PR","pump":[0.12,0.01]}
 		},
@@ -95,7 +95,7 @@
 		"CP-1": {"rate":0.3},
 		"CP-2": {"rate":0.3}
 	},
-	"labels": {"APU":"APU","BAT":"BAT","CO2-1":"CO2","CO2-2":"CO2","FMON":"FLUID MON","MV":"MAIN VALVES","NHDR":"N2 HDR","NS-1":"N2","NS-2":"N2","NS-3":"N2","NS-4":"N2","NS-5":"N2","NS-6":"N2","O2B":"O2","PUMP-2":"PUMP 2","PUMP-M":"MAIN PUMP","PUMP-R":"RETURN","PWR-P":"PUMP PWR","T-1":"T1","T-2":"T2","T-3":"T3","VMAP":"VALVE MAP","XMAN":"XCONN"},
+	"labels": {"APU":"APU","BAT":"BAT","CO2-1":"CO2","CO2-2":"CO2","FMON":"FLUID MON","MV":"MAIN VALVES","NHDR":"N2 HDR","NS-1":"N2","NS-2":"N2","NS-3":"N2","NS-4":"N2","NS-5":"N2","NS-6":"N2","O2B":"O2","PUMP-2":"PUMP 2","PUMP-M":"MAIN PUMP","PUMP-R":"RETURN","PWR-P":"PUMP PWR","T-1":"T1 MMH","T-2":"T2 N2O4","T-3":"T3 MMH","VMAP":"VALVE MAP","XMAN":"XCONN"},
 	"hints": {},
 	"market": {
 		"class": "VT",
@@ -111,7 +111,7 @@
 		"slots": {
 			"hidden_damage": {"plates":["HF3-0","HF3-2","HA0-0","HA0-2"]},
 			"fire_system": {"base":["HA2-0",6.95],"port":[81.0,5.67],"room":"P","x":80.6,"y0":5.6,"y1":6.95},
-			"valve_leak": {"tanks":["T-1","T-2","T-3"]}
+			"valve_leak": {"tanks":["T-1","T-3"]}
 		},
 		"mechanisms": true
 	},
@@ -191,15 +191,15 @@
 		{"barrier":true,"cut_speed":130.0,"density":2.0,"key":"SP-T-4","kind":"beam","mass":10.16,"name_key":"p_spine","poly":[[59.0,-1.8],[71.7,-1.8],[71.7,-1.4],[59.0,-1.4]],"tag":"SP-T-4"},
 		{"barrier":true,"cut_speed":130.0,"density":2.0,"key":"SP-B-4","kind":"beam","mass":10.16,"name_key":"p_spine","poly":[[59.0,1.1],[71.7,1.1],[71.7,1.5],[59.0,1.5]],"tag":"SP-B-4"},
 		{"art":"lamp","art_size":[0.56,0.16],"art_xf":[1.0,0.0,0.0,1.0,44.7200012207031,-1.39999993642171],"cut_speed":260.0,"density":1.0,"key":"LAMP-K","kind":"fixture","mass":0.04,"name_key":"p_lamp","poly":[[44.72,-1.4],[45.28,-1.4],[45.28,-1.24],[44.72,-1.24]],"room":"K","tag":"LAMP-K"},
-		{"art":"fueltank","art_size":[16.0,7.4],"art_xf":[1.0,0.0,0.0,1.0,20.7000007629395,2.09999990463257],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.25,"hazard":"fuel_tank","key":"T-1","kind":"equip","mass":6.0,"name_key":"p_prop_tank","poly":[[22.328,2.1],[35.072,2.1],[36.7,4.3792],[36.7,7.2208],[35.072,9.5],[22.328,9.5],[20.7,7.2208],[20.7,4.3792]],"segments":[[26.0333333333333,2.1,26.0333333333333,9.5],[31.3666666666667,2.1,31.3666666666667,9.5]],"tag":"T-1","value":18000.0},
+		{"art":"fueltank","art_size":[16.0,7.4],"art_xf":[1.0,0.0,0.0,1.0,20.7000007629395,2.09999990463257],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.25,"hazard":"fuel_tank","key":"T-1","kind":"equip","mass":6.0,"name_key":"p_mmh_tank","poly":[[22.328,2.1],[35.072,2.1],[36.7,4.3792],[36.7,7.2208],[35.072,9.5],[22.328,9.5],[20.7,7.2208],[20.7,4.3792]],"segments":[[26.0333333333333,2.1,26.0333333333333,9.5],[31.3666666666667,2.1,31.3666666666667,9.5]],"tag":"T-1","value":18000.0},
 		{"cut_speed":150.0,"density":1.6,"key":"HG-11","kind":"strut","mass":0.48,"name_key":"p_tank_hanger","poly":[[23.7,1.5],[24.2,1.5],[24.2,2.1],[23.7,2.1]],"tag":"HG-11"},
 		{"cut_speed":150.0,"density":1.6,"key":"HG-12","kind":"strut","mass":0.48,"name_key":"p_tank_hanger","poly":[[33.2,1.5],[33.7,1.5],[33.7,2.1],[33.2,2.1]],"tag":"HG-12"},
 		{"art":"pump","art_size":[1.2,0.65],"art_xf":[1.0,0.0,0.0,1.0,32.2999979654948,9.4499994913737],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.35,"key":"SUMP-1","kind":"equip","mass":0.15,"name_key":"p_sump_pump","poly":[[32.3,9.45],[33.5,9.45],[33.5,10.1],[32.3,10.1]],"tag":"SUMP-1","value":1500.0},
-		{"art":"fueltank","art_size":[16.2,7.4],"art_xf":[1.0,0.0,0.0,1.0,37.7000020345052,2.09999990463257],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.25,"hazard":"fuel_tank","key":"T-2","kind":"equip","mass":6.0,"name_key":"p_prop_tank","poly":[[39.328,2.1],[52.272,2.1],[53.9,4.3792],[53.9,7.2208],[52.272,9.5],[39.328,9.5],[37.7,7.2208],[37.7,4.3792]],"segments":[[43.1,2.1,43.1,9.5],[48.5,2.1,48.5,9.5]],"tag":"T-2","value":18000.0},
+		{"art":"fueltank","art_size":[16.2,7.4],"art_xf":[1.0,0.0,0.0,1.0,37.7000020345052,2.09999990463257],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.25,"hazard":"fuel_tank","key":"T-2","kind":"equip","mass":6.0,"name_key":"p_nto_tank","poly":[[39.328,2.1],[52.272,2.1],[53.9,4.3792],[53.9,7.2208],[52.272,9.5],[39.328,9.5],[37.7,7.2208],[37.7,4.3792]],"segments":[[43.1,2.1,43.1,9.5],[48.5,2.1,48.5,9.5]],"tag":"T-2","value":18000.0},
 		{"cut_speed":150.0,"density":1.6,"key":"HG-21","kind":"strut","mass":0.48,"name_key":"p_tank_hanger","poly":[[40.7,1.5],[41.2,1.5],[41.2,2.1],[40.7,2.1]],"tag":"HG-21"},
 		{"cut_speed":150.0,"density":1.6,"key":"HG-22","kind":"strut","mass":0.48,"name_key":"p_tank_hanger","poly":[[50.4,1.5],[50.9,1.5],[50.9,2.1],[50.4,2.1]],"tag":"HG-22"},
 		{"art":"pump","art_size":[1.2,0.65],"art_xf":[1.0,0.0,0.0,1.0,49.5,9.4499994913737],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.35,"key":"SUMP-2","kind":"equip","mass":0.15,"name_key":"p_sump_pump","poly":[[49.5,9.45],[50.7,9.45],[50.7,10.1],[49.5,10.1]],"tag":"SUMP-2","value":1500.0},
-		{"art":"fueltank","art_size":[16.1,7.4],"art_xf":[1.0,0.0,0.0,1.0,54.7999979654948,2.09999990463257],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.25,"hazard":"fuel_tank","key":"T-3","kind":"equip","mass":6.0,"name_key":"p_prop_tank","poly":[[56.428,2.1],[69.272,2.1],[70.9,4.3792],[70.9,7.2208],[69.272,9.5],[56.428,9.5],[54.8,7.2208],[54.8,4.3792]],"segments":[[60.1666666666667,2.1,60.1666666666667,9.5],[65.5333333333333,2.1,65.5333333333333,9.5]],"tag":"T-3","value":18000.0},
+		{"art":"fueltank","art_size":[16.1,7.4],"art_xf":[1.0,0.0,0.0,1.0,54.7999979654948,2.09999990463257],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.25,"hazard":"fuel_tank","key":"T-3","kind":"equip","mass":6.0,"name_key":"p_mmh_tank","poly":[[56.428,2.1],[69.272,2.1],[70.9,4.3792],[70.9,7.2208],[69.272,9.5],[56.428,9.5],[54.8,7.2208],[54.8,4.3792]],"segments":[[60.1666666666667,2.1,60.1666666666667,9.5],[65.5333333333333,2.1,65.5333333333333,9.5]],"tag":"T-3","value":18000.0},
 		{"cut_speed":150.0,"density":1.6,"key":"HG-31","kind":"strut","mass":0.48,"name_key":"p_tank_hanger","poly":[[57.8,1.5],[58.3,1.5],[58.3,2.1],[57.8,2.1]],"tag":"HG-31"},
 		{"cut_speed":150.0,"density":1.6,"key":"HG-32","kind":"strut","mass":0.48,"name_key":"p_tank_hanger","poly":[[67.4,1.5],[67.9,1.5],[67.9,2.1],[67.4,2.1]],"tag":"HG-32"},
 		{"art":"pump","art_size":[1.2,0.65],"art_xf":[1.0,0.0,0.0,1.0,66.5,9.4499994913737],"cls":"equip","cut_speed":140.0,"density":1.0,"dest":"equip","fragile":0.35,"key":"SUMP-3","kind":"equip","mass":0.15,"name_key":"p_sump_pump","poly":[[66.5,9.45],[67.7,9.45],[67.7,10.1],[66.5,10.1]],"tag":"SUMP-3","value":1500.0},
@@ -368,7 +368,6 @@
 		{"a":"SUMP-3","at":[66.9,9.45],"b":"T-3","type":"bolt"},
 		{"a":"SUMP-3","at":[67.3,9.45],"b":"T-3","type":"bolt"},
 		{"a":"XMAN","at":[32.9,10.1],"b":"SUMP-1","type":"bolt"},
-		{"a":"XMAN","at":[50.1,10.1],"b":"SUMP-2","type":"bolt"},
 		{"a":"XMAN","at":[67.1,10.1],"b":"SUMP-3","type":"bolt"},
 		{"a":"RISER-F","at":[19.2,6.7],"b":"HF5-0","type":"bolt"},
 		{"a":"RISER-F","at":[19.2,10.1],"b":"XMAN","type":"bolt"},
@@ -468,8 +467,8 @@
 		{"at":[21.7,5.8],"id":"L-1","kind":"probe","medium":"level","piece":"T-1","target":"t1"},
 		{"at":[26.7,2.4],"id":"TV-1","kind":"port","medium":"gas","piece":"T-1","target":"TU-1"},
 		{"at":[29.9,-5.4],"id":"PV-1","kind":"valve","piece":"NHDR","state":true,"target":"PV-1"},
-		{"at":[51.3,10.3],"id":"XV-2","kind":"valve","piece":"XMAN","target":"XV-2"},
-		{"at":[52.6,10.4],"id":"LD-2","kind":"port","medium":"fuel","piece":"XMAN","target":"b2"},
+		{"at":[49.8,9.8],"id":"XV-2","kind":"valve","piece":"SUMP-2","target":"XV-2"},
+		{"at":[50.4,9.85],"id":"LD-2","kind":"port","medium":"fuel","piece":"SUMP-2","target":"b2"},
 		{"at":[38.7,5.8],"id":"L-2","kind":"probe","medium":"level","piece":"T-2","target":"t2"},
 		{"at":[43.7,2.4],"id":"TV-2","kind":"port","medium":"gas","piece":"T-2","target":"TU-2"},
 		{"at":[47.0,-5.4],"id":"PV-2","kind":"valve","piece":"NHDR","state":true,"target":"PV-2"},

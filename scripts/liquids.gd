@@ -11,7 +11,11 @@ extends Node2D
 #   water: evaporates slowly in air; in vacuum it freezes over into a ball of ice and
 #     slowly sublimes;
 #   fuel: oily, slow to evaporate (its vapour still feeds the systems' fuel clouds);
-#     a laser through a fuel globule lights it;
+#   MMH and N₂O₄ (a bipropellant's fuel and oxidiser): the hydrazine clear and slow to
+#     boil, the tetroxide orange-brown and boiling hard in vacuum (its vapour pressure
+#     is near an atmosphere) until it freezes over; the two light on contact;
+#   what burns, and when, is combustion.gd's: the vapour a burnable globule boils off
+#     is handed to it;
 #   glycol coolant: like water, but never freezes and barely evaporates;
 #   drilling mud: thick, never splashes, sticks wherever it lands.
 # What a globule does to what it touches (none for the "quiet" ones a module spilt and
@@ -28,17 +32,21 @@ const RHO_GAP := 0.6            # how close two globules come before they merge 
 
 # per look: boil fraction/s in vacuum and in air, flash fraction lost on the way out,
 # density (kg/m³, for the air drag), splash speed (m/s) above which it breaks up,
-# whether it freezes
+# whether it freezes (s in vacuum before it does), its vapour pressure at the berth's
+# temperature (kPa: what pushes it out of a holed tank with no gas over it)
 const LOOKS := {
-	"lhe": {"boil_v": 0.30, "boil_a": 0.45, "flash": 0.45, "rho": 125.0, "splash": 1.5, "cryo": true},
-	"lh2": {"boil_v": 0.12, "boil_a": 0.22, "flash": 0.25, "rho": 71.0, "splash": 1.8, "cryo": true},
-	"lng": {"boil_v": 0.05, "boil_a": 0.09, "flash": 0.12, "rho": 430.0, "splash": 2.0, "cryo": true},
-	"ln2": {"boil_v": 0.07, "boil_a": 0.12, "flash": 0.15, "rho": 810.0, "splash": 2.0, "cryo": true},
-	"water": {"boil_v": 0.004, "boil_a": 0.0015, "flash": 0.0, "rho": 1000.0, "splash": 2.4, "freeze": 6.0},
-	"fuel": {"boil_v": 0.006, "boil_a": 0.003, "flash": 0.0, "rho": 800.0, "splash": 2.8},
-	"glycol": {"boil_v": 0.001, "boil_a": 0.0005, "flash": 0.0, "rho": 1110.0, "splash": 2.6},
-	"mud": {"boil_v": 0.0, "boil_a": 0.0, "flash": 0.0, "rho": 1800.0, "splash": 99.0, "sticky": true},
+	"lhe": {"boil_v": 0.30, "boil_a": 0.45, "flash": 0.45, "rho": 125.0, "splash": 1.5, "cryo": true, "pvap": 130.0},
+	"lh2": {"boil_v": 0.12, "boil_a": 0.22, "flash": 0.25, "rho": 71.0, "splash": 1.8, "cryo": true, "pvap": 130.0},
+	"lng": {"boil_v": 0.05, "boil_a": 0.09, "flash": 0.12, "rho": 430.0, "splash": 2.0, "cryo": true, "pvap": 120.0},
+	"ln2": {"boil_v": 0.07, "boil_a": 0.12, "flash": 0.15, "rho": 810.0, "splash": 2.0, "cryo": true, "pvap": 120.0},
+	"water": {"boil_v": 0.004, "boil_a": 0.0015, "flash": 0.0, "rho": 1000.0, "splash": 2.4, "freeze": 6.0, "pvap": 2.3},
+	"fuel": {"boil_v": 0.006, "boil_a": 0.003, "flash": 0.0, "rho": 800.0, "splash": 2.8, "pvap": 0.7},
+	"mmh": {"boil_v": 0.02, "boil_a": 0.004, "flash": 0.02, "rho": 880.0, "splash": 2.8, "freeze": 14.0, "pvap": 5.0},
+	"nto": {"boil_v": 0.12, "boil_a": 0.03, "flash": 0.15, "rho": 1440.0, "splash": 2.6, "freeze": 4.0, "pvap": 96.0},
+	"glycol": {"boil_v": 0.001, "boil_a": 0.0005, "flash": 0.0, "rho": 1110.0, "splash": 2.6, "pvap": 0.01},
+	"mud": {"boil_v": 0.0, "boil_a": 0.0, "flash": 0.0, "rho": 1800.0, "splash": 99.0, "sticky": true, "pvap": 0.0},
 }
+const CRYO := ["lhe", "lh2", "lng", "ln2"]
 
 var game
 var world
@@ -142,7 +150,6 @@ func _physics_process(dt: float) -> void:
 	_flush()
 	if Engine.get_physics_frames() % 2 == 0:
 		_merge()
-	_burn_check()
 	for f in frost:
 		f[1] = float(f[1]) + dt
 	frost = frost.filter(func(f): return float(f[1]) < 24.0)
@@ -164,16 +171,21 @@ func _leaks(dt: float) -> void:
 		var look := look_of(v)
 		var at: Vector2 = game.leak_pos(lk)
 		var dir: Vector2 = lk.dir if lk.dir != Vector2.ZERO else Vector2.UP
-		jets.append([at, dir, flow, look])
-		# a jet: a stream of globules every few frames, sized by the flow
-		var each: float = clampf(flow * 0.12, 0.0004, MAX_VOL)
+		var severed: bool = lk.get("severed", false)
+		if not severed:
+			jets.append([at, dir, flow, look])
+		# a jet: a stream of globules every few frames, sized by the flow (a tank cut open
+		# lets its liquid go in big masses, all round the opening)
+		var each: float = clampf(flow * (0.12 if flow < 0.3 else 0.06), 0.0004, MAX_VOL if flow < 0.3 else 0.09)
 		var n := 0
-		while acc >= each and n < 4:
+		var spread: float = 1.6 if severed else 0.35
+		# the jet's speed: from the pressure behind the hole (systems.gd), or a seep
+		var sp: float = clampf(float(lk.v), 1.0, 18.0) if lk.has("v") else clampf(1.5 + flow * 30.0, 1.5, 6.0)
+		while acc >= each and n < 6:
 			acc -= each
 			n += 1
-			var sp: float = clampf(1.5 + flow * 30.0, 1.5, 6.0)
-			_add(at + dir * 0.2 * Geom.M, dir.rotated(randf_range(-0.35, 0.35)) * sp * randf_range(0.7, 1.2) * Geom.M, each, look, false)
-		lk["_liq"] = minf(acc, each * 4.0)
+			_add(at + dir * 0.2 * Geom.M, dir.rotated(randf_range(-spread, spread)) * sp * randf_range(0.7, 1.2) * Geom.M, each, look, false)
+		lk["_liq"] = minf(acc, each * 6.0)
 
 
 var _bounds := Rect2()
@@ -211,6 +223,7 @@ func _move(dt: float) -> void:
 		var near: bool = _near_ship(b.pos)
 		var kpa: float = _room_kpa(b.pos) if near else 0.0
 		var air: bool = kpa > 5.0
+		var v0: float = float(b.vol)
 		# evaporation / boiling, freezing
 		if bool(lk.get("cryo", false)):
 			var boil: float = float(lk.boil_a if air else lk.boil_v)
@@ -229,6 +242,13 @@ func _move(dt: float) -> void:
 		if float(b.vol) < 0.00008:
 			dead.append(b)
 			continue
+		# what a burnable one boiled off is vapour, handed on in lumps
+		if game.combustion != null and game.combustion.reacts(b.look):
+			var vap: float = float(b.get("vap", 0.0)) + (v0 - float(b.vol)) * float(lk.get("rho", 1000.0))
+			if vap > 0.05 or (vap > 0.0 and fmod(float(b.t), 0.3) < dt):
+				game.combustion.add_vapour(b.pos, b.vel * 0.2, vap, b.look)
+				vap = 0.0
+			b["vap"] = vap
 		if int(b.stuck) >= 0:
 			var sp = world.pieces.get(int(b.stuck))
 			if sp == null or sp.gone:
@@ -305,6 +325,8 @@ func _touch(b: Dictionary, p) -> void:
 		game._dent(p, maxf(0.0, p.cond - 0.08 * size_k), "dv_wet_short")
 		game.note_loss("dv_wet_short", p.tag, (before2 - p.cond) * p.value)
 		game.fx.sparks(b.pos, b.nrm if b.nrm != Vector2.ZERO else Vector2.UP, 6, Pal.ink(0.9, 1.6), 140.0, 0.25, 1.2)
+		if game.combustion != null:
+			game.combustion.spark(b.pos, 0.6)
 
 
 func _drone_wet(b: Dictionary, lk: Dictionary) -> void:
@@ -375,23 +397,6 @@ func _merge() -> void:
 	blobs = keep
 
 
-# a laser through a fuel globule: it lights (the systems' fuel cloud fire)
-func _burn_check() -> void:
-	var tl = game.tools
-	if tl == null or not tl.cutting:
-		return
-	for b in blobs:
-		if b.look != "fuel" or b.ice:
-			continue
-		if b.pos.distance_to(tl.front) < radius_m(b.vol) * Geom.M + 6.0:
-			var r: float = 1.5 * Geom.M + radius_m(b.vol) * Geom.M * 6.0
-			game.on_ignite({"pos": b.pos, "r": r, "amount": float(b.vol)}, b.pos)
-			for o in blobs:
-				if o.look == "fuel" and o.pos.distance_to(b.pos) < r:
-					o.vol = 0.0
-			return
-
-
 # ---------------------------------------------------------------- drawing
 
 func _draw() -> void:
@@ -401,8 +406,8 @@ func _draw() -> void:
 		var sz: float = float(f[2])
 		for k in 6:
 			var d := Vector2.from_angle(k * TAU / 6.0 + float(c.x) * 0.1)
-			draw_line(c + d * sz * 0.2, c + d * sz, Pal.ink(a), 1.0, true)
-			draw_line(c + d * sz * 0.6, c + d * sz * 0.6 + d.rotated(0.8) * sz * 0.25, Pal.ink(a * 0.7), 1.0, true)
+			draw_line(c + d * sz * 0.2, c + d * sz, Pal.ink(a), 1.0, false)
+			draw_line(c + d * sz * 0.6, c + d * sz * 0.6 + d.rotated(0.8) * sz * 0.25, Pal.ink(a * 0.7), 1.0, false)
 	for j in jets:
 		_draw_jet(j)
 	for b in blobs:
@@ -416,7 +421,7 @@ func _draw_jet(j: Array) -> void:
 	var dir: Vector2 = j[1]
 	var flow: float = float(j[2])
 	var look: String = j[3]
-	var cryo: bool = look in ["lhe", "lh2", "lng", "ln2"]
+	var cryo: bool = look in CRYO
 	var len_px: float = clampf(0.3 + flow * 12.0, 0.3, 1.4) * Geom.M
 	var w0: float = clampf(1.5 + flow * 40.0, 1.5, 5.0)
 	var nrm := Vector2(-dir.y, dir.x)
@@ -431,16 +436,16 @@ func _draw_jet(j: Array) -> void:
 		var c: Vector2 = at + dir * len_px * f
 		left.append(c + nrm * wv * 0.5)
 		right.append(c - nrm * wv * 0.5)
-	draw_polyline(left, col, 1.0, true)
-	draw_polyline(right, col, 1.0, true)
+	draw_polyline(left, col, 1.0, false)
+	draw_polyline(right, col, 1.0, false)
 	# the drops just pinched off its end
 	for k in 3:
 		var f2: float = 1.08 + k * 0.1 + fposmod(_t * 3.0, 0.1)
-		draw_arc(at + dir * len_px * f2, w0 * 0.45, 0.0, TAU, 8, col, 1.0, true)
+		draw_arc(at + dir * len_px * f2, w0 * 0.45, 0.0, TAU, 8, col, 1.0, false)
 	if cryo:
 		for k in 3:
 			var f3: float = fposmod(_t * 1.5 + k * 0.33, 1.0)
-			draw_arc(at + dir * len_px * f3 * 1.4 + nrm * sin(f3 * 9.0 + k) * 6.0, 3.0 + f3 * 10.0, 0.0, TAU, 10, Pal.ink(0.12 * (1.0 - f3)), 1.0, true)
+			draw_arc(at + dir * len_px * f3 * 1.4 + nrm * sin(f3 * 9.0 + k) * 6.0, 3.0 + f3 * 10.0, 0.0, TAU, 10, Pal.ink(0.12 * (1.0 - f3)), 1.0, false)
 
 
 func _draw_blob(b: Dictionary) -> void:
@@ -453,9 +458,13 @@ func _draw_blob(b: Dictionary) -> void:
 		"lhe", "lh2", "lng", "ln2":
 			col = Pal.tint(Pal.FLUID, 0.95, 1.6)
 			w = 0.9
-		"fuel":
+		"fuel", "mmh":
 			col = Pal.tint(Pal.FLUID, 0.8, 1.0)
 			w = 1.8
+		"nto":
+			# nitrogen tetroxide: yellow-orange liquid
+			col = Color(0.95, 0.6, 0.28, 0.9)
+			w = 1.6
 		"mud":
 			col = Pal.ink(0.35)
 			w = 1.4
@@ -466,9 +475,9 @@ func _draw_blob(b: Dictionary) -> void:
 			var a: float = k * TAU / 7.0 + float(b.ph)
 			pts.append(c + Vector2.from_angle(a) * r * (0.9 + 0.12 * sin(a * 3.0 + float(b.ph))))
 		pts.append(pts[0])
-		draw_polyline(pts, Pal.ink(0.7), 1.1, true)
-		draw_line(pts[0], pts[3], Pal.ink(0.25), 1.0, true)
-		draw_line(pts[1], pts[5], Pal.ink(0.2), 1.0, true)
+		draw_polyline(pts, Pal.ink(0.7), 1.1, false)
+		draw_line(pts[0], pts[3], Pal.ink(0.25), 1.0, false)
+		draw_line(pts[1], pts[5], Pal.ink(0.2), 1.0, false)
 		return
 	var stuck: bool = int(b.stuck) >= 0
 	var n := 10 if r < 4.0 else (16 if r < 10.0 else 24)
@@ -495,26 +504,26 @@ func _draw_blob(b: Dictionary) -> void:
 	var body: PackedVector2Array = pts2.slice(0, n)
 	if r > 2.5 and not Geometry2D.triangulate_polygon(body).is_empty():
 		draw_colored_polygon(body, Pal.ink(0.12) if look == "mud" else Color(col.r, col.g, col.b, 0.07))
-	draw_polyline(pts2, col, w, true)
+	draw_polyline(pts2, col, w, false)
 	if r < 3.0:
 		return
 	match look:
 		"water", "glycol":
 			# the highlight the light makes on a clear sphere
-			draw_arc(c + Vector2(-r * 0.28, -r * 0.28), r * 0.42, PI * 1.05, PI * 1.55, 6, Pal.ink(0.55), 1.0, true)
+			draw_arc(c + Vector2(-r * 0.28, -r * 0.28), r * 0.42, PI * 1.05, PI * 1.55, 6, Pal.ink(0.55), 1.0, false)
 			if look == "glycol":
-				draw_arc(c, r * 0.78, 0.0, TAU, n, Color(col.r, col.g, col.b, 0.3), 1.0, true)
-		"fuel":
+				draw_arc(c, r * 0.78, 0.0, TAU, n, Color(col.r, col.g, col.b, 0.3), 1.0, false)
+		"fuel", "mmh", "nto":
 			# the oily film swirling inside
 			var sw: float = _t * 0.8 + float(b.ph)
-			draw_arc(c, r * 0.55, sw, sw + 2.2, 8, Color(col.r, col.g, col.b, 0.5), 1.0, true)
-			draw_arc(c, r * 0.3, -sw * 1.3, -sw * 1.3 + 1.8, 6, Color(col.r, col.g, col.b, 0.35), 1.0, true)
-			draw_arc(c + Vector2(-r * 0.3, -r * 0.3), r * 0.35, PI * 1.1, PI * 1.5, 5, Pal.ink(0.4), 1.0, true)
+			draw_arc(c, r * 0.55, sw, sw + 2.2, 8, Color(col.r, col.g, col.b, 0.5), 1.0, false)
+			draw_arc(c, r * 0.3, -sw * 1.3, -sw * 1.3 + 1.8, 6, Color(col.r, col.g, col.b, 0.35), 1.0, false)
+			draw_arc(c + Vector2(-r * 0.3, -r * 0.3), r * 0.35, PI * 1.1, PI * 1.5, 5, Pal.ink(0.4), 1.0, false)
 		"lhe", "lh2", "lng", "ln2":
 			# boiling: vapour bubbles nucleating inside and rising out of it
 			for k in 3:
 				var bp: Vector2 = c + Vector2.from_angle(float(b.ph) * 3.0 + k * 2.1 + _t * 2.0) * r * fposmod(_t * 0.9 + k * 0.33, 1.0) * 0.8
-				draw_arc(bp, maxf(0.8, r * 0.12), 0.0, TAU, 6, Pal.ink(0.5), 1.0, true)
+				draw_arc(bp, maxf(0.8, r * 0.12), 0.0, TAU, 6, Pal.ink(0.5), 1.0, false)
 		"mud":
 			for k in mini(8, int(r * 0.6)):
 				var gp: Vector2 = c + Vector2.from_angle(k * 2.4 + float(b.ph)) * r * fposmod(k * 0.37, 0.8)

@@ -1037,7 +1037,7 @@ func _commit_cut(p, pl: PackedVector2Array, r: float = KERF) -> Dictionary:
 	var old_cuts: PackedVector2Array = p.get_meta("cuts", PackedVector2Array())
 	# what the equipment looked like before it was cut up: each part keeps it, drawn
 	# clipped to what is left of it (free_body.gd)
-	var ghost = p.get_meta("ghost", null)
+	var ghost = p.get_meta("ghost") if p.has_meta("ghost") else null
 	if ghost == null and p.art != "" and p.cls == "equip":
 		ghost = [p.art, p.art_xf, p.art_size]
 	p.poly = parts[0]
@@ -1375,7 +1375,7 @@ func _mark_cut_edges(q, old_poly: PackedVector2Array, old_cuts: PackedVector2Arr
 # a kerf's edge as cut metal looks: not ruler-straight but wandering a little, a
 # band of scorched metal along it on the inside, beads of dross along the outside
 func _cut_edges(ci: CanvasItem, p, off: Vector2) -> void:
-	var cache = p.get_meta("cuts_draw", null)
+	var cache = p.get_meta("cuts_draw") if p.has_meta("cuts_draw") else null
 	if cache == null:
 		var cuts: PackedVector2Array = p.get_meta("cuts")
 		var edge := PackedVector2Array()

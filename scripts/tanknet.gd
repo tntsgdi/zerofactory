@@ -14,6 +14,9 @@ extends Node
 #   The main pump draws the manifold at the recovery port, only with power; kept
 #   drawing with the manifold dry and nothing left to feed it, it runs dry and is
 #   damaged.
+#   A tank marked "own" (a bipropellant's oxidiser) is not on the manifold at all:
+#   it is drawn at its own drain port ("drain"), its cross valve only opening it to
+#   its branch.
 #   A tank's ullage follows its level: as the liquid goes, the gas over it
 #   expands. With its pressurisation shut and the ullage vented, drawing liquid
 #   pulls a vacuum and the tank buckles (badly damaged).
@@ -114,6 +117,8 @@ func _physics_process(dt: float) -> void:
 	for t in cfg.tanks:
 		var e: Dictionary = cfg.tanks[t]
 		before[t] = s.fluid(e.vol)
+		if e.get("own", false):
+			continue
 		var k := 0.0
 		if s.on(e.valve):
 			k = 1.0

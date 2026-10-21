@@ -465,6 +465,15 @@ func _prep() -> void:
 					_note("cross valve %s open" % xv)
 					_work(2.5)
 					return
+			# an oxidiser tank kept off the manifold: drawn at its own drain
+			for t in tn.tanks:
+				var dp: String = tn.tanks[t].get("drain", "")
+				if dp != "" and s.fluid(tn.tanks[t].vol) > 0.02 and not s.hoses.has(dp) and not _hidden(dp) and _once("drain " + dp):
+					done_ops["hose " + dp] = true
+					_h(dp)
+					_note("draw the oxidiser at its own drain %s" % dp)
+					_work(2.5)
+					return
 			if not s.hoses.has(tn.port) and not _hidden(tn.port) and _once("draw " + tn.port):
 				done_ops["hose " + tn.port] = true
 				_h(tn.port)
@@ -477,6 +486,13 @@ func _prep() -> void:
 				_note("propellant drawn: %s off" % tn.port)
 				_work(1.5)
 				return
+			for t in tn.tanks:
+				var dp2: String = tn.tanks[t].get("drain", "")
+				if dp2 != "" and s.hoses.has(dp2) and _once("drain off " + dp2):
+					_h(dp2)
+					_note("oxidiser drawn: %s off" % dp2)
+					_work(1.5)
+					return
 			for t in tn.tanks:
 				var pv: String = tn.tanks[t].get("pv", "")
 				if pv != "" and s.on(pv) and not _hidden(pv) and _once("pv " + pv):

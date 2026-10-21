@@ -34,7 +34,7 @@ var spine                     # a spine carrying the tail (ARK-01), scripts/spin
 var workday                   # a job of several working days (ARK-01), scripts/workday.gd
 var boiloff                   # cryogenic tanks boiling off (HG-170), scripts/boiloff.gd
 var liquids                   # liquid adrift in free fall (every leak and spill), scripts/liquids.gd
-var liquids                   # liquid adrift in free fall (every leak and spill), scripts/liquids.gd
+var combustion                # what burns, with what, and how hard, scripts/combustion.gd
 var drillstring               # a drill string in its derrick (DR-150), scripts/drillstring.gd
 var nested                    # a ship carried inside the ship (LC-140), scripts/nested.gd
 var waterball                 # a water ball in its net (BL-88), scripts/waterball.gd
@@ -333,9 +333,9 @@ func _ready() -> void:
 	liquids = preload("res://scripts/liquids.gd").new()
 	world.add_child(liquids)
 	liquids.setup(self)
-	liquids = preload("res://scripts/liquids.gd").new()
-	world.add_child(liquids)
-	liquids.setup(self)
+	combustion = preload("res://scripts/combustion.gd").new()
+	world.add_child(combustion)
+	combustion.setup(self)
 	boiloff = preload("res://scripts/boiloff.gd").new()
 	boiloff.process_mode = Node.PROCESS_MODE_PAUSABLE
 	world.add_child(boiloff)
@@ -2341,9 +2341,14 @@ func on_cut_into(p, pos: Vector2) -> void:
 	if p.hazard == "explosive" and p.intact and (munitions == null or munitions.live(p)):
 		_blast(p, pos)
 	elif sys.bursts(p):
+		# the gas over the liquid is what pushes it out: a tank that bursts throws its
+		# contents out with it
+		var burst_kpa: float = sys.P(sys.tank_vol(p))
 		_burst(p, pos)
+		if fv != "" and sys.fluid(fv) > 0.02:
+			_breach(p, fv, pos, burst_kpa)
 	elif fv != "" and sys.fluid(fv) > 0.02:
-		_leak(sys.fvol[fv].fluid, fv, pos, p)
+		_breach(p, fv, pos, 0.0)
 	if volts > 30.0:
 		_arc(pos, volts, p)
 		# the arc empties whatever stored it
@@ -2366,6 +2371,7 @@ func on_cut_into(p, pos: Vector2) -> void:
 
 func _arc(pos: Vector2, volts: float, p = null) -> void:
 	incident("arc", "%d V%s" % [int(volts), (" " + p.tag) if p != null and p.tag != "" else ""])
+	combustion.spark(pos, 1.2 + clampf(volts / 400.0, 0.0, 1.5))
 	var k := clampf(volts / 400.0, 0.3, 1.0)
 	for i in 3 + int(k * 3):
 		fx.arc(pos, pos + Vector2.from_angle(randf() * TAU) * randf_range(40, 120) * k, randf_range(0.18, 0.35), k)
@@ -2387,6 +2393,7 @@ func _burst(p, pos: Vector2) -> void:
 	sys.gas_lost += sys.vols[v].n
 	sys.vols[v].n = 0.0
 	var c := world.frame(p) * Geom.centroid(p.poly)
+	combustion.spark(c, 2.0)
 	fx.flash(c, 240.0, 0.5, Pal.ink(1.0, 2.0))
 	fx.ring(c, 10.0, 220.0, 0.5, Pal.ink(0.9), 3.0)
 	for i in 40:
@@ -2413,6 +2420,7 @@ func _burst(p, pos: Vector2) -> void:
 func _blast(p, pos: Vector2) -> void:
 	incident("blast", p.tag)
 	var c := world.frame(p) * Geom.centroid(p.poly)
+	combustion.spark(c, 4.0)
 	fx.flash(c, 360.0, 0.7, Pal.heat(1.0, 3.0))
 	fx.ring(c, 20.0, 340.0, 0.6, Pal.heat(0.9, 2.2), 3.0)
 	fx.burst_shards(c, 26, 620.0, Pal.heat(0.9, 1.6), 12.0)
@@ -2524,6 +2532,51 @@ func _leak(fluid: String, src: String, at: Vector2, piece = null) -> void:
 				_dent(q, q.cond * 0.7, "dv_frost")
 
 
+# A cut into a tank still holding liquid: a hole the size of the kerf so far, the liquid
+# pushed out of it by the gas over it (systems.gd works the flow out of the hole's area
+# and the pressure behind it). burst_kpa: the tank burst at that pressure, and most of
+# what it held is thrown out with its shell at once.
+const LIQ = preload("res://scripts/liquids.gd")
+const KERF_W := 0.004           # m: the width of a laser kerf through a tank wall
+
+
+func _breach(p, fv: String, pos: Vector2, burst_kpa: float) -> void:
+	var v: Dictionary = sys.fvol[fv]
+	_leak(v.fluid, fv, pos, p)
+	var lk: Dictionary = sys.leaks.back()
+	lk.area = KERF_W * 0.25
+	lk.ullage = sys.tank_vol(p)
+	if burst_kpa <= 0.0:
+		return
+	lk.area = 0.5
+	lk.severed = true
+	var look: String = LIQ.look_of(v)
+	var rho: float = float(LIQ.LOOKS.get(look, LIQ.LOOKS.water).get("rho", 1000.0))
+	var out: float = float(v.amount) * 0.7
+	v.amount = float(v.amount) - out
+	sys.fluid_lost += out
+	var speed: float = clampf(sqrt(2.0 * burst_kpa * 1000.0 / rho), 2.0, 16.0)
+	var c := world.frame(p) * Geom.centroid(p.poly)
+	liquids.spill(c, Vector2.ZERO, out, look, clampi(int(out * 25.0) + 10, 10, 70), TAU, speed, false)
+
+
+# the kerf grows across a tank holding liquid: so does the hole; cut through, it is open
+func _kerf_breach(p, pl: PackedVector2Array, res: Dictionary) -> void:
+	for lk in sys.leaks:
+		if lk.piece != p or not lk.has("area"):
+			continue
+		var ln := 0.0
+		for i in pl.size() - 1:
+			ln += pl[i].distance_to(pl[i + 1])
+		lk.area = float(lk.area) + ln / Geom.M * KERF_W
+		if int(res.get("split", 1)) > 1:
+			# cut in two: the tank's whole section is open to space
+			var bb := Geom.bbox(p.poly)
+			lk.area = maxf(float(lk.area), minf(bb.size.x, bb.size.y) / Geom.M * 0.8)
+			lk.severed = true
+		return
+
+
 func leak_pos(lk: Dictionary) -> Vector2:
 	if lk.piece != null and not lk.piece.gone:
 		return world.frame(lk.piece) * lk.local
@@ -2541,6 +2594,7 @@ func on_line_cut(l, at: Vector2) -> void:
 		elif volts > 0.0:
 			fx.sparks(at, Vector2.UP, 10, Pal.tint(Pal.VOLT, 1.0, 2.0), 160.0, 0.3, PI)
 			sfx.play("zap_small")
+			combustion.spark(at, 0.6)
 		else:
 			fx.sparks(at, Vector2.UP, 4, Pal.ink(0.8, 1.3), 120.0, 0.2, PI)
 		say("cable_cut", at, l.id.to_upper())
@@ -2582,6 +2636,10 @@ func _cut_cable_volts(l) -> float:
 
 
 func on_ignite(cl: Dictionary, pos: Vector2) -> void:
+	# it burns only with something to burn with (scripts/combustion.gd)
+	if combustion != null:
+		combustion.ignite_cloud(cl, pos)
+		return
 	incident("fire")
 	sys.clouds.erase(cl)
 	var c: Vector2 = cl.pos
@@ -2621,7 +2679,9 @@ func cut_kerf(p, pl: PackedVector2Array) -> void:
 	if pl.size() >= 2:
 		for hit in world.cut_lines(pl):
 			on_line_cut(hit[0], hit[1])
-	on_kerf(p, world.commit_cut(p, world.frame(p).affine_inverse() * pl))
+	var res: Dictionary = world.commit_cut(p, world.frame(p).affine_inverse() * pl)
+	_kerf_breach(p, pl, res)
+	on_kerf(p, res)
 
 
 # a marked line only takes an empty vessel apart cleanly: one still under
@@ -2635,6 +2695,7 @@ func on_kerf(p, res: Dictionary) -> void:
 	for j in res.killed:
 		var jp: Vector2 = world.joint_world(j)
 		fx.sparks(jp, Vector2.from_angle(randf() * TAU), 4, Pal.heat(1.0, 2.0), 160.0, 0.25, PI)
+		combustion.spark(jp, 0.3)
 	for l in res.lines:
 		on_line_cut(l, world.frame(p) * Geom.centroid(p.poly))
 	if res.split > 1:

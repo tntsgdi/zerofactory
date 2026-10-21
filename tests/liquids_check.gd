@@ -2,7 +2,7 @@ extends SceneTree
 # Liquid adrift in free fall (scripts/liquids.gd): a cut fuel line jets globules; they
 # keep their momentum in vacuum, merge when they touch, wet the wall they reach; a
 # cryogen boils away fast, water in vacuum freezes into a ball of ice, mud sticks; a
-# laser through fuel lights it; BL-88's ball bursts into drifting globules, DR-150's mud
+# laser through fuel in vacuum lights nothing; BL-88's ball bursts into drifting globules, DR-150's mud
 # blows out as globules; three hundred globules stay cheap.
 # godot --headless --path . --fixed-fps 60 -s tests/liquids_check.gd
 
@@ -81,12 +81,13 @@ func _run() -> void:
 	lq.spill(far + Vector2(10.05, 0) * Geom.M, Vector2.ZERO, 0.004, "fuel", 1, 0.0, 0.0, true)
 	await _frames(45)
 	check(lq.count("fuel") == 1 and absf(lq.total_volume("fuel") - 0.008) < 0.0005, "two globules that touch become one (%.4f m³)" % lq.total_volume("fuel"))
-	var inc0: int = g.incidents.size()
+	# (fire is combustion.gd's, tests/fire_check.gd: here only that vacuum gives it nothing to burn with)
 	g.tools.cutting = true
-	g.tools.front = lq.blobs.filter(func(b): return b.look == "fuel")[0].pos
-	lq._burn_check()
+	for i in 10:
+		g.tools.front = lq.blobs.filter(func(b): return b.look == "fuel")[0].pos
+		await process_frame
 	g.tools.cutting = false
-	check(g.incidents.size() > inc0 and g.incidents.back()[1] == "fire" and lq.total_volume("fuel") < 0.001, "the laser through a fuel globule: it lights")
+	check(g.combustion.burnt_kg == 0.0 and lq.total_volume("fuel") > 0.007, "the laser through a fuel globule in vacuum: no oxygen, it doesn't light")
 	g.queue_free()
 	await _frames(2)
 

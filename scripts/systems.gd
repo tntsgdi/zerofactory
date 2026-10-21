@@ -988,7 +988,10 @@ func _step_fluids(dt: float) -> void:
 		var take := 0.0
 		var v = fvol.get(lk.src)
 		if v != null:
-			take = minf(v.amount, dt * float(v.get("leak", 0.1)))
+			if lk.has("area"):
+				take = minf(v.amount, dt * _hole_flow(lk, v, dt))
+			else:
+				take = minf(v.amount, dt * float(v.get("leak", 0.1)))
 			v.amount -= take
 			# a line that leaks keeps being fed through an open valve
 			if joined.has(lk.src) and joined[lk.src].has("leak_through"):
@@ -999,7 +1002,7 @@ func _step_fluids(dt: float) -> void:
 		lk.rate = take / maxf(dt, 1e-4)
 		fluid_lost += take
 		if lk.fluid == "fuel" and take > 0.0:
-			_feed_cloud(game.leak_pos(lk), take)
+			_feed_cloud(game.leak_pos(lk), take, LIQ.look_of(v) if v != null else "fuel")
 	leaks = leaks.filter(func(lk): return lk.rate > 0.0005 or lk.t < 0.3)
 	for cl in clouds:
 		cl.t += dt
@@ -1072,12 +1075,50 @@ func is_heat_port(port_id: String) -> bool:
 	return port_id in heat.get("ports", [])
 
 
-func _feed_cloud(pos: Vector2, amt: float) -> void:
+func _feed_cloud(pos: Vector2, amt: float, look: String = "fuel") -> void:
 	for cl in clouds:
-		if cl.pos.distance_to(pos) < Geom.M * 2.0:
+		if cl.pos.distance_to(pos) < Geom.M * 2.0 and str(cl.get("look", "fuel")) == look:
 			cl.amount += amt
 			return
-	clouds.append({"pos": pos, "r": Geom.M, "amount": amt, "t": 0.0})
+	clouds.append({"pos": pos, "r": Geom.M, "amount": amt, "t": 0.0, "look": look})
+
+
+# A hole in a tank (game.gd's _breach): liquid driven out through it by the pressure
+# behind it, the gas over the liquid or the liquid's own vapour pressure (whichever
+# is higher) against what is outside: v = √(2Δp/ρ), Q = Cd·A·v. In free fall the
+# liquid wets the walls, so more of the hole sees liquid than its share of the tank;
+# the rest of the hole lets the gas go (and the pressure with it). Cut in two, what
+# is left floats out within a couple of seconds whatever the pressure. m³/s
+const LIQ = preload("res://scripts/liquids.gd")
+const CD := 0.62
+
+
+func _hole_flow(lk: Dictionary, v: Dictionary, dt: float) -> float:
+	var look: String = LIQ.look_of(v)
+	var lkd: Dictionary = LIQ.LOOKS.get(look, LIQ.LOOKS.water)
+	var rho: float = float(lkd.get("rho", 1000.0))
+	var uk: String = str(lk.get("ullage", ""))
+	var gas: float = P(uk) if uk != "" and vols.has(uk) else 0.0
+	var room: String = world.room_at(game.leak_pos(lk))
+	var outside: float = P(room) if room != "" else 0.0
+	var dp: float = maxf(gas, float(lkd.get("pvap", 1.0))) - outside
+	var full: float = maxf(float(v.get("full", v.amount)), 0.01)
+	var liq: float = clampf(float(v.amount) / full, 0.0, 1.0)
+	var area: float = float(lk.area)
+	var vel: float = sqrt(2.0 * maxf(dp, 0.0) * 1000.0 / rho)
+	lk.v = vel
+	var q: float = CD * area * clampf(liq + 0.15, 0.0, 1.0) * vel
+	if uk != "" and vols.has(uk) and gas > outside:
+		# the gas through the rest of the hole (choked, about the speed of sound)
+		var vg: float = maxf(float(vessel_cfg.get(uk, {}).get("V", 1.0)), 0.05)
+		var n0: float = vols[uk].n
+		vols[uk].n = n0 * exp(-area * (1.0 - liq) * 160.0 * dt / vg)
+		gas_lost += n0 - vols[uk].n
+	if lk.get("severed", false):
+		q = maxf(q, float(v.amount) * 0.5 + 0.02)
+	# not all of it at once: the liquid has to get to the hole
+	q = minf(q, float(v.amount) * 1.2 + 0.05)
+	return maxf(q, minf(0.003, area * 2.0))
 
 
 func cloud_at(pos: Vector2):
